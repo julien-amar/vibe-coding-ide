@@ -2,7 +2,7 @@ import { hasVisiblePane, panesOf, updateAt, type PaneNode } from '@shared/layout
 import type { LayoutNode, Profile } from '@shared/types'
 import { useProfiles } from '../profiles'
 import { useTabs, type Tab } from '../store'
-import { GitLogPane } from './GitLogPane'
+import { GitPanel } from './GitPanel'
 import { ProfileIcon } from './ProfileIcon'
 import { ProfileSelect } from './ProfileSelect'
 import { SplitView } from './SplitView'
@@ -91,7 +91,7 @@ function GitPane({ tab, pane, visible }: { tab: Tab; pane: PaneNode; visible: bo
         <CollapseButton tab={tab} pane={pane} />
       </div>
       <div className="pane-body">
-        <GitLogPane root={tab.project!.root} visible={visible} />
+        <GitPanel root={tab.project!.root} visible={visible} openProject={(path) => void useTabs.getState().openProject(path)} />
       </div>
     </div>
   )

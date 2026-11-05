@@ -2,8 +2,8 @@ import { existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, type Rectangle, type WebContents } from 'electron'
 import { mapPanes, sessionIdsOf } from '@shared/layout'
-import type { LayoutNode, PtyCreateRequest, PtyCreateResult, TabSnapshot, WindowInit, WindowTabsState } from '@shared/types'
-import { gitLog, GitWatcher } from './git'
+import type { GitOpRequest, LayoutNode, PtyCreateRequest, PtyCreateResult, TabSnapshot, WindowInit, WindowTabsState } from '@shared/types'
+import { gitLog, gitOp, GitWatcher } from './git'
 import { loadLayout, saveLayout, visibleBounds, type SavedWindow } from './layout-store'
 import { profileIcon } from './icons'
 import { findProfile, listProfiles } from './profiles'
@@ -338,6 +338,9 @@ function registerIpc(): void {
 
   ipcMain.handle('git:log', (_e, root: string) =>
     isDir(String(root)) ? gitLog(String(root)) : { isRepo: false, error: 'Folder not found', commits: [] }
+  )
+  ipcMain.handle('git:op', (_e, root: string, req: GitOpRequest) =>
+    isDir(String(root)) ? gitOp(String(root), req ?? { op: 'status' }) : { ok: false, error: 'Folder not found' }
   )
   ipcMain.on('git:watch', (e, root: string) => {
     if (isDir(String(root))) gitWatcher.watch(String(root), e.sender)

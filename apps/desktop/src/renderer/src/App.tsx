@@ -1,4 +1,5 @@
 import { useCallback, useEffect } from 'react'
+import { DialogHost } from './components/Dialogs'
 import { Launcher } from './components/Launcher'
 import { ProjectView } from './components/ProjectView'
 import { TabStrip } from './components/TabStrip'
@@ -67,6 +68,7 @@ export function App(): React.JSX.Element {
           </div>
         )}
       </main>
+      <DialogHost />
     </div>
   )
 }

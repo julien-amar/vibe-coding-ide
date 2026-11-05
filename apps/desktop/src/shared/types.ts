@@ -80,6 +80,95 @@ export interface GitLog {
   commits: GitCommit[]
 }
 
+export interface GitStatusFile {
+  path: string
+  /** Original path of a rename/copy. */
+  origPath?: string
+  /** Staged state (porcelain X): ' ', M, A, D, R, C, U, ? */
+  index: string
+  /** Working-tree state (porcelain Y): ' ', M, D, U, ? */
+  worktree: string
+}
+
+export interface GitStatus {
+  branch?: string
+  upstream?: string
+  ahead: number
+  behind: number
+  files: GitStatusFile[]
+}
+
+export interface GitBranch {
+  name: string
+  remote: boolean
+  current: boolean
+  upstream?: string
+  ahead: number
+  behind: number
+  /** Upstream branch was deleted on the remote. */
+  gone: boolean
+  /** Unix seconds of the tip commit. */
+  date: number
+  subject: string
+}
+
+export interface GitWorktree {
+  path: string
+  branch?: string
+  head?: string
+  main: boolean
+  detached?: boolean
+  locked?: boolean
+  prunable?: boolean
+}
+
+export type GitOp =
+  | 'status'
+  | 'diff'
+  | 'stage'
+  | 'unstage'
+  | 'discard'
+  | 'commit'
+  | 'branches'
+  | 'switch'
+  | 'createBranch'
+  | 'renameBranch'
+  | 'deleteBranch'
+  | 'merge'
+  | 'fetch'
+  | 'pull'
+  | 'push'
+  | 'addWorktree'
+  | 'removeWorktree'
+
+export interface GitOpRequest {
+  op: GitOp
+  path?: string
+  paths?: string[]
+  staged?: boolean
+  untracked?: boolean
+  message?: string
+  amend?: boolean
+  branch?: string
+  newName?: string
+  start?: string
+  checkout?: boolean
+  remote?: boolean
+  force?: boolean
+}
+
+export interface GitOpResult {
+  ok: boolean
+  error?: string
+  /** Command output (diff text, commit summary…). */
+  text?: string
+  status?: GitStatus
+  branches?: GitBranch[]
+  worktrees?: GitWorktree[]
+  /** New worktree folder (addWorktree). */
+  path?: string
+}
+
 /** Serializable description of a tab, used for moving tabs between windows and for layout restore. */
 export interface TabSnapshot {
   kind: TabKind
@@ -155,6 +244,8 @@ export interface DevHubApi {
   }
   git: {
     log(root: string): Promise<GitLog>
+    /** Status, diffs and repository actions (see GitOpRequest). */
+    op(root: string, req: GitOpRequest): Promise<GitOpResult>
     watch(root: string): void
     unwatch(root: string): void
     onChanged(cb: (root: string) => void): () => void

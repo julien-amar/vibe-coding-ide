@@ -1,32 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GitCommit, GitLog } from '@shared/types'
 import { computeGraph, laneColor, type GraphRow } from '../git-graph'
+import { relativeTime } from '../time'
 
 const ROW_H = 26
 const LANE_W = 14
 const GRAPH_PAD = 8
-
-function relativeTime(unixSeconds: number): string {
-  const diff = Date.now() / 1000 - unixSeconds
-  const units: Array<[number, string]> = [
-    [60, 'second'],
-    [60, 'minute'],
-    [24, 'hour'],
-    [7, 'day'],
-    [4.35, 'week'],
-    [12, 'month'],
-    [Number.POSITIVE_INFINITY, 'year']
-  ]
-  let value = diff
-  for (const [step, unit] of units) {
-    if (value < step) {
-      const n = Math.max(1, Math.floor(value))
-      return `${n} ${unit}${n > 1 ? 's' : ''} ago`
-    }
-    value /= step
-  }
-  return ''
-}
 
 const laneX = (j: number): number => GRAPH_PAD + j * LANE_W + LANE_W / 2
 
@@ -85,33 +64,21 @@ function RefBadges({ refs }: { refs: string[] }): React.JSX.Element {
   )
 }
 
-export function GitLogPane({ root, visible }: { root: string; visible: boolean }): React.JSX.Element {
+/** History view of the Git panel: all branches with a commit graph. Reloads when `tick` changes. */
+export function GitLogPane({ root, visible, tick }: { root: string; visible: boolean; tick: number }): React.JSX.Element {
   const [log, setLog] = useState<GitLog | null>(null)
-  const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState<string>()
   const [scrollTop, setScrollTop] = useState(0)
   const [viewH, setViewH] = useState(400)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(() => {
-    setLoading(true)
-    void window.devhub.git.log(root).then((l) => {
-      setLog(l)
-      setLoading(false)
-    })
+    void window.devhub.git.log(root).then(setLog)
   }, [root])
 
   useEffect(() => {
     load()
-    window.devhub.git.watch(root)
-    const off = window.devhub.git.onChanged((r) => {
-      if (r === root) load()
-    })
-    return () => {
-      off()
-      window.devhub.git.unwatch(root)
-    }
-  }, [root, load])
+  }, [load, tick])
 
   useEffect(() => {
     const el = scrollRef.current
@@ -137,14 +104,6 @@ export function GitLogPane({ root, visible }: { root: string; visible: boolean }
 
   return (
     <div className="git-pane">
-      <div className="pane-toolbar">
-        {log?.isRepo && log.branch && <span className="ref-badge head">{log.branch}</span>}
-        {log?.isRepo && <span className="muted">{commits.length >= 2000 ? '2000+ commits' : `${commits.length} commits`}</span>}
-        <span className="spacer" />
-        <button className="icon-button" title="Refresh" onClick={load} disabled={loading}>
-          ⟳
-        </button>
-      </div>
 
       {log && !log.isRepo && (
         <div className="pane-message">

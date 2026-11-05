@@ -44,6 +44,7 @@ const api: DevHubApi = {
   },
   git: {
     log: (root) => ipcRenderer.invoke('git:log', root),
+    op: (root, req) => ipcRenderer.invoke('git:op', root, req),
     watch: (root) => ipcRenderer.send('git:watch', root),
     unwatch: (root) => ipcRenderer.send('git:unwatch', root),
     onChanged: (cb) => {
