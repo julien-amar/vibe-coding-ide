@@ -45,9 +45,13 @@ export async function launch(userData: string): Promise<DevHub> {
 
 /** Close the window like a user (saves the layout) and wait for the app to exit. */
 export async function quit(hub: DevHub): Promise<void> {
-  const closed = hub.app.waitForEvent('close')
+  const exited = hub.app.waitForEvent('close')
+  const windowClosed = hub.page.waitForEvent('close')
   await hub.page.evaluate(() => window.devhub.window.close()).catch(() => undefined)
-  await closed
+  await windowClosed
+  // macOS apps keep running without windows; quit like Cmd+Q (the layout was saved on window close).
+  if (process.platform === 'darwin') await hub.app.close()
+  await exited
 }
 
 /** Text currently in the terminal of the visible tab (or a given terminal host). */

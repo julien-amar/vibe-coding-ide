@@ -48,12 +48,15 @@ test('tabs can be renamed, reordered and closed', async () => {
 
   // Rename by double-click.
   await page.locator('.tab').first().dblclick()
+  await expect(page.locator('.tab-rename')).toBeFocused()
   await page.locator('.tab-rename').fill('First tab')
   await page.keyboard.press('Enter')
   await expect(page.locator('.tab').first().locator('.tab-title')).toHaveText('First tab')
 
-  // Reorder by drag and drop.
-  await page.locator('.tab').first().dragTo(page.locator('.tab').nth(1), { targetPosition: { x: 150, y: 10 } })
+  // Reorder by drag and drop onto the right half of the second tab (tab widths differ per OS).
+  const target = page.locator('.tab').nth(1)
+  const box = (await target.boundingBox())!
+  await page.locator('.tab').first().dragTo(target, { targetPosition: { x: box.width * 0.75, y: box.height / 2 } })
   await expect(page.locator('.tab').nth(1).locator('.tab-title')).toHaveText('First tab')
 
   // Close with ×.
@@ -65,6 +68,7 @@ test('tabs can be renamed, reordered and closed', async () => {
 test('the layout and tab names are restored after a restart', async () => {
   let { page } = hub
   await page.locator('.tab').first().dblclick()
+  await expect(page.locator('.tab-rename')).toBeFocused()
   await page.locator('.tab-rename').fill('Keep me')
   await page.keyboard.press('Enter')
   await typeInTerminal(page, 'echo before-restart')

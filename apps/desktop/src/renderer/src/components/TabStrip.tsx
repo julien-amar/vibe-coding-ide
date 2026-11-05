@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { tabTitle, toSnapshot, useTabs, type Tab } from '../store'
 import { onTabDragEnd, onTabDragStart } from '../tab-dnd'
 import { useProfiles } from '../profiles'
@@ -34,7 +34,8 @@ function TabItem({
   const [draft, setDraft] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
+  // Layout effect: the field holds the current title before anything can be typed into it.
+  useLayoutEffect(() => {
     if (editing) {
       setDraft(tabTitle(tab))
       requestAnimationFrame(() => inputRef.current?.select())

@@ -182,7 +182,10 @@ export function TerminalView({ sessionId, restoredScrollback, visible, autoFocus
       } catch {
         /* ignore */
       }
-      if (autoFocus) termRef.current?.focus()
+      // Do not steal focus from a text field the user just opened (e.g. renaming the tab).
+      const a = document.activeElement
+      const typing = a instanceof HTMLInputElement || (a instanceof HTMLTextAreaElement && !a.closest('.terminal-view'))
+      if (autoFocus && !typing) termRef.current?.focus()
     })
   }, [visible, autoFocus])
 
