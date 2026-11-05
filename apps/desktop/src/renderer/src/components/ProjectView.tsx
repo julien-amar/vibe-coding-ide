@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { hasVisiblePane, panesOf, updateAt, type DropSide, type PaneNode } from '@shared/layout'
 import type { LayoutNode, PaneType, Profile } from '@shared/types'
+import { parseWslPath } from '@shared/wsl-paths'
 import { useProfiles } from '../profiles'
 import { useTabs, type Tab } from '../store'
 import { GitPanel } from './GitPanel'
@@ -11,6 +12,12 @@ import { TerminalView } from './TerminalView'
 
 const PANE_ICON: Record<PaneNode['type'], string> = { git: '⎇', terminal: '>_', agent: 'AI' }
 const PANE_MIME = 'application/x-devhub-pane'
+
+/** Project folder for display: WSL folders as "<distro>: /linux/path". */
+function displayPath(root: string): string {
+  const wsl = parseWslPath(root)
+  return wsl ? `${wsl.distro}: ${wsl.path}` : root
+}
 
 /** Human label for a pane (used in the side rail). */
 function paneLabel(pane: PaneNode, profiles: Profile[]): string {
@@ -125,7 +132,13 @@ function TerminalPane({ tab, pane, visible, autoFocus }: { tab: Tab; pane: PaneN
   const restartPane = useTabs((s) => s.restartPane)
   const exitCode = useTabs((s) => (pane.sessionId ? s.paneExit[pane.sessionId] : undefined))
   const isAgent = pane.type === 'agent'
-  const choices = profiles.filter((p) => (isAgent ? p.kind === 'agent' : p.kind !== 'agent'))
+  // Agents installed in another WSL distro than the project's cannot run there: hide them.
+  const distro = parseWslPath(tab.project?.root ?? '')?.distro.toLowerCase()
+  const choices = profiles
+    .filter((p) => (isAgent ? p.kind === 'agent' : p.kind !== 'agent'))
+    .filter((p) => !(p.kind === 'agent' && p.wslDistro && p.wslDistro.toLowerCase() !== distro))
+    // In a WSL project, the distro's own shell/agents come first.
+    .sort((a, b) => Number(b.wslDistro?.toLowerCase() === distro && !!distro) - Number(a.wslDistro?.toLowerCase() === distro && !!distro))
 
   return (
     <PaneFrame
@@ -141,7 +154,8 @@ function TerminalPane({ tab, pane, visible, autoFocus }: { tab: Tab; pane: PaneN
             onChange={(id) => void restartPane(tab.id, pane.id, id)}
           />
           <span className="pane-path" title={tab.project?.root}>
-            {tab.project?.root}
+            {/* LRM marks keep slashes in place despite the rtl trick that ellipsizes from the left. */}
+            {'‎' + displayPath(tab.project?.root ?? '') + '‎'}
           </span>
         </>
       }

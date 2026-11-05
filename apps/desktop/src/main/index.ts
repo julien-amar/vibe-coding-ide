@@ -6,10 +6,10 @@ import type { GitOpRequest, LayoutNode, PtyCreateRequest, PtyCreateResult, TabSn
 import { gitLog, gitOp, GitWatcher } from './git'
 import { loadLayout, saveLayout, visibleBounds, type SavedWindow } from './layout-store'
 import { profileIcon } from './icons'
-import { findProfile, listProfiles } from './profiles'
+import { findProfile, listProfiles, wslAgents } from './profiles'
 import { recentProjects, touchProject } from './projects'
 import { PtyManager } from './pty-manager'
-import { parseWslPath } from './wsl-paths'
+import { parseWslPath } from '@shared/wsl-paths'
 
 app.setName('DevHub')
 app.setPath('userData', join(app.getPath('appData'), 'DevHub'))
@@ -257,6 +257,7 @@ const isDir = (p: string): boolean => {
 
 function registerIpc(): void {
   ipcMain.handle('profiles:list', (_e, refresh?: boolean) => listProfiles(Boolean(refresh)))
+  ipcMain.handle('profiles:wslAgents', (_e, distro: string) => wslAgents(String(distro)))
   ipcMain.handle('profiles:icon', async (_e, id: string) => {
     const profile = await findProfile(String(id))
     return profile ? profileIcon(profile) : null
@@ -327,9 +328,10 @@ function registerIpc(): void {
 
   ipcMain.on('window:close', (e) => BrowserWindow.fromWebContents(e.sender)?.close())
 
-  ipcMain.handle('project:pickFolder', async (e) => {
+  ipcMain.handle('project:pickFolder', async (e, defaultPath?: string) => {
     const win = BrowserWindow.fromWebContents(e.sender)
-    const opts = { title: 'Open project folder', properties: ['openDirectory' as const] }
+    const start = typeof defaultPath === 'string' && isDir(defaultPath) ? defaultPath : undefined
+    const opts = { title: 'Open project folder', defaultPath: start, properties: ['openDirectory' as const] }
     const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
     return res.canceled || !res.filePaths[0] ? null : res.filePaths[0]
   })

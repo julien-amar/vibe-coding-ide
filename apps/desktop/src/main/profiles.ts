@@ -234,13 +234,49 @@ function agents(): Profile[] {
 }
 
 let cache: Profile[] | undefined
+/** Agents found inside WSL distributions (discovered on demand, per distro). */
+const wslAgentCache = new Map<string, Profile[]>()
 
 export async function listProfiles(refresh = false): Promise<Profile[]> {
-  if (cache && !refresh) return cache
+  if (cache && !refresh) return [...cache, ...[...wslAgentCache.values()].flat()]
   const shells = isWin ? windowsShells() : unixShells()
   const [distros] = await Promise.all([wslDistros()])
   cache = [...shells, ...distros, ...agents()]
-  return cache
+  return [...cache, ...[...wslAgentCache.values()].flat()]
+}
+
+const AGENT_LABELS: Record<string, string> = { claude: 'Claude Code', codex: 'Codex CLI', gemini: 'Gemini CLI', opencode: 'opencode', pi: 'pi' }
+
+/**
+ * Agent CLIs installed inside a WSL distribution. They run in the distro
+ * through a login shell (so PATH from ~/.profile / nvm etc. applies). This
+ * starts the distro, so it is only done when a WSL project needs it.
+ */
+export function wslAgents(distro: string): Promise<Profile[]> {
+  const known = wslAgentCache.get(distro)
+  if (known) return Promise.resolve(known)
+  const wsl = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe')
+  const script = `for c in ${Object.keys(AGENT_LABELS).join(' ')}; do p=$(command -v "$c" 2>/dev/null) && echo "$c=$p"; done`
+  return new Promise((resolve) => {
+    execFile(wsl, ['-d', distro, '--exec', 'bash', '-lic', script], { encoding: 'buffer', timeout: 20000, windowsHide: true }, (_err, stdout) => {
+      const found: Profile[] = []
+      for (const line of decodeWslOutput((stdout as Buffer) ?? Buffer.alloc(0)).split(/\r?\n/)) {
+        const m = /^(\w+)=(\/.+)$/.exec(line.trim())
+        if (!m || !AGENT_LABELS[m[1]]) continue
+        found.push({
+          id: `wslagent:${distro}:${m[1]}`,
+          name: `${AGENT_LABELS[m[1]]} (${distro})`,
+          kind: 'agent',
+          command: wsl,
+          args: ['-d', distro, '--cd', '~', '--exec', 'bash', '-lic', `exec ${m[1]}`],
+          source: `${distro}: ${m[2]}`,
+          wslDistro: distro
+        })
+      }
+      wslAgentCache.set(distro, found)
+      resolve(found)
+    })
+  })
 }
 
 export async function findProfile(id: string): Promise<Profile | undefined> {

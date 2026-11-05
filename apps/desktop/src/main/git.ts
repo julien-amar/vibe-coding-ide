@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import type { WebContents } from 'electron'
 import type { GitBranch, GitCommit, GitLog, GitOpRequest, GitOpResult, GitStatus, GitStatusFile, GitWorktree } from '@shared/types'
 import { which } from './profiles'
-import { parseWslPath } from './wsl-paths'
+import { parseWslPath } from '@shared/wsl-paths'
 
 const MAX_COMMITS = 2000
 const FIELD = '\x1f'
@@ -28,12 +28,14 @@ const BASE_CONFIG = ['-c', 'core.quotepath=off', '-c', 'log.showSignature=false'
  * How to run git for a project root. Repos inside WSL (\\wsl.localhost\<distro>\…)
  * run the distro's own git through wsl.exe — faster and correct (permissions,
  * symlinks, line endings) compared to Windows git over the network share.
+ * --exec runs git directly: without it wsl.exe passes the command line through
+ * the distro shell, which would mangle arguments such as --format=%(refname).
  */
 function gitCommand(root: string, args: string[]): { file: string; args: string[] } {
   const wsl = process.platform === 'win32' ? parseWslPath(root) : undefined
   if (wsl) {
     const wslExe = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe')
-    return { file: wslExe, args: ['-d', wsl.distro, '--cd', wsl.path, '--', 'git', ...BASE_CONFIG, ...args] }
+    return { file: wslExe, args: ['-d', wsl.distro, '--cd', wsl.path, '--exec', 'git', ...BASE_CONFIG, ...args] }
   }
   return { file: gitBinary(), args: ['-C', root, ...BASE_CONFIG, ...args] }
 }

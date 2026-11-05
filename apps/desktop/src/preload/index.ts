@@ -6,7 +6,8 @@ const api: DevHubApi = {
   debug: process.argv.includes('--devhub-debug'),
   profiles: {
     list: (refresh) => ipcRenderer.invoke('profiles:list', refresh),
-    icon: (id) => ipcRenderer.invoke('profiles:icon', id)
+    icon: (id) => ipcRenderer.invoke('profiles:icon', id),
+    wslAgents: (distro) => ipcRenderer.invoke('profiles:wslAgents', distro)
   },
   pty: {
     create: (req) => ipcRenderer.invoke('pty:create', req),
@@ -38,7 +39,7 @@ const api: DevHubApi = {
     close: () => ipcRenderer.send('window:close')
   },
   project: {
-    pickFolder: () => ipcRenderer.invoke('project:pickFolder'),
+    pickFolder: (defaultPath) => ipcRenderer.invoke('project:pickFolder', defaultPath),
     recent: () => ipcRenderer.invoke('project:recent'),
     touch: (root) => ipcRenderer.send('project:touch', root)
   },

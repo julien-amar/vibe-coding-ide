@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { appendPane, insertPane, mapPanes, movePane, newPaneId, panesOf, removePane, sessionIdsOf, type DropSide, type PaneNode } from '@shared/layout'
 import type { LayoutNode, PaneType, Profile, ProjectSnapshot, TabKind, TabSnapshot } from '@shared/types'
+import { parseWslPath } from '@shared/wsl-paths'
+import { loadProfiles } from './profiles'
 
 export interface Tab {
   id: string
@@ -92,8 +94,27 @@ async function profiles(): Promise<Profile[]> {
   return window.devhub.profiles.list()
 }
 
-const defaultShell = (list: Profile[]): Profile | undefined => list.find((p) => p.kind === 'shell') ?? list[0]
-const defaultAgent = (list: Profile[]): Profile | undefined => list.find((p) => p.kind === 'agent')
+/** Shell for a folder: the distro's own shell for folders inside WSL, else the first shell. */
+const defaultShell = (list: Profile[], root?: string): Profile | undefined => {
+  const distro = root && parseWslPath(root)?.distro.toLowerCase()
+  return (distro && list.find((p) => p.kind === 'wsl' && p.wslDistro?.toLowerCase() === distro)) || list.find((p) => p.kind === 'shell') || list[0]
+}
+
+/** Agent for a folder: one installed in the folder's WSL distro if any, else the first agent. */
+const defaultAgent = (list: Profile[], root?: string): Profile | undefined => {
+  const distro = root && parseWslPath(root)?.distro.toLowerCase()
+  return (distro && list.find((p) => p.kind === 'agent' && p.wslDistro?.toLowerCase() === distro)) || list.find((p) => p.kind === 'agent' && !p.wslDistro)
+}
+
+/** Profiles, including agents installed in the WSL distro of `root` (discovered on first use). */
+async function profilesFor(root: string): Promise<Profile[]> {
+  const wsl = parseWslPath(root)
+  if (wsl) {
+    await window.devhub.profiles.wslAgents(wsl.distro)
+    return loadProfiles(true)
+  }
+  return profiles()
+}
 
 async function createSession(profileId: string, cwd?: string): Promise<{ sessionId: string; title: string } | undefined> {
   try {
@@ -170,6 +191,7 @@ export const useTabs = create<State>((set, get) => ({
       }
       if (snap.project) {
         // Restored project: start fresh sessions in the project folder; panes keep their saved output.
+        if (parseWslPath(snap.project.root)) await profilesFor(snap.project.root) // agents installed in WSL
         const layout = await startPaneSessions(snap.project.layout, snap.project.root)
         tabs.push({ id: newTabId(), kind: 'project', autoTitle: snap.project.name, customTitle: snap.customTitle, project: { ...snap.project, layout } })
         continue
@@ -211,8 +233,8 @@ export const useTabs = create<State>((set, get) => ({
       set({ activeId: existing.id })
       return
     }
-    const list = await profiles()
-    const layout = await startPaneSessions(defaultProjectLayout(defaultShell(list), defaultAgent(list)), root)
+    const list = await profilesFor(root)
+    const layout = await startPaneSessions(defaultProjectLayout(defaultShell(list, root), defaultAgent(list, root)), root)
     const name = projectName(root)
     const tab: Tab = { id: newTabId(), kind: 'project', autoTitle: name, project: { root, name, layout } }
     window.devhub.project.touch(root)
@@ -330,9 +352,10 @@ export const useTabs = create<State>((set, get) => ({
   async addPane(tabId, type, opts = {}) {
     const tab = get().tabs.find((t) => t.id === tabId)
     if (!tab?.project) return
-    const list = await profiles()
+    const list = await profilesFor(tab.project.root)
+    const root = tab.project.root
     const profileId =
-      type === 'git' ? undefined : (opts.profileId ?? (type === 'agent' ? defaultAgent(list) : defaultShell(list))?.id)
+      type === 'git' ? undefined : (opts.profileId ?? (type === 'agent' ? defaultAgent(list, root) : defaultShell(list, root))?.id)
     const pane: PaneNode = { kind: 'pane', id: newPaneId(), type, profileId }
     if (profileId) {
       const s = await createSession(profileId, tab.project.root)

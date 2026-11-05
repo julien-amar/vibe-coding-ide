@@ -215,6 +215,8 @@ export interface DevHubApi {
     list(refresh?: boolean): Promise<Profile[]>
     /** Icon of the installed shell/distro/agent as a data: URL, or null (draw a monogram). */
     icon(profileId: string): Promise<string | null>
+    /** Agent CLIs installed inside a WSL distribution (starts the distro; cached). */
+    wslAgents(distro: string): Promise<Profile[]>
   }
   pty: {
     create(req: PtyCreateRequest): Promise<PtyCreateResult>
@@ -238,7 +240,8 @@ export interface DevHubApi {
     close(): void
   }
   project: {
-    pickFolder(): Promise<string | null>
+    /** Folder picker; `defaultPath` is where it starts (e.g. a WSL home). */
+    pickFolder(defaultPath?: string): Promise<string | null>
     recent(): Promise<RecentProject[]>
     touch(root: string): void
   }

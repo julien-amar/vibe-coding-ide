@@ -23,6 +23,13 @@ interface Monogram {
  * monogram, distinct per shell / distribution / agent.
  */
 const KNOWN: Array<[RegExp, Monogram]> = [
+  // (order matters: first match wins — agents before distros, as WSL agent ids contain the distro name)
+  // AI agents
+  [/^(wsl)?agent:(.+:)?claude$/, { text: 'C', color: '#d97757' }],
+  [/^(wsl)?agent:(.+:)?codex$/, { text: 'Cx', color: '#10a37f' }],
+  [/^(wsl)?agent:(.+:)?gemini$/, { text: 'G', color: '#4285f4' }],
+  [/^(wsl)?agent:(.+:)?opencode$/, { text: 'oc', color: '#4b5563' }],
+  [/^(wsl)?agent:(.+:)?pi$/, { text: 'π', color: '#8b5cf6' }],
   // Shells (matched on profile id or name)
   [/^shell:pwsh$/, { text: 'PS', color: '#2671be' }],
   [/^shell:powershell$/, { text: 'PS', color: '#012456' }],
@@ -46,12 +53,6 @@ const KNOWN: Array<[RegExp, Monogram]> = [
   [/oracle/i, { text: 'O', color: '#c74634' }],
   [/alma/i, { text: 'Al', color: '#ac5ba8' }],
   [/rocky/i, { text: 'R', color: '#10b981' }],
-  // AI agents
-  [/^agent:claude$/, { text: 'C', color: '#d97757' }],
-  [/^agent:codex$/, { text: 'Cx', color: '#10a37f' }],
-  [/^agent:gemini$/, { text: 'G', color: '#4285f4' }],
-  [/^agent:opencode$/, { text: 'oc', color: '#4b5563' }],
-  [/^agent:pi$/, { text: 'π', color: '#8b5cf6' }]
 ]
 
 function monogramFor(profile: Profile): Monogram {

@@ -89,6 +89,8 @@ async function exeIcon(path: string): Promise<string | null> {
 async function resolveIcon(profile: Profile): Promise<string | null> {
   if (process.platform !== 'win32') return null
 
+  if (profile.id.startsWith('wslagent:')) return null // monogram, like the Windows agent CLIs
+
   if (profile.kind === 'wsl') {
     const base = (await wslInstallFolders()).get(profile.name)
     const ico = base && join(base, 'shortcut.ico')

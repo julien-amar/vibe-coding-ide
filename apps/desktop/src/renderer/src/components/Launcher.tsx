@@ -59,6 +59,23 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
           })
         }
       },
+      // Projects inside WSL: the folder picker starts in the distro's home.
+      ...(profiles ?? [])
+        .filter((p) => p.kind === 'wsl' && p.wslDistro)
+        .map((p) => ({
+          key: `project:wsl:${p.wslDistro}`,
+          group: 'Projects',
+          label: `Open folder in ${p.wslDistro}…`,
+          detail: 'git, terminal and agent run inside the distribution',
+          badge: 'project' as const,
+          profile: p,
+          run: () => {
+            onClose()
+            void window.devhub.project.pickFolder(`\\\\wsl.localhost\\${p.wslDistro}\\home`).then((root) => {
+              if (root) void openProject(root)
+            })
+          }
+        })),
       ...recent.map((p) => ({
         key: `project:${p.root}`,
         group: 'Projects',
@@ -67,7 +84,7 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
         badge: 'project' as const,
         run: () => void openProject(p.root)
       })),
-      ...(profiles ?? []).map((p) => ({
+      ...(profiles ?? []).filter((p) => !(p.kind === 'agent' && p.wslDistro)).map((p) => ({
         key: p.id,
         group: PROFILE_GROUP[p.kind],
         label: p.name,
