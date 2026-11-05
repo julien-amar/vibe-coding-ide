@@ -9,7 +9,7 @@ import { parseCargoArtifacts, parseCargoList, parseCargoOutput } from './cargo'
 import { parseJUnitXml } from './core'
 import { dotnetCase, dotnetFilter, parseDotnetLine, parseDotnetList, parseTrx } from './dotnet'
 import { goRunArgs, packageDir, parseGoList } from './go'
-import { jvmFilter, junitId, mergeJUnit, parseJavaTests } from './jvm'
+import { jvmFilter, junitId, mergeJUnit, parseJavaTests, surefirePatterns, surefireRuns } from './jvm'
 
 const FIXTURE = resolve(__dirname, '../../../e2e/fixtures/polyglot-tests')
 
@@ -178,6 +178,32 @@ describe('Java (Maven / Gradle)', () => {
       'addsPairs'
     ])
     expect(jvmFilter('maven', { projectId: 'x', file: 'sample.MathTest', titlePath: ['adds'] })).toEqual(['-Dtest=sample.MathTest#adds'])
+  })
+
+  it('lists for Maven only the classes Surefire runs (default names, or the POM includes / excludes)', () => {
+    const none = { includes: [], excludes: [] }
+    expect(['a/MathTest.java', 'a/TestMath.java', 'a/MathTests.java', 'a/MathTestCase.java'].every((p) => surefireRuns(p, none))).toBe(true)
+    expect(surefireRuns('a/MathChecks.java', none)).toBe(false)
+    expect(surefireRuns('a/MathTestHelper.java', none)).toBe(false)
+
+    const pom = `<project><build><plugins>
+      <plugin><artifactId>maven-compiler-plugin</artifactId><configuration><includes><include>nope</include></includes></configuration></plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <includes><include>**/*Checks.java</include><include>Spec*</include></includes>
+          <!-- <excludes><exclude>**/*.java</exclude></excludes> -->
+          <excludes><exclude>**/slow/**</exclude></excludes>
+        </configuration>
+      </plugin></plugins></build></project>`
+    const patterns = surefirePatterns(pom)
+    expect(patterns).toEqual({ includes: ['**/*Checks.java', 'Spec*'], excludes: ['**/slow/**'] })
+    expect(surefireRuns('a/MathChecks.java', patterns)).toBe(true)
+    expect(surefireRuns('a/b/SpecMath.java', patterns)).toBe(true)
+    expect(surefireRuns('a/MathTest.java', patterns)).toBe(false)
+    expect(surefireRuns('a/slow/BigChecks.java', patterns)).toBe(false)
+    expect(surefirePatterns('<project/>')).toEqual(none)
     expect(jvmFilter('maven', { projectId: 'x', file: 'sample.MathTest' })).toEqual(['-Dtest=sample.MathTest,sample.MathTest$*'])
     expect(jvmFilter('gradle', { projectId: 'x', file: 'sample.MathTest$Inner', titlePath: ['works'] })).toEqual(['--tests', 'sample.MathTest$Inner.works'])
   })

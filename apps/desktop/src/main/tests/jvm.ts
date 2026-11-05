@@ -147,10 +147,63 @@ export function reportFiles(dir: string, framework: JvmFramework, maxDepth = 6):
   return out
 }
 
-/** Test methods in the project's test sources (src/test/java of every module), with their file. */
-function javaTests(dir: string): (JavaTest & { source: string })[] {
+/** Surefire's default test classes (when the POM does not configure includes). */
+const SUREFIRE_INCLUDES = ['**/Test*.java', '**/*Test.java', '**/*Tests.java', '**/*TestCase.java']
+
+/** Includes / excludes of the maven-surefire-plugin configuration of a POM (empty when not configured). */
+export function surefirePatterns(pom: string): { includes: string[]; excludes: string[] } {
+  const plugin = /<plugin>(?:(?!<\/plugin>)[\s\S])*?<artifactId>\s*maven-surefire-plugin\s*<\/artifactId>(?:(?!<\/plugin>)[\s\S])*<\/plugin>/.exec(
+    pom.replace(/<!--[\s\S]*?-->/g, '')
+  )?.[0]
+  const list = (tag: string): string[] => {
+    const block = plugin && new RegExp(`<${tag}s>([\\s\\S]*?)</${tag}s>`).exec(plugin)?.[1]
+    return block ? [...block.matchAll(new RegExp(`<${tag}>\\s*([^<]+?)\\s*</${tag}>`, 'g'))].map((m) => m[1]) : []
+  }
+  return { includes: list('include'), excludes: list('exclude') }
+}
+
+/** Ant-style pattern (`**​/*Test.java`, `Test*`, `com/x/**`) as a regex on a path under src/test/java. */
+function antRegex(pattern: string): RegExp {
+  const p = pattern.replace(/\\/g, '/').replace(/^\//, '').replace(/\.(java|class)$/, '')
+  let re = ''
+  for (let i = 0; i < p.length; i++) {
+    if (p.startsWith('**/', i)) {
+      re += '(?:.*/)?'
+      i += 2
+    } else if (p.startsWith('**', i)) {
+      re += '.*'
+      i += 1
+    } else if (p[i] === '*') re += '[^/]*'
+    else if (p[i] === '?') re += '[^/]'
+    else re += p[i].replace(/[.+^${}()|[\]\\]/g, '\\$&')
+  }
+  // A pattern without folders matches the class name in any package (Surefire's -Dtest style).
+  return new RegExp(`^${p.includes('/') ? '' : '(?:.*/)?'}${re}$`)
+}
+
+/** Whether Surefire runs the test class in `path` (relative to src/test/java, e.g. "sample/MathTest.java"). */
+export function surefireRuns(path: string, patterns: { includes: string[]; excludes: string[] }): boolean {
+  const cls = path.replace(/\.java$/, '')
+  const includes = patterns.includes.length ? patterns.includes : SUREFIRE_INCLUDES
+  return includes.some((p) => antRegex(p).test(cls)) && !patterns.excludes.some((p) => antRegex(p).test(cls))
+}
+
+/**
+ * Test methods in the project's test sources (src/test/java of every module), with their file.
+ * Maven: only the classes Surefire runs (its includes / excludes in the module's POM, else the
+ * root POM, else its defaults: Test*, *Test, *Tests, *TestCase). Gradle runs any class with tests.
+ */
+function javaTests(dir: string, framework: JvmFramework): (JavaTest & { source: string })[] {
+  const rootPom = framework === 'maven' ? surefirePatterns(readText(join(dir, 'pom.xml'))) : undefined
   return findFiles(dir, ['.java'])
     .filter((p) => /(^|\/)src\/test\/java\//.test(p))
+    .filter((p) => {
+      if (framework !== 'maven') return true
+      const [moduleDir, inSources] = p.split(/(?:^|\/)src\/test\/java\//)
+      const modulePom = moduleDir ? surefirePatterns(readText(join(dir, moduleDir, 'pom.xml'))) : rootPom!
+      const configured = modulePom.includes.length || modulePom.excludes.length ? modulePom : rootPom!
+      return surefireRuns(inSources, configured)
+    })
     .flatMap((f) => parseJavaTests(readText(join(dir, f))).map((t) => ({ ...t, source: f })))
 }
 
@@ -169,7 +222,7 @@ function adapter(framework: JvmFramework): Adapter {
     ownsSubfolders: true,
 
     async list(dir) {
-      const tests: TestCase[] = javaTests(dir).map((t) => ({ id: testId(t.cls, [t.method]), file: t.cls, suite: [], name: t.method, source: t.source, line: t.line }))
+      const tests: TestCase[] = javaTests(dir, framework).map((t) => ({ id: testId(t.cls, [t.method]), file: t.cls, suite: [], name: t.method, source: t.source, line: t.line }))
       return { tests }
     },
 
@@ -181,7 +234,7 @@ function adapter(framework: JvmFramework): Adapter {
           : // cleanTest: run the tests even when Gradle considers them up to date.
             ['cleanTest', 'test', '--console=plain', ...filter]
       ctx.send(`$ ${framework === 'maven' ? 'mvn' : 'gradle'} ${args.join(' ')}\n`)
-      const known = javaTests(dir)
+      const known = javaTests(dir, framework)
       const mtimeOf = (f: string): number | undefined => {
         try {
           return statSync(join(dir, f)).mtimeMs
