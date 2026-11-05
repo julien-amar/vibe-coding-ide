@@ -61,6 +61,16 @@ const api: IdeApi = {
       return () => ipcRenderer.off('git:changed', listener)
     }
   },
+  tests: {
+    discover: (root) => ipcRenderer.invoke('tests:discover', root),
+    run: (root, req) => ipcRenderer.invoke('tests:run', root, req),
+    stop: (root) => ipcRenderer.send('tests:stop', root),
+    onOutput: (cb) => {
+      const listener = (_e: IpcRendererEvent, root: string, text: string): void => cb(root, text)
+      ipcRenderer.on('tests:output', listener)
+      return () => ipcRenderer.off('tests:output', listener)
+    }
+  },
   app: {
     openExternal: (url) => ipcRenderer.send('app:openExternal', url)
   }

@@ -19,7 +19,7 @@ A tabbed development environment — see [PLAN.md](PLAN.md) for the full design.
 ### Project tabs
 `+` → **Projects** → *Open folder…*, *Open folder in &lt;WSL distro&gt;…*, or a recent project.
 
-- **Panels:** Git, Terminal and AI agent to start with. Every panel header can **split** it right/down, **collapse** it to the side rail (its process keeps running — click it in the rail to bring it back) or **close** it. The rail's **+** adds a Terminal, AI agent or Git panel. **Drag a panel by its header** onto another panel to dock it to that edge. Drag the dividers to resize.
+- **Panels:** Git, Terminal and AI agent to start with, plus Tests in the side rail. Every panel header can **split** it right/down, **collapse** it to the side rail (its process keeps running — click it in the rail to bring it back) or **close** it. The rail's **+** adds a Terminal, AI agent, Git or Tests panel. **Drag a panel by its header** onto another panel to dock it to that edge. Drag the dividers to resize.
 - **Terminal / AI agent panels** run in the project folder; switch the shell or agent from the header (with icons). A panel whose process exits shows a **Restart** button.
 - **Git panel:**
   - *History* — all branches with a commit graph, branch/tag badges, commit details on click.
@@ -27,6 +27,7 @@ A tabbed development environment — see [PLAN.md](PLAN.md) for the full design.
   - *Branches* — switch, create, rename, merge into the current branch, delete (with a confirmation for unmerged branches), check out remote branches.
   - **New feature…** — creates `feature/<name>` in its own folder next to the repository (a git worktree) and opens it as a new project with its own terminal and agent, so you can work on it in parallel. Worktrees can be reopened or removed from the Branches view.
   - Fetch / Pull / Push (Publish for a branch without upstream), ahead/behind counts. Refreshes automatically when the repository changes.
+- **Tests panel:** finds the project's **Vitest** and **Playwright** tests (from their config files, also in sub-folders of a monorepo) and lists them by file and `describe()` block. **Run all**, or hover any project, file, suite or test and click **▶**; each test shows passed / failed / skipped and its duration, and files with failures open automatically. Click a test for its error and stack trace; **Output** shows the console output of the runs. Filter by name or show failed tests only; **■ Stop** ends a run. Tests run with the project's own installed tools (from `node_modules`), inside the distribution for WSL projects. Other frameworks (pytest, Jest, .NET, Go, Rust, JVM) are planned.
 - **WSL projects** (`\\wsl.localhost\<distro>\...`): git runs inside the distribution, the terminal opens the distro's shell in the project folder, and the agent defaults to one installed inside the distro (e.g. `claude` in Ubuntu), falling back to the Windows one.
 - Project tabs move between windows like any other tab and are restored on start.
 

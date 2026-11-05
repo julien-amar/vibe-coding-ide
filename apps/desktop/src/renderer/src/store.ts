@@ -128,7 +128,7 @@ async function createSession(profileId: string, cwd?: string): Promise<{ session
 async function startPaneSessions(layout: LayoutNode, cwd: string): Promise<LayoutNode> {
   const started = new Map<string, string>()
   for (const p of panesOf(layout)) {
-    if (p.type === 'git' || p.sessionId || !p.profileId) continue
+    if (p.type === 'git' || p.type === 'tests' || p.sessionId || !p.profileId) continue
     const s = await createSession(p.profileId, p.cwd ?? cwd)
     if (s) started.set(p.id, s.sessionId)
   }
@@ -139,11 +139,13 @@ function defaultProjectLayout(shell?: Profile, agent?: Profile): LayoutNode {
   const git: PaneNode = { kind: 'pane', id: 'git', type: 'git' }
   const term: PaneNode = { kind: 'pane', id: 'terminal', type: 'terminal', profileId: shell?.id }
   const ai: PaneNode = { kind: 'pane', id: 'agent', type: 'agent', profileId: agent?.id }
+  // Tests start collapsed in the side rail (discovery runs the project's test tools: only on demand).
+  const tests: PaneNode = { kind: 'pane', id: 'tests', type: 'tests', collapsed: true }
   return {
     kind: 'split',
     dir: 'row',
     sizes: [0.6, 0.4],
-    children: [{ kind: 'split', dir: 'column', sizes: [0.55, 0.45], children: [git, term] }, ai]
+    children: [{ kind: 'split', dir: 'column', sizes: [0.4, 0.3, 0.3], children: [git, tests, term] }, ai]
   }
 }
 
@@ -355,7 +357,7 @@ export const useTabs = create<State>((set, get) => ({
     const list = await profilesFor(tab.project.root)
     const root = tab.project.root
     const profileId =
-      type === 'git' ? undefined : (opts.profileId ?? (type === 'agent' ? defaultAgent(list, root) : defaultShell(list, root))?.id)
+      type === 'git' || type === 'tests' ? undefined : (opts.profileId ?? (type === 'agent' ? defaultAgent(list, root) : defaultShell(list, root))?.id)
     const pane: PaneNode = { kind: 'pane', id: newPaneId(), type, profileId }
     if (profileId) {
       const s = await createSession(profileId, tab.project.root)

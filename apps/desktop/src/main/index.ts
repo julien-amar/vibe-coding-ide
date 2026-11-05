@@ -2,7 +2,7 @@ import { existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, type Rectangle, type WebContents } from 'electron'
 import { mapPanes, sessionIdsOf } from '@shared/layout'
-import type { GitOpRequest, LayoutNode, PtyCreateRequest, PtyCreateResult, TabSnapshot, WindowInit, WindowTabsState, PackageUpdateInfo } from '@shared/types'
+import type { TestRunRequest, GitOpRequest,LayoutNode, PtyCreateRequest, PtyCreateResult, TabSnapshot, WindowInit, WindowTabsState, PackageUpdateInfo } from '@shared/types'
 import { gitLog, gitOp, GitWatcher } from './git'
 import { loadLayout, saveLayout, visibleBounds, type SavedWindow } from './layout-store'
 import { profileIcon } from './icons'
@@ -11,6 +11,7 @@ import { recentProjects, touchProject } from './projects'
 import { PtyManager } from './pty-manager'
 import { checkUpdates, forgetUpdates, type UpdateTarget } from './package-updates'
 import { parseWslPath } from '@shared/wsl-paths'
+import { discoverTests, runTests, stopAllTests, stopTests } from './test-runner'
 
 app.setName('vibe-coding-ide')
 // VIBE_CODING_IDE_USER_DATA: run with a separate profile (layout, recent projects), e.g. for automated tests.
@@ -184,7 +185,7 @@ function restoreOrCreate(): void {
 
 // ---------- Validation of renderer input ----------
 
-const PANE_TYPES = new Set(['terminal', 'agent', 'git'])
+const PANE_TYPES = new Set(['terminal', 'agent', 'git', 'tests'])
 const TAB_KINDS = new Set(['shell', 'wsl', 'agent', 'project'])
 
 /** Validate a layout tree coming from a renderer (drops anything malformed). */
@@ -378,6 +379,14 @@ function registerIpc(): void {
   })
   ipcMain.on('git:unwatch', (e, root: string) => gitWatcher.unwatch(String(root), e.sender))
 
+  ipcMain.handle('tests:discover', (_e, root: string) => (isDir(String(root)) ? discoverTests(String(root)) : []))
+  ipcMain.handle('tests:run', (e, root: string, req: TestRunRequest) =>
+    isDir(String(root))
+      ? runTests(String(root), { ...req, projectId: String(req?.projectId ?? '') }, e.sender)
+      : { ok: false, error: 'Folder not found', results: [], fileErrors: [] }
+  )
+  ipcMain.on('tests:stop', (_e, root: string) => stopTests(String(root)))
+
   ipcMain.on('app:openExternal', (_e, url: string) => {
     try {
       const { protocol } = new URL(url)
@@ -407,4 +416,7 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-app.on('will-quit', () => ptys.killAll())
+app.on('will-quit', () => {
+  ptys.killAll()
+  stopAllTests()
+})

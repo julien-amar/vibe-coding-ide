@@ -10,8 +10,9 @@ import { ProfileIcon } from './ProfileIcon'
 import { ProfileSelect } from './ProfileSelect'
 import { SplitView } from './SplitView'
 import { TerminalView } from './TerminalView'
+import { TestPanel } from './TestPanel'
 
-const PANE_ICON: Record<PaneNode['type'], string> = { git: '⎇', terminal: '>_', agent: 'AI' }
+const PANE_ICON: Record<PaneNode['type'], string> = { git: '⎇', terminal: '>_', agent: 'AI', tests: '✓' }
 const PANE_MIME = 'application/x-vibe-coding-ide-pane'
 
 /** Project folder for display: WSL folders as "<distro>: /linux/path". */
@@ -23,6 +24,7 @@ function displayPath(root: string): string {
 /** Human label for a pane (used in the side rail). */
 function paneLabel(pane: PaneNode, profiles: Profile[]): string {
   if (pane.type === 'git') return 'Git'
+  if (pane.type === 'tests') return 'Tests'
   const name = profiles.find((p) => p.id === pane.profileId)?.name
   if (pane.type === 'agent') return name ?? 'AI agent'
   return name ?? 'Terminal'
@@ -63,8 +65,8 @@ function PaneFrame({ tab, pane, title, actions, children }: { tab: Tab; pane: Pa
   const dropSide = useTabs((s) => (s.paneDrop?.paneId === pane.id ? s.paneDrop.side : undefined))
   const onlyPane = tab.project ? panesOf(tab.project.layout).length <= 1 : true
   // Terminal and agent panels can be split (the new panel duplicates the kind and profile).
-  // The Git panel has no split buttons: add panels from the side rail's "+" instead.
-  const canSplit = pane.type !== 'git'
+  // Git and Tests panels have no split buttons: add panels from the side rail's "+" instead.
+  const canSplit = pane.type === 'terminal' || pane.type === 'agent'
   const split = (side: DropSide): void => void addPane(tab.id, pane.type, { target: pane.id, side, profileId: pane.profileId })
 
   const isPaneDrag = (e: React.DragEvent): boolean => e.dataTransfer.types.includes(PANE_MIME)
@@ -207,6 +209,23 @@ function GitPane({ tab, pane, visible }: { tab: Tab; pane: PaneNode; visible: bo
   )
 }
 
+function TestsPane({ tab, pane, visible }: { tab: Tab; pane: PaneNode; visible: boolean }): React.JSX.Element {
+  return (
+    <PaneFrame
+      tab={tab}
+      pane={pane}
+      title={
+        <>
+          <span className="pane-icon tests">{PANE_ICON.tests}</span>
+          <span className="pane-title">Tests</span>
+        </>
+      }
+    >
+      <TestPanel root={tab.project!.root} visible={visible} />
+    </PaneFrame>
+  )
+}
+
 /**
  * "+" menu of the side rail: add a panel to the project. The menu is rendered
  * in a portal with fixed positioning: inside the rail it would be clipped by
@@ -268,6 +287,9 @@ function AddPanelButton({ tab }: { tab: Tab }): React.JSX.Element {
           </button>
           <button onClick={() => add('git')}>
             <span className="pane-icon git">{PANE_ICON.git}</span> Git
+          </button>
+          <button onClick={() => add('tests')}>
+            <span className="pane-icon tests">{PANE_ICON.tests}</span> Tests
           </button>
         </div>,
           document.body
@@ -334,6 +356,7 @@ export function ProjectView({ tab, visible }: { tab: Tab; visible: boolean }): R
       )
     }
     if (node.type === 'git') return <GitPane key={node.id} tab={tab} pane={node} visible={visible} />
+    if (node.type === 'tests') return <TestsPane key={node.id} tab={tab} pane={node} visible={visible} />
     return <TerminalPane key={node.id} tab={tab} pane={node} visible={visible} autoFocus={node.id === focusId} />
   }
 

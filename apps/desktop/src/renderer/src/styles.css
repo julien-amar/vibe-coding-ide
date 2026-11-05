@@ -19,6 +19,8 @@
   --pane-header: #ebebeb;
   --selection: rgba(0, 95, 184, 0.12);
   --danger: #c42b1c;
+  --success: #0f7b0f;
+  --warning: #9d5d00;
   color-scheme: light;
 }
 
@@ -43,6 +45,8 @@
     --pane-header: #252525;
     --selection: rgba(96, 205, 255, 0.14);
     --danger: #ff99a4;
+    --success: #6ccb5f;
+    --warning: #fce100;
     color-scheme: dark;
   }
 }
@@ -599,6 +603,11 @@ body.resizing-row * {
 .pane-icon.git {
   color: var(--badge-wsl);
   font-size: 14px;
+}
+
+.pane-icon.tests {
+  color: var(--success);
+  font-size: 13px;
 }
 
 .pane-title {
