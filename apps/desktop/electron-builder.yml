@@ -1,0 +1,52 @@
+# Installers for Windows, macOS and Linux (electron-builder).
+# Local: `pnpm --filter @devhub/desktop dist` builds for the current OS into apps/desktop/dist.
+# CI: .github/workflows/release.yml builds all three and publishes a GitHub Release.
+appId: dev.devhub.app
+productName: DevHub
+copyright: Copyright © 2026 DevHub contributors
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+
+directories:
+  output: dist
+  buildResources: build
+
+# The app is fully bundled by electron-vite into out/; node-pty (native) is the only runtime dependency.
+files:
+  - out/**
+  - package.json
+
+# Native binaries cannot run from inside the asar archive.
+asarUnpack:
+  - '**/node_modules/node-pty/**'
+
+# node-pty uses N-API (prebuilt / built at install time for the runner's OS), no rebuild for Electron needed.
+npmRebuild: false
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+    - target: zip
+  # Unsigned until an Apple Developer ID is configured (users must right-click > Open the first time).
+  identity: null
+
+linux:
+  category: Development
+  maintainer: julien-amar <julien-amar@users.noreply.github.com>
+  synopsis: Tabbed development environment
+  target:
+    - AppImage
+    - deb
+
+# Publishing is done by the release workflow (gh release), not by electron-builder.
+publish: null

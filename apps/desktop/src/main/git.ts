@@ -126,8 +126,8 @@ export async function gitLog(root: string): Promise<GitLog> {
 
 // ---------- Status ----------
 
-export async function gitStatus(root: string): Promise<GitStatus> {
-  const raw = await git(root, ['status', '--porcelain=v1', '-z', '--branch', '--untracked-files=all'])
+/** Parse `git status --porcelain=v1 -z --branch` output. */
+export function parseStatus(raw: string): GitStatus {
   const parts = raw.split('\0')
   const status: GitStatus = { files: [], ahead: 0, behind: 0 }
   for (let i = 0; i < parts.length; i++) {
@@ -155,6 +155,10 @@ export async function gitStatus(root: string): Promise<GitStatus> {
     status.files.push(file)
   }
   return status
+}
+
+export async function gitStatus(root: string): Promise<GitStatus> {
+  return parseStatus(await git(root, ['status', '--porcelain=v1', '-z', '--branch', '--untracked-files=all']))
 }
 
 // ---------- Branches & worktrees ----------
@@ -209,6 +213,12 @@ async function gitWorktrees(root: string): Promise<GitWorktree[]> {
   return list
 }
 
+/** Start point of a new branch / worktree: HEAD (current commit) or a validated branch name. */
+async function startPoint(root: string, v: unknown): Promise<string | undefined> {
+  const s = String(v ?? '').trim()
+  return !s || s === 'HEAD' ? undefined : validBranch(root, s)
+}
+
 /** Reject anything git would not accept as a branch name (also blocks option injection). */
 async function validBranch(root: string, name: unknown): Promise<string> {
   const n = String(name ?? '').trim()
@@ -235,7 +245,7 @@ function validHash(v: unknown): string {
 }
 
 /** Parse `--name-status -z` output: "M\0path\0" or "R100\0old\0new\0". */
-function parseNameStatus(raw: string): GitCommitFile[] {
+export function parseNameStatus(raw: string): GitCommitFile[] {
   const parts = raw.split('\0')
   const files: GitCommitFile[] = []
   for (let i = 0; i < parts.length; i++) {
@@ -254,7 +264,7 @@ function parseNameStatus(raw: string): GitCommitFile[] {
 }
 
 /** Folder name for a new feature worktree: next to the repository, "<repo>-<feature>". */
-function worktreeDir(root: string, feature: string): string {
+export function worktreeDir(root: string, feature: string): string {
   const wsl = process.platform === 'win32' ? parseWslPath(root) : undefined
   const slug = feature.replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '') || 'feature'
   if (wsl) {
@@ -323,7 +333,7 @@ export async function gitOp(root: string, req: GitOpRequest): Promise<GitOpResul
       }
       case 'createBranch': {
         const name = await validBranch(root, req.branch)
-        const start = req.start ? await validBranch(root, req.start) : undefined
+        const start = await startPoint(root, req.start)
         await git(root, req.checkout === false ? ['branch', name, ...(start ? [start] : [])] : ['switch', '-c', name, ...(start ? [start] : [])])
         return { ok: true }
       }
@@ -380,7 +390,7 @@ export async function gitOp(root: string, req: GitOpRequest): Promise<GitOpResul
       case 'addWorktree': {
         const feature = String(req.branch ?? '').trim()
         const branch = await validBranch(root, feature.includes('/') ? feature : `feature/${feature}`)
-        const base = req.start ? await validBranch(root, req.start) : 'HEAD'
+        const base = (await startPoint(root, req.start)) ?? 'HEAD'
         const dir = worktreeDir(root, feature.split('/').pop() ?? feature)
         await git(root, ['worktree', 'add', '-b', branch, '--', dir, base], { timeout: 120000 })
         return { ok: true, path: toProjectPath(root, dir), text: branch }

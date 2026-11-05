@@ -46,6 +46,24 @@ If Electron fails to start because its binary is missing, run `pnpm run ensure-e
 
 Automated UI checks: set `DEVHUB_USER_DATA=<folder>` to run with a separate profile (layout, recent projects), and start the app with `--remote-debugging-port=<port>` (or `DEVHUB_DEBUG=1`) to expose `window.__devhubTabs` and `.terminal-host.__xterm` for scripted checks over the DevTools protocol.
 
+## Tests
+```sh
+pnpm test        # unit tests (Vitest): layout tree, git / winget / shell parsers, git operations on a real repo
+pnpm build
+pnpm test:e2e    # end-to-end tests (Playwright): launches the built app with throwaway profiles and repos
+```
+Unit tests live next to the code (`src/**/*.test.ts`), end-to-end tests in `apps/desktop/e2e/`.
+
+## CI & releases (GitHub Actions)
+- **CI** (`.github/workflows/ci.yml`): on every push and pull request, type-check, unit tests, build and end-to-end tests on Windows, macOS and Linux.
+- **Release** (`.github/workflows/release.yml`): push a version tag to build the installers on all three platforms and publish them as a GitHub Release:
+  ```sh
+  git tag v0.2.0
+  git push origin v0.2.0
+  ```
+  Installers: Windows `.exe` (NSIS), macOS `.dmg` / `.zip` (Apple Silicon), Linux `.AppImage` / `.deb`. They are **unsigned** for now (Windows SmartScreen and macOS Gatekeeper will warn). *Actions → Release → Run workflow* builds them as downloadable artifacts without publishing.
+- Local installer for the current OS: `pnpm --filter @devhub/desktop dist` (output in `apps/desktop/dist`).
+
 ## Shortcuts
 | Keys | Action |
 |---|---|

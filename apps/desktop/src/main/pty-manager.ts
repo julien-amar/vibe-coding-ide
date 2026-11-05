@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import type { WebContents } from 'electron'
 import * as pty from 'node-pty'
 import type { Profile } from '@shared/types'
+import { lastReportedCwd } from './shell-integration'
 
 /** Max bytes of output kept per session, replayed when a window (re)attaches. */
 const MAX_BUFFER = 1024 * 1024
@@ -17,26 +18,6 @@ interface Session {
   exitCode?: number
   /** Working directory last reported by the shell (OSC 7 / OSC 9;9). */
   cwd?: string
-}
-
-/** OSC 9;9;"path" (Windows Terminal convention) and OSC 7;file://host/path. */
-const OSC_CWD = /\x1b\](?:9;9;"?([^"\x07\x1b]*)"?|7;file:\/\/[^/\x07\x1b]*(\/[^\x07\x1b]*))(?:\x07|\x1b\\)/g
-
-function lastReportedCwd(data: string): string | undefined {
-  let cwd: string | undefined
-  for (const m of data.matchAll(OSC_CWD)) {
-    if (m[1]) cwd = m[1]
-    else if (m[2]) {
-      try {
-        cwd = decodeURIComponent(m[2])
-      } catch {
-        cwd = m[2]
-      }
-    }
-  }
-  // Git Bash reports C:/Users/...; normalise to a Windows path.
-  if (cwd && /^[a-z]:\//i.test(cwd)) cwd = cwd.replace(/\//g, '\\')
-  return cwd
 }
 
 /**

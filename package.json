@@ -8,6 +8,9 @@
     "start": "pnpm --filter @devhub/desktop start",
     "typecheck": "pnpm --filter @devhub/desktop typecheck",
     "ensure-electron": "node -e \"require('fs').existsSync('node_modules/electron/dist')||require('child_process').execSync('node node_modules/electron/install.js',{stdio:'inherit'})\"",
-    "postinstall": "pnpm run ensure-electron"
-  }
+    "postinstall": "pnpm run ensure-electron",
+    "test": "pnpm --filter @devhub/desktop test",
+    "test:e2e": "pnpm --filter @devhub/desktop test:e2e"
+  },
+  "packageManager": "pnpm@12.16.1"
 }

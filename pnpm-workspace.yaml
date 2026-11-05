@@ -6,5 +6,7 @@ allowBuilds:
   node-pty: true
   electron: true
   esbuild: true
+  # Squirrel.Windows installer helper pulled in by electron-builder; not used (NSIS target)
+  electron-winstaller: false
 
 nodeLinker: hoisted
