@@ -41,6 +41,10 @@ mac:
   identity: null
 
 linux:
+  # Defaults to the package name (@devhub/desktop), which is not a valid file name.
+  executableName: devhub
+  # The window's app id / WM_CLASS matches the generated devhub.desktop entry (desktopName in package.json).
+  syncDesktopName: true
   category: Development
   maintainer: julien-amar <julien-amar@users.noreply.github.com>
   synopsis: Tabbed development environment

@@ -5,6 +5,7 @@
   "description": "DevHub - a tabbed development environment",
   "license": "MIT",
   "main": "out/main/index.js",
+  "desktopName": "devhub.desktop",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
