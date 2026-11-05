@@ -204,7 +204,12 @@ describe('discovering and running real tests (fixture project)', () => {
       'unit/math.check.ts::is skipped',
       'unit/math.check.ts::math > adds numbers',
       'unit/math.check.ts::math > fails on purpose',
-      'unit/math.check.ts::math > nested > multiplies'
+      'unit/math.check.ts::math > nested > multiplies',
+      // Real names (not a text reading of the file): escapes kept, titles computed, no callbacks.
+      'unit/names.check.ts::names > computed title 1',
+      'unit/names.check.ts::names > computed title 2',
+      'unit/names.check.ts::names > is not confused by callbacks',
+      'unit/names.check.ts::names > keeps \\\\wsl.localhost escapes'
     ])
     expect(pw.error).toBeUndefined()
     expect(pw.tests.map((t) => t.id)).toEqual(['pw/basic.pw.ts::basic > passes', 'pw/basic.pw.ts::basic > fails on purpose'])
@@ -219,13 +224,11 @@ describe('discovering and running real tests (fixture project)', () => {
     expect(byId['unit/math.check.ts::math > fails on purpose'].message).toMatch(/expected 4 to be 5/)
     expect(byId['unit/math.check.ts::is skipped'].status).toBe('skipped')
     expect(output.join('')).toMatch(/\$ vitest run/)
-    // Live results arrived during the run (and the marked lines are not in the output).
-    expect(progress.map((p) => `${p.id}=${p.status}`).sort()).toEqual([
-      'unit/math.check.ts::is skipped=skipped',
-      'unit/math.check.ts::math > adds numbers=passed',
-      'unit/math.check.ts::math > fails on purpose=failed',
-      'unit/math.check.ts::math > nested > multiplies=passed'
-    ])
+    // The listing and the run agree: same tests, same ids (the panel's counts depend on it).
+    const listed = (await discoverTests(FIXTURE)).find((p) => p.framework === 'vitest')!.tests.map((t) => t.id)
+    expect(all.results.map((r) => r.id).sort()).toEqual(listed.sort())
+    // Live results arrived during the run, one per test (and the marked lines are not in the output).
+    expect(progress.map((p) => `${p.id}=${p.status}`).sort()).toEqual(all.results.map((r) => `${r.id}=${r.status}`).sort())
     expect(output.join('')).not.toContain(RESULT_MARK)
     progress.length = 0
 

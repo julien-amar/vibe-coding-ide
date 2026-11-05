@@ -8,7 +8,10 @@ const [vitestNode, out] = process.argv.slice(2)
 const { createVitest } = await import(pathToFileURL(vitestNode).href)
 const ctx = await createVitest('test', { watch: false, run: true })
 try {
-  const { testModules, unhandledErrors } = await ctx.collect([])
+  // staticParse: false = load the test files to collect their tests. Vitest 5 otherwise reads them
+  // as text, which gets names with escapes or computed titles wrong and mistakes some calls for
+  // tests, so the list would not match what runs.
+  const { testModules, unhandledErrors } = await ctx.collect([], { staticParse: false })
   const tests = []
   for (const m of testModules) {
     for (const t of m.children.allTests()) {
