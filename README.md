@@ -21,6 +21,7 @@ A tabbed development environment — see [PLAN.md](PLAN.md) for the full design.
   - **Terminal** — a shell started in the project folder (switch shell from the pane header).
   - **AI agent** — your agent CLI (Claude Code, Codex, Gemini, opencode, pi — whichever is installed) started in the project folder; switch agents from the pane header.
 - A pane whose process exits shows a **Restart** button; drag the dividers to resize panes.
+- Shells, WSL distributions and AI agents show their **icon** in the launcher and in the project panes' shell/agent dropdown: the real icon of the installed software where Windows provides one (executable icon, the distro's own `shortcut.ico`, Git for Windows' icon), otherwise a small coloured monogram unique to that entry.
 - Each panel has a **collapse** button (⇤ in its header): the panel moves to a slim rail on the left of the project and the remaining panels take its space. Click it in the rail to bring it back. Its process keeps running while collapsed, and collapsed panels are remembered (moving the tab, restarting the app).
 - Project tabs move between windows like any other tab (all their processes keep running) and are restored on start: same folder, layout and pane sizes, fresh processes, previous output shown above the restore marker.
 

@@ -3,6 +3,8 @@ import type { LayoutNode, Profile } from '@shared/types'
 import { useProfiles } from '../profiles'
 import { useTabs, type Tab } from '../store'
 import { GitLogPane } from './GitLogPane'
+import { ProfileIcon } from './ProfileIcon'
+import { ProfileSelect } from './ProfileSelect'
 import { SplitView } from './SplitView'
 import { TerminalView } from './TerminalView'
 
@@ -38,25 +40,17 @@ function TerminalPane({ tab, pane, visible, autoFocus }: { tab: Tab; pane: PaneN
   const exitCode = useTabs((s) => (pane.sessionId ? s.paneExit[pane.sessionId] : undefined))
   const isAgent = pane.type === 'agent'
   const choices = profiles.filter((p) => (isAgent ? p.kind === 'agent' : p.kind !== 'agent'))
-  const current = profiles.find((p) => p.id === pane.profileId)
 
   return (
     <div className="pane">
       <div className="pane-header">
-        <span className={`pane-icon ${pane.type}`}>{PANE_ICON[pane.type]}</span>
-        <select
-          className="pane-select"
-          value={pane.profileId ?? ''}
+        <ProfileSelect
+          value={pane.profileId}
+          choices={choices}
+          placeholder={isAgent ? 'No agent' : 'No shell'}
           title={isAgent ? 'Switch AI agent (restarts the pane)' : 'Switch shell (restarts the pane)'}
-          onChange={(e) => void restartPane(tab.id, pane.id, e.target.value)}
-        >
-          {!current && <option value="">{isAgent ? 'No agent' : 'No shell'}</option>}
-          {choices.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+          onChange={(id) => void restartPane(tab.id, pane.id, id)}
+        />
         <span className="pane-path" title={tab.project?.root}>
           {tab.project?.root}
         </span>
@@ -112,6 +106,7 @@ function SideRail({ tab, panes }: { tab: Tab; panes: PaneNode[] }): React.JSX.El
     <nav className="side-rail" aria-label="Collapsed panels">
       {panes.map((p) => {
         const label = paneLabel(p, profiles)
+        const profile = profiles.find((x) => x.id === p.profileId)
         const exited = p.sessionId !== undefined && paneExit[p.sessionId] !== undefined
         return (
           <button
@@ -120,7 +115,7 @@ function SideRail({ tab, panes }: { tab: Tab; panes: PaneNode[] }): React.JSX.El
             title={`Show ${label}${exited ? ' (process exited)' : ''}`}
             onClick={() => setPaneCollapsed(tab.id, p.id, false)}
           >
-            <span className={`pane-icon ${p.type}`}>{PANE_ICON[p.type]}</span>
+            {profile ? <ProfileIcon profile={profile} /> : <span className={`pane-icon ${p.type}`}>{PANE_ICON[p.type]}</span>}
             <span className="rail-label">{label}</span>
           </button>
         )

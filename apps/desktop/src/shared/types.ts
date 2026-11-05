@@ -114,6 +114,8 @@ export interface DevHubApi {
   platform: NodeJS.Platform
   profiles: {
     list(refresh?: boolean): Promise<Profile[]>
+    /** Icon of the installed shell/distro/agent as a data: URL, or null (draw a monogram). */
+    icon(profileId: string): Promise<string | null>
   }
   pty: {
     create(req: PtyCreateRequest): Promise<PtyCreateResult>

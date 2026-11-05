@@ -5,6 +5,7 @@ import { mapPanes, sessionIdsOf } from '@shared/layout'
 import type { LayoutNode, PtyCreateRequest, PtyCreateResult, TabSnapshot, WindowInit, WindowTabsState } from '@shared/types'
 import { gitLog, GitWatcher } from './git'
 import { loadLayout, saveLayout, visibleBounds, type SavedWindow } from './layout-store'
+import { profileIcon } from './icons'
 import { findProfile, listProfiles } from './profiles'
 import { recentProjects, touchProject } from './projects'
 import { PtyManager } from './pty-manager'
@@ -246,6 +247,10 @@ const isDir = (p: string): boolean => {
 
 function registerIpc(): void {
   ipcMain.handle('profiles:list', (_e, refresh?: boolean) => listProfiles(Boolean(refresh)))
+  ipcMain.handle('profiles:icon', async (_e, id: string) => {
+    const profile = await findProfile(String(id))
+    return profile ? profileIcon(profile) : null
+  })
 
   ipcMain.handle('pty:create', async (e, req: PtyCreateRequest): Promise<PtyCreateResult> => {
     const profile = await findProfile(req.profileId)

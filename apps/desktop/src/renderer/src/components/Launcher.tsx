@@ -3,6 +3,7 @@ import type { Profile, RecentProject, TabKind } from '@shared/types'
 import { loadProfiles } from '../profiles'
 import { useTabs } from '../store'
 import { KindBadge } from './KindBadge'
+import { ProfileIcon } from './ProfileIcon'
 
 interface Entry {
   key: string
@@ -10,6 +11,8 @@ interface Entry {
   label: string
   detail?: string
   badge: TabKind
+  /** Launch profile (shows the shell/distro/agent icon instead of the kind badge). */
+  profile?: Profile
   run: () => void
 }
 
@@ -70,6 +73,7 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
         label: p.name,
         detail: p.source,
         badge: p.kind,
+        profile: p,
         run: () => void openProfile(p)
       }))
     ]
@@ -127,7 +131,7 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
                     onClick={item.run}
                     title={item.detail}
                   >
-                    <KindBadge kind={item.badge} />
+                    {item.profile ? <ProfileIcon profile={item.profile} /> : <KindBadge kind={item.badge} />}
                     <span className="launcher-item-name">{item.label}</span>
                     <span className="launcher-item-source">{item.detail}</span>
                   </button>
