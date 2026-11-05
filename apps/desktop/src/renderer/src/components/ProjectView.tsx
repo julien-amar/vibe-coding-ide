@@ -61,9 +61,10 @@ function PaneFrame({ tab, pane, title, actions, children }: { tab: Tab; pane: Pa
   const setPaneDrop = useTabs((s) => s.setPaneDrop)
   const dropSide = useTabs((s) => (s.paneDrop?.paneId === pane.id ? s.paneDrop.side : undefined))
   const onlyPane = tab.project ? panesOf(tab.project.layout).length <= 1 : true
-  // A split duplicates the panel kind (git splits into a terminal).
-  const splitType: PaneType = pane.type === 'git' ? 'terminal' : pane.type
-  const split = (side: DropSide): void => void addPane(tab.id, splitType, { target: pane.id, side, profileId: pane.type === 'git' ? undefined : pane.profileId })
+  // Terminal and agent panels can be split (the new panel duplicates the kind and profile).
+  // The Git panel has no split buttons: add panels from the side rail's "+" instead.
+  const canSplit = pane.type !== 'git'
+  const split = (side: DropSide): void => void addPane(tab.id, pane.type, { target: pane.id, side, profileId: pane.profileId })
 
   const isPaneDrag = (e: React.DragEvent): boolean => e.dataTransfer.types.includes(PANE_MIME)
 
@@ -82,12 +83,16 @@ function PaneFrame({ tab, pane, title, actions, children }: { tab: Tab; pane: Pa
         {title}
         <span className="spacer" />
         {actions}
-        <button className="icon-button pane-action" title="Split right" onClick={() => split('right')}>
-          <Icon d={ICONS.splitRight} />
-        </button>
-        <button className="icon-button pane-action" title="Split down" onClick={() => split('bottom')}>
-          <Icon d={ICONS.splitDown} />
-        </button>
+        {canSplit && (
+          <>
+            <button className="icon-button pane-action" title="Split right" onClick={() => split('right')}>
+              <Icon d={ICONS.splitRight} />
+            </button>
+            <button className="icon-button pane-action" title="Split down" onClick={() => split('bottom')}>
+              <Icon d={ICONS.splitDown} />
+            </button>
+          </>
+        )}
         <button className="icon-button pane-action collapse-button" title="Collapse to the side bar (the process keeps running)" onClick={() => setPaneCollapsed(tab.id, pane.id, true)}>
           <Icon d={ICONS.collapse} />
         </button>
