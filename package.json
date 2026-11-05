@@ -1,0 +1,11 @@
+{
+  "name": "devhub",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "dev": "pnpm --filter @devhub/desktop dev",
+    "build": "pnpm --filter @devhub/desktop build",
+    "start": "pnpm --filter @devhub/desktop start",
+    "typecheck": "pnpm --filter @devhub/desktop typecheck"
+  }
+}

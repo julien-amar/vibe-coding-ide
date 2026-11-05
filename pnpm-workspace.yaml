@@ -1,0 +1,10 @@
+packages:
+  - apps/*
+  - packages/*
+
+allowBuilds:
+  node-pty: true
+  electron: true
+  esbuild: true
+
+nodeLinker: hoisted

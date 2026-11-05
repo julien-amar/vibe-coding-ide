@@ -1,0 +1,165 @@
+import { useEffect, useRef } from 'react'
+import { Terminal, type ITheme } from '@xterm/xterm'
+import { FitAddon } from '@xterm/addon-fit'
+import { WebglAddon } from '@xterm/addon-webgl'
+import { WebLinksAddon } from '@xterm/addon-web-links'
+import { onSessionData, onSessionExit } from '../pty-bus'
+import { handleAppShortcut } from '../shortcuts'
+import { useTabs, type Tab } from '../store'
+
+const darkTheme: ITheme = {
+  background: '#0c0c0c',
+  foreground: '#cccccc',
+  cursor: '#ffffff',
+  selectionBackground: '#3a3d41',
+  black: '#0c0c0c', red: '#c50f1f', green: '#13a10e', yellow: '#c19c00',
+  blue: '#0037da', magenta: '#881798', cyan: '#3a96dd', white: '#cccccc',
+  brightBlack: '#767676', brightRed: '#e74856', brightGreen: '#16c60c', brightYellow: '#f9f1a5',
+  brightBlue: '#3b78ff', brightMagenta: '#b4009e', brightCyan: '#61d6d6', brightWhite: '#f2f2f2'
+}
+
+const lightTheme: ITheme = {
+  ...darkTheme,
+  background: '#ffffff',
+  foreground: '#1a1a1a',
+  cursor: '#1a1a1a',
+  selectionBackground: '#add6ff',
+  white: '#6e6e6e',
+  brightWhite: '#1a1a1a',
+  brightYellow: '#986f00'
+}
+
+const media = window.matchMedia('(prefers-color-scheme: dark)')
+const currentTheme = (): ITheme => (media.matches ? darkTheme : lightTheme)
+
+async function copySelection(term: Terminal): Promise<boolean> {
+  const text = term.getSelection()
+  if (!text) return false
+  await navigator.clipboard.writeText(text)
+  term.clearSelection()
+  return true
+}
+
+async function paste(term: Terminal): Promise<void> {
+  const text = await navigator.clipboard.readText()
+  if (text) term.paste(text)
+}
+
+export function TerminalView({ tab, active }: { tab: Tab; active: boolean }): React.JSX.Element {
+  const hostRef = useRef<HTMLDivElement>(null)
+  const termRef = useRef<Terminal | null>(null)
+  const fitRef = useRef<FitAddon | null>(null)
+  const { sessionId } = tab
+
+  useEffect(() => {
+    const host = hostRef.current!
+    const term = new Terminal({
+      fontFamily: '"Cascadia Mono", "Cascadia Code", Consolas, Menlo, "DejaVu Sans Mono", monospace',
+      fontSize: 14,
+      cursorBlink: true,
+      scrollback: 10000,
+      allowProposedApi: true,
+      theme: currentTheme()
+    })
+    const fit = new FitAddon()
+    term.loadAddon(fit)
+    term.loadAddon(new WebLinksAddon((_e, uri) => window.devhub.app.openExternal(uri)))
+    term.open(host)
+    try {
+      const webgl = new WebglAddon()
+      webgl.onContextLoss(() => webgl.dispose())
+      term.loadAddon(webgl)
+    } catch {
+      /* fall back to the DOM renderer */
+    }
+    termRef.current = term
+    fitRef.current = fit
+
+    term.attachCustomKeyEventHandler((e) => {
+      if (handleAppShortcut(e)) return false
+      if (e.type !== 'keydown') return true
+      const key = e.key.toLowerCase()
+      const ctrl = e.ctrlKey || e.metaKey
+      // Ctrl+Shift+C / Ctrl+C with a selection copies; Ctrl+Shift+V / Ctrl+V pastes.
+      if (ctrl && key === 'c' && (e.shiftKey || term.hasSelection())) {
+        void copySelection(term)
+        return false
+      }
+      if (ctrl && key === 'v') {
+        void paste(term)
+        return false
+      }
+      return true
+    })
+
+    host.addEventListener('contextmenu', (e) => {
+      e.preventDefault()
+      void copySelection(term).then((copied) => {
+        if (!copied) void paste(term)
+      })
+    })
+
+    // Replay buffered output, dropping live events received before the snapshot
+    // (they are already contained in it).
+    let attached = false
+    const offData = onSessionData(sessionId, (data) => {
+      if (attached) term.write(data)
+    })
+    void window.devhub.pty.attach(sessionId).then((buffer) => {
+      if (buffer) term.write(buffer)
+      attached = true
+    })
+    const offExit = onSessionExit((id, code) => {
+      if (id === sessionId) term.write(`\r\n\x1b[90m[process exited with code ${code}]\x1b[0m\r\n`)
+    })
+
+    const dataSub = term.onData((d) => window.devhub.pty.write(sessionId, d))
+    const resizeSub = term.onResize(({ cols, rows }) => window.devhub.pty.resize(sessionId, cols, rows))
+    const titleSub = term.onTitleChange((t) => useTabs.getState().setAutoTitle(tab.id, t))
+
+    const doFit = (): void => {
+      if (host.clientWidth > 0 && host.clientHeight > 0) {
+        try {
+          fit.fit()
+        } catch {
+          /* not ready */
+        }
+      }
+    }
+    const ro = new ResizeObserver(() => requestAnimationFrame(doFit))
+    ro.observe(host)
+    doFit()
+
+    const onScheme = (): void => {
+      term.options.theme = currentTheme()
+    }
+    media.addEventListener('change', onScheme)
+
+    return () => {
+      media.removeEventListener('change', onScheme)
+      ro.disconnect()
+      offData()
+      offExit()
+      dataSub.dispose()
+      resizeSub.dispose()
+      titleSub.dispose()
+      term.dispose()
+      termRef.current = null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId])
+
+  useEffect(() => {
+    if (!active) return
+    requestAnimationFrame(() => {
+      try {
+        fitRef.current?.fit()
+      } catch {
+        /* ignore */
+      }
+      termRef.current?.focus()
+    })
+  }, [active])
+
+  return <div ref={hostRef} className={`terminal-host${active ? ' active' : ''}`} />
+}
