@@ -285,8 +285,17 @@ test('other agents get the settings in their own format (Codex CLI, pi) or are s
   expect(instructions).toContain('Use pnpm.\\nSay \\"hi\\" first.')
   expect(instructions).toMatch(/- haiku: Answers with a haiku \(file: [^)]*SKILL\.md\)/)
 
-  // pi: instructions and skills as flags; no MCP (shown as such, "Only these servers" disabled).
+  // "Only these skills" (Skills tab).
+  dialog = await openSettings(page, pane)
+  await dialog.getByRole('tab', { name: /Skills/ }).click()
+  await dialog.getByLabel('Only these skills').check()
+  await page.keyboard.press('Escape')
+
+  // pi: instructions and skills as flags, its own skills off (--no-skills); no MCP (shown as such,
+  // "Only these servers" disabled).
   const pi = await useAgent('agent:pi')
+  expect(pi.indexOf('--no-skills')).toBeGreaterThan(-1)
+  expect(pi.indexOf('--no-skills')).toBeLessThan(pi.indexOf('--skill'))
   expect(readFileSync(pi[pi.indexOf('--append-system-prompt') + 1], 'utf8')).toBe('Use pnpm.\nSay "hi" first.\n')
   expect(pi[pi.indexOf('--skill') + 1]).toMatch(/agent-skills[\\/]haiku$/)
   expect(pi.join(' ')).not.toContain('demo-tools')
@@ -302,6 +311,8 @@ test('other agents get the settings in their own format (Codex CLI, pi) or are s
   dialog = await openSettings(page, pane)
   await expect(dialog.locator('.harness-support-line')).toHaveClass(/none/)
   await expect(dialog.locator('.harness-support-line')).toContainText('only reads settings from ~/.gemini')
+  await dialog.getByRole('tab', { name: /Skills/ }).click()
+  await expect(dialog.getByLabel('Only these skills')).toBeDisabled()
 })
 
 test('a server that fails to start shows its error and output; disabling servers and "only these servers"', async () => {

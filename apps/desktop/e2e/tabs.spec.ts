@@ -62,10 +62,12 @@ test('tabs can be renamed, reordered and closed', async () => {
   for (let i = 1; i <= 10; i++) {
     await page.mouse.move(to.x + (to.width * 0.75 * i) / 10, to.y + to.height / 2)
   }
-  // Chromium does not always report the last position of an HTML5 drag (seen on Windows CI):
-  // keep nudging the mouse over the right half until the drop marker follows.
-  for (let i = 0; i < 20 && !/drop-after/.test((await page.locator('.tab').nth(1).getAttribute('class')) ?? ''); i++) {
-    await page.mouse.move(to.x + to.width * (0.7 + (i % 2) * 0.1), to.y + to.height / 2 + (i % 3) - 1)
+  // Chromium does not always report the last position of an HTML5 drag, and the tab strip can
+  // shift once the drag starts (seen on Windows CI): keep nudging the mouse over the right half of
+  // the target, measured again each time, until the drop marker follows.
+  for (let i = 0; i < 30 && !/drop-after/.test((await page.locator('.tab').nth(1).getAttribute('class')) ?? ''); i++) {
+    const now = (await page.locator('.tab').nth(1).boundingBox())!
+    await page.mouse.move(now.x + now.width * (0.7 + (i % 2) * 0.1), now.y + now.height / 2 + (i % 3) - 1)
     await page.waitForTimeout(50)
   }
   await expect(page.locator('.tab').nth(1)).toHaveClass(/drop-after/)

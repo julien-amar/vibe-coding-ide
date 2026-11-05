@@ -243,6 +243,22 @@ function agents(): Profile[] {
 let cache: Profile[] | undefined
 /** Agents found inside WSL distributions (discovered on demand, per distro). */
 const wslAgentCache = new Map<string, Profile[]>()
+const wslHomeCache = new Map<string, Promise<string | undefined>>()
+
+/** The distribution user's home folder as a \\wsl.localhost path (asked once per distribution). */
+export function wslHome(distro: string): Promise<string | undefined> {
+  const known = wslHomeCache.get(distro)
+  if (known) return known
+  const wsl = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe')
+  const p = new Promise<string | undefined>((resolve) => {
+    execFile(wsl, ['-d', distro, '--exec', 'sh', '-c', 'printf %s "$HOME"'], { encoding: 'buffer', timeout: 20000, windowsHide: true }, (_err, stdout) => {
+      const home = decodeWslOutput((stdout as Buffer) ?? Buffer.alloc(0)).trim()
+      resolve(home.startsWith('/') ? `\\\\wsl.localhost\\${distro}${home.replace(/\//g, '\\')}` : undefined)
+    })
+  })
+  wslHomeCache.set(distro, p)
+  return p
+}
 
 export async function listProfiles(refresh = false): Promise<Profile[]> {
   if (cache && !refresh) return [...cache, ...[...wslAgentCache.values()].flat()]
@@ -269,7 +285,9 @@ export function wslAgents(distro: string): Promise<Profile[]> {
       const found: Profile[] = []
       for (const line of decodeWslOutput((stdout as Buffer) ?? Buffer.alloc(0)).split(/\r?\n/)) {
         const m = /^(\w+)=(\/.+)$/.exec(line.trim())
-        if (!m || !AGENT_LABELS[m[1]]) continue
+        // Commands under /mnt/ are Windows programs reached through WSL's Windows PATH (npm installs
+        // on Windows): they are not agents of the distribution (and often do not run there).
+        if (!m || !AGENT_LABELS[m[1]] || m[2].startsWith('/mnt/')) continue
         found.push({
           id: `wslagent:${distro}:${m[1]}`,
           name: `${AGENT_LABELS[m[1]]} (${distro})`,

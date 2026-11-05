@@ -398,7 +398,7 @@ export const useTabs = create<State>((set, get) => ({
     const tab = get().tabs.find((t) => t.id === tabId)
     const pane = tab?.project && panesOf(tab.project.layout).find((p) => p.id === paneId)
     if (!tab?.project || !pane) return
-    const empty = !harness.mcpServers.length && !harness.skills.length && !harness.instructions.trim() && !harness.strictMcp
+    const empty = !harness.mcpServers.length && !harness.skills.length && !harness.instructions.trim() && !harness.strictMcp && !harness.strictSkills
     get().setLayout(tabId, mapPanes(tab.project.layout, (p) => (p.id === paneId ? { ...p, harness: empty ? undefined : harness } : p)))
     // Its running agent started with the previous settings.
     if (pane.sessionId && get().paneExit[pane.sessionId] === undefined) set((st) => ({ harnessStale: { ...st.harnessStale, [pane.sessionId!]: true } }))

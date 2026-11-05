@@ -59,6 +59,8 @@ export interface Harness {
   instructions: string
   /** Use only the harness's MCP servers (not the user's or the repository's .mcp.json). */
   strictMcp?: boolean
+  /** Use only the harness's skills (not the user's, the repository's or the agent's bundled ones). */
+  strictSkills?: boolean
 }
 
 /** Result of starting an MCP server and listing its tools. */
@@ -91,6 +93,8 @@ export interface AgentHarnessSupport {
   instructions: boolean
   /** "Only these servers": the agent can be made to ignore its other MCP configurations. */
   strictMcp: boolean
+  /** "Only these skills": the agent can be made to ignore its other skills. */
+  strictSkills: boolean
   /** How the settings reach the agent, or why they do not. */
   note?: string
 }

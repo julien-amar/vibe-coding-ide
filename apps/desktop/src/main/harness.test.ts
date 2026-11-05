@@ -10,6 +10,8 @@ import {
   compileHarness,
   directLaunch,
   supportOf,
+  agentPath,
+  skillNamesIn,
   harnessIsEmpty,
   listSkills,
   parseHttpReply,
@@ -191,6 +193,52 @@ describe('compiling a harness for Claude Code', () => {
     })
     expect(supportOf('pi')).toMatchObject({ mcp: false, skills: true, instructions: true })
     expect(supportOf('gemini')).toMatchObject({ mcp: false, skills: false, instructions: false })
+  })
+
+  it('only these skills: each agent turns off its other skills in its own way', () => {
+    const root = join(base, 'strictproj')
+    const home = join(base, 'strict-home')
+    // Skills the agents would find on their own: the user's (Claude, Codex, ~/.agents) and the repository's.
+    write(join(home, '.claude', 'skills', 'mine', 'SKILL.md'), '---\nname: mine\n---\n')
+    write(join(home, '.codex', 'skills', '.system', 'imagegen', 'SKILL.md'), '---\nname: imagegen\n---\n')
+    write(join(home, '.agents', 'skills', 'shared', 'SKILL.md'), '---\nname: shared\n---\n')
+    write(join(root, '.claude', 'skills', 'repo-skill', 'SKILL.md'), '---\nname: repo-skill\n---\n')
+    write(join(root, '.agents', 'skills', 'repo-agents', 'SKILL.md'), '---\nname: repo-agents\n---\n')
+    const h = { ...sample(root), strictSkills: true }
+    // A WSL-style target lets the test choose the home folder the agents' skills are read from.
+    const target = { kind: 'wsl' as const, distro: 'X', home }
+
+    const claude = compileHarness('claude', h, root, join(base, 'strict-claude'), target).args
+    const settings = JSON.parse(readFileSync(join(base, 'strict-claude', 'settings.json'), 'utf8'))
+    expect(claude[claude.indexOf('--settings') + 1]).toMatch(/strict-claude\/settings\.json$/)
+    expect(settings).toEqual({ disableBundledSkills: true, skillOverrides: { mine: 'off', 'repo-skill': 'off' } })
+
+    const codex = compileHarness('codex', h, root, join(base, 'strict-codex'), target).args
+    const config = codex[codex.findIndex((a) => a.startsWith('skills.config='))]
+    for (const n of ['imagegen', 'shared', 'repo-agents']) expect(config).toContain(`{ name = "${n}", enabled = false }`)
+    expect(config).not.toContain('haiku')
+
+    const oc = compileHarness('opencode', h, root, join(base, 'strict-oc')).env.OPENCODE_CONFIG
+    expect(JSON.parse(readFileSync(oc, 'utf8')).permission).toEqual({ skill: { '*': 'deny', haiku: 'allow' } })
+
+    expect(compileHarness('pi', h, root, join(base, 'strict-pi')).args).toContain('--no-skills')
+    // Without the option, nothing is turned off.
+    expect(compileHarness('pi', sample(root), root, join(base, 'strict-pi2')).args).not.toContain('--no-skills')
+    expect(skillNamesIn([join(home, '.codex', 'skills')])).toEqual(['imagegen'])
+  })
+
+  it('WSL agents: paths written for Linux, server commands left as typed', () => {
+    const root = '\\\\wsl.localhost\\Ubuntu\\home\\me\\proj'
+    const target = { kind: 'wsl' as const, distro: 'Ubuntu' }
+    expect(agentPath(target, 'C:\\Users\\me\\AppData\\Roaming\\x\\mcp.json')).toBe('/mnt/c/Users/me/AppData/Roaming/x/mcp.json')
+    expect(agentPath(target, `${root}\\skills\\a`)).toBe('/home/me/proj/skills/a')
+    expect(agentPath({ kind: 'host' }, 'C:\\x')).toBe('C:\\x')
+    const out = join(base, 'wsl-out')
+    const { args } = compileHarness('claude', sanitizeHarness({ mcpServers: [{ name: 'n', command: 'npx', args: ['-y', 'pkg'] }], instructions: 'x' }), base, out, target)
+    // (A Windows temp folder becomes /mnt/<drive>/…; other systems' paths are already Linux paths.)
+    expect(args[1]).toMatch(process.platform === 'win32' ? /^\/mnt\/[a-z]\/.*\/wsl-out\/mcp\.json$/ : /\/wsl-out\/mcp\.json$/)
+    // npx is not wrapped in cmd /c inside WSL.
+    expect(JSON.parse(readFileSync(join(out, 'mcp.json'), 'utf8')).mcpServers.n).toEqual({ command: 'npx', args: ['-y', 'pkg'] })
   })
 
   it('launches npm command shims (codex.cmd…) directly, so arguments do not go through cmd.exe', () => {

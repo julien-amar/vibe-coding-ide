@@ -3,8 +3,9 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statS
 import { homedir } from 'node:os'
 import { basename, isAbsolute, join, resolve } from 'node:path'
 import type { AgentHarnessSupport, Harness, McpCheckResult, McpServer, SkillInfo } from '@shared/types'
+import { parseWslPath } from '@shared/wsl-paths'
 import { launchSpec, which } from './profiles'
-import { killTree, LineReader } from './tests/core'
+import { killTree, LineReader, programCommand } from './tests/core'
 
 /**
  * Harness: the settings of one AI agent pane — MCP servers, skills and
@@ -16,7 +17,8 @@ import { killTree, LineReader } from './tests/core'
 export const emptyHarness = (): Harness => ({ mcpServers: [], skills: [], instructions: '' })
 
 /** Nothing to give the agent. */
-export const harnessIsEmpty = (h: Harness): boolean => !h.mcpServers.length && !h.skills.length && !h.instructions.trim() && !h.strictMcp
+export const harnessIsEmpty = (h: Harness): boolean =>
+  !h.mcpServers.length && !h.skills.length && !h.instructions.trim() && !h.strictMcp && !h.strictSkills
 
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined)
 const strMap = (v: unknown): Record<string, string> | undefined => {
@@ -52,7 +54,13 @@ export function sanitizeHarness(input: unknown): Harness {
     .map((raw) => (raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}))
     .filter((s) => typeof s.path === 'string' && s.path.trim())
     .map((s) => ({ path: (s.path as string).trim(), enabled: s.enabled !== false }))
-  return { mcpServers, skills, instructions: str(h.instructions) ?? '', strictMcp: h.strictMcp === true || undefined }
+  return {
+    mcpServers,
+    skills,
+    instructions: str(h.instructions) ?? '',
+    strictMcp: h.strictMcp === true || undefined,
+    strictSkills: h.strictSkills === true || undefined
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -66,7 +74,16 @@ export const agentOf = (profileId: string): string | undefined => /^(?:agent:|ws
  * (Claude Code 2.1, Codex CLI 0.166, opencode 1.19, pi 0.73, Gemini CLI 0.67).
  */
 export const HARNESS_SUPPORT: AgentHarnessSupport[] = [
-  { agent: 'claude', label: 'Claude Code', mcp: true, skills: true, instructions: true, strictMcp: true },
+  {
+    agent: 'claude',
+    label: 'Claude Code',
+    mcp: true,
+    skills: true,
+    instructions: true,
+    strictMcp: true,
+    strictSkills: true,
+    note: '"Only these skills" turns off your skills, the repository’s and the bundled ones (not those of installed plugins).'
+  },
   {
     agent: 'codex',
     label: 'Codex CLI',
@@ -74,6 +91,7 @@ export const HARNESS_SUPPORT: AgentHarnessSupport[] = [
     skills: true,
     instructions: true,
     strictMcp: true,
+    strictSkills: true,
     note: 'Skills are listed in its instructions (name, description, SKILL.md location), as Codex lists its own.'
   },
   {
@@ -83,9 +101,10 @@ export const HARNESS_SUPPORT: AgentHarnessSupport[] = [
     skills: true,
     instructions: true,
     strictMcp: false,
+    strictSkills: true,
     note: 'opencode always adds your own configured MCP servers.'
   },
-  { agent: 'pi', label: 'pi', mcp: false, skills: true, instructions: true, strictMcp: false, note: 'pi has no MCP support.' },
+  { agent: 'pi', label: 'pi', mcp: false, skills: true, instructions: true, strictMcp: false, strictSkills: true, note: 'pi has no MCP support.' },
   {
     agent: 'gemini',
     label: 'Gemini CLI',
@@ -93,6 +112,7 @@ export const HARNESS_SUPPORT: AgentHarnessSupport[] = [
     skills: false,
     instructions: false,
     strictMcp: false,
+    strictSkills: false,
     note: 'Gemini CLI only reads settings from ~/.gemini or the repository’s .gemini folder, which vibe-coding-ide does not change.'
   }
 ]
@@ -110,12 +130,12 @@ function stdioCommand(command: string, args: string[]): { command: string; args:
 }
 
 /** Claude Code's MCP configuration (the format of .mcp.json) for the enabled servers. */
-export function claudeMcpConfig(servers: McpServer[]): { mcpServers: Record<string, unknown> } {
+export function claudeMcpConfig(servers: McpServer[], target: HarnessTarget = { kind: 'host' }): { mcpServers: Record<string, unknown> } {
   const mcpServers: Record<string, unknown> = {}
   for (const s of servers.filter((x) => x.enabled)) {
     if (s.transport === 'stdio') {
       if (!s.command) continue
-      const c = stdioCommand(s.command, s.args ?? [])
+      const c = serverCommand(target, s.command, s.args ?? [])
       mcpServers[s.name] = { command: c.command, args: c.args, ...(s.env ? { env: s.env } : {}) }
     } else if (s.url) {
       mcpServers[s.name] = { type: s.transport, url: s.url, ...(s.headers ? { headers: s.headers } : {}) }
@@ -148,6 +168,38 @@ export interface CompiledHarness {
 const enabledSkillFolders = (harness: Harness, root: string): string[] =>
   harness.skills.filter((s) => s.enabled).flatMap((s) => skillFolders(resolveSkillPath(root, s.path)))
 
+/** Where the agent runs: on Windows (or the host OS), or inside a WSL distribution. */
+export type HarnessTarget = { kind: 'host' } | { kind: 'wsl'; distro: string; /** The distribution user's home, as a \\wsl.localhost path. */ home?: string }
+
+/** A path (Windows or \\wsl.localhost) as the agent sees it: inside WSL, C:\x → /mnt/c/x and \\wsl.localhost\d\x → /x. */
+export function agentPath(target: HarnessTarget, p: string): string {
+  if (target.kind !== 'wsl') return p
+  return parseWslPath(p)?.path ?? p.replace(/^([A-Za-z]):[\\/]/, (_m, d: string) => `/mnt/${d.toLowerCase()}/`).replace(/\\/g, '/')
+}
+
+/** The agent's home folder, readable from here (host home, or the distribution's home over \\wsl.localhost). */
+const agentHome = (target: HarnessTarget): string | undefined => (target.kind === 'wsl' ? target.home : homedir())
+
+/** Names of the skills in skill folders (SKILL.md name, or the folder name), searched a few levels down. */
+export function skillNamesIn(dirs: string[], depth = 3): string[] {
+  const names = new Set<string>()
+  const walk = (d: string, level: number): void => {
+    let entries
+    try {
+      entries = readdirSync(d, { withFileTypes: true })
+    } catch {
+      return
+    }
+    if (entries.some((e) => e.isFile() && e.name === 'SKILL.md')) {
+      names.add(skillMeta(readText(join(d, 'SKILL.md'))).name ?? basename(d))
+      return
+    }
+    if (level < depth) for (const e of entries) if (e.isDirectory() && e.name !== 'node_modules') walk(join(d, e.name), level + 1)
+  }
+  for (const d of dirs) walk(d, 0)
+  return [...names]
+}
+
 /** Instructions file (trimmed text), when there are instructions. */
 function instructionsFile(harness: Harness, outDir: string, extra = ''): string | undefined {
   const text = [harness.instructions.trim(), extra.trim()].filter(Boolean).join('\n\n')
@@ -171,13 +223,17 @@ const tomlKey = (k: string): string => (/^[A-Za-z0-9_-]+$/.test(k) ? k : JSON.st
 /** A server name Codex accepts in a dotted -c path (letters, digits, - and _). */
 const codexName = (name: string): string => name.replace(/[^A-Za-z0-9_-]/g, '_')
 
+/** A stdio server command for the target: Windows .cmd shims through cmd /c on the host, as typed inside WSL. */
+const serverCommand = (target: HarnessTarget, command: string, args: string[]): { command: string; args: string[] } =>
+  target.kind === 'wsl' ? { command, args } : stdioCommand(command, args)
+
 /** Codex's MCP server tables (config.toml [mcp_servers.<name>]) for the enabled servers. */
-export function codexMcpServers(servers: McpServer[]): Record<string, Record<string, unknown>> {
+export function codexMcpServers(servers: McpServer[], target: HarnessTarget = { kind: 'host' }): Record<string, Record<string, unknown>> {
   const out: Record<string, Record<string, unknown>> = {}
   for (const s of servers.filter((x) => x.enabled)) {
     if (s.transport === 'stdio') {
       if (!s.command) continue
-      const c = stdioCommand(s.command, s.args ?? [])
+      const c = serverCommand(target, s.command, s.args ?? [])
       out[codexName(s.name)] = { command: c.command, args: c.args, ...(s.env ? { env: s.env } : {}) }
     } else if (s.url) {
       // Codex speaks Streamable HTTP (no legacy SSE): sse servers are given as http ones.
@@ -188,11 +244,11 @@ export function codexMcpServers(servers: McpServer[]): Record<string, Record<str
 }
 
 /** Skills as a list in instructions (for agents that cannot load skill folders): where to read each. */
-export function skillsCatalog(folders: string[]): string {
+export function skillsCatalog(folders: string[], target: HarnessTarget = { kind: 'host' }): string {
   if (!folders.length) return ''
   const lines = folders.map((f) => {
     const meta = skillMeta(readText(join(f, 'SKILL.md')))
-    return `- ${meta.name ?? basename(f)}: ${meta.description ?? '(no description)'} (file: ${join(f, 'SKILL.md')})`
+    return `- ${meta.name ?? basename(f)}: ${meta.description ?? '(no description)'} (file: ${agentPath(target, join(f, 'SKILL.md'))})`
   })
   return [
     '## Skills',
@@ -213,8 +269,9 @@ const readText = (file: string): string => {
 /**
  * Launch additions giving `agent` its pane's settings; generated files go to `outDir` (app data,
  * not the repository, not the user's agent configuration). Agents without support get nothing.
+ * `target`: where the agent runs (paths it is given are written for that system).
  */
-export function compileHarness(agent: string | undefined, harness: Harness, root: string, outDir: string): CompiledHarness {
+export function compileHarness(agent: string | undefined, harness: Harness, root: string, outDir: string, target: HarnessTarget = { kind: 'host' }): CompiledHarness {
   const none: CompiledHarness = { args: [], env: {} }
   const support = supportOf(agent)
   if (!support || harnessIsEmpty(harness)) return none
@@ -222,19 +279,23 @@ export function compileHarness(agent: string | undefined, harness: Harness, root
   mkdirSync(outDir, { recursive: true })
   const args: string[] = []
   const env: Record<string, string> = {}
+  const p = (path: string): string => agentPath(target, path)
   const skills = enabledSkillFolders(harness, root)
+  const skillNames = skills.map((f) => skillMeta(readText(join(f, 'SKILL.md'))).name ?? basename(f))
+  const home = agentHome(target)
+  const strictSkills = !!harness.strictSkills && support.strictSkills
 
   switch (agent) {
     case 'claude': {
-      const mcp = claudeMcpConfig(harness.mcpServers)
+      const mcp = claudeMcpConfig(harness.mcpServers, target)
       if (Object.keys(mcp.mcpServers).length || harness.strictMcp) {
         const file = join(outDir, 'mcp.json')
         writeFileSync(file, JSON.stringify(mcp, null, 2))
-        args.push('--mcp-config', file)
+        args.push('--mcp-config', p(file))
         if (harness.strictMcp) args.push('--strict-mcp-config')
       }
       const instructions = instructionsFile(harness, outDir)
-      if (instructions) args.push('--append-system-prompt-file', instructions)
+      if (instructions) args.push('--append-system-prompt-file', p(instructions))
       // Skills: a plugin for this session (--plugin-dir) whose skills/ holds copies of the skills.
       if (skills.length) {
         const plugin = join(outDir, 'plugin')
@@ -250,18 +311,32 @@ export function compileHarness(agent: string | undefined, harness: Harness, root
           used.add(name)
           cpSync(f, join(plugin, 'skills', name), { recursive: true })
         }
-        args.push('--plugin-dir', plugin)
+        args.push('--plugin-dir', p(plugin))
+      }
+      // Only these skills: the user's and the repository's skills, and the bundled ones, switched off
+      // for this session (the plugin's skills are namespaced: project-harness:<name>).
+      if (strictSkills) {
+        const others = skillNamesIn([...(home ? [join(home, '.claude', 'skills')] : []), join(root, '.claude', 'skills')])
+        const file = join(outDir, 'settings.json')
+        writeFileSync(file, JSON.stringify({ disableBundledSkills: true, skillOverrides: Object.fromEntries(others.map((n) => [n, 'off'])) }, null, 2))
+        args.push('--settings', p(file))
       }
       break
     }
 
     case 'codex': {
       // -c overrides on top of ~/.codex/config.toml: per server, or (only these servers) the whole table.
-      const servers = codexMcpServers(harness.mcpServers)
+      const servers = codexMcpServers(harness.mcpServers, target)
       if (harness.strictMcp) args.push('-c', `mcp_servers=${toml(servers)}`)
       else for (const [name, table] of Object.entries(servers)) for (const [k, v] of Object.entries(table)) args.push('-c', `mcp_servers.${name}.${k}=${toml(v)}`)
-      const text = [harness.instructions.trim(), skillsCatalog(skills)].filter(Boolean).join('\n\n')
+      const text = [harness.instructions.trim(), skillsCatalog(skills, target)].filter(Boolean).join('\n\n')
       if (text) args.push('-c', `developer_instructions=${toml(text)}`)
+      // Only these skills: Codex's own skills (bundled, ~/.codex, ~/.agents, the repository) switched off.
+      if (strictSkills) {
+        const dirs = [...(home ? [join(home, '.codex', 'skills'), join(home, '.agents', 'skills')] : []), join(root, '.agents', 'skills'), join(root, '.codex', 'skills')]
+        const others = skillNamesIn(dirs).filter((n) => !skillNames.includes(n))
+        if (others.length) args.push('-c', `skills.config=${toml(others.map((name) => ({ name, enabled: false })))}`)
+      }
       break
     }
 
@@ -271,24 +346,28 @@ export function compileHarness(agent: string | undefined, harness: Harness, root
       const mcp: Record<string, unknown> = {}
       for (const s of harness.mcpServers.filter((x) => x.enabled)) {
         if (s.transport === 'stdio' && s.command) {
-          const c = stdioCommand(s.command, s.args ?? [])
+          const c = serverCommand(target, s.command, s.args ?? [])
           mcp[s.name] = { type: 'local', command: [c.command, ...c.args], ...(s.env ? { environment: s.env } : {}), enabled: true }
         } else if (s.url) mcp[s.name] = { type: 'remote', url: s.url, ...(s.headers ? { headers: s.headers } : {}), enabled: true }
       }
       if (Object.keys(mcp).length) config.mcp = mcp
       const instructions = instructionsFile(harness, outDir)
-      if (instructions) config.instructions = [instructions]
-      if (skills.length) config.skills = { paths: skills }
+      if (instructions) config.instructions = [p(instructions)]
+      if (skills.length) config.skills = { paths: skills.map(p) }
+      // Only these skills: the skill permission denies every other skill.
+      if (strictSkills) config.permission = { skill: { '*': 'deny', ...Object.fromEntries(skillNames.map((n) => [n, 'allow'])) } }
       const file = join(outDir, 'opencode.json')
       writeFileSync(file, JSON.stringify(config, null, 2))
-      env.OPENCODE_CONFIG = file
+      env.OPENCODE_CONFIG = p(file)
       break
     }
 
     case 'pi': {
       const instructions = instructionsFile(harness, outDir)
-      if (instructions) args.push('--append-system-prompt', instructions)
-      for (const f of skills) args.push('--skill', f)
+      if (instructions) args.push('--append-system-prompt', p(instructions))
+      // Only these skills: no skill discovery (explicit --skill paths still load).
+      if (strictSkills) args.push('--no-skills')
+      for (const f of skills) args.push('--skill', p(f))
       break
     }
   }
@@ -397,15 +476,18 @@ const serverOf = (r: RpcResponse): McpCheckResult['server'] => r.result?.serverI
 
 function checkStdio(root: string, s: McpServer, timeout: number): Promise<McpCheckResult> {
   if (!s.command) return Promise.resolve({ ok: false, error: 'No command.' })
-  const exe = isAbsolute(s.command) ? s.command : (which(s.command) ?? s.command)
-  const spec = launchSpec(exe, s.args ?? [])
+  // A WSL project's agent runs inside the distribution: so does its server (and the check).
+  const wsl = process.platform === 'win32' && parseWslPath(root) !== undefined
+  const exe = wsl || isAbsolute(s.command) ? s.command : (which(s.command) ?? s.command)
+  const inWsl = wsl ? programCommand(root, s.command, s.args ?? [], s.env ?? {}) : undefined
+  const spec = inWsl ? { command: inWsl.file, args: inWsl.args } : launchSpec(exe, s.args ?? [])
   return new Promise((done) => {
     let stderr = ''
     let server: McpCheckResult['server']
     let finished = false
     const child = spawn(spec.command, spec.args, {
       cwd: existsSync(root) && !root.startsWith('\\\\') ? root : undefined,
-      env: { ...process.env, ...(s.env ?? {}) },
+      env: { ...process.env, ...(s.env ?? {}), ...(inWsl?.env ?? {}) },
       windowsHide: true,
       detached: process.platform !== 'win32'
     })

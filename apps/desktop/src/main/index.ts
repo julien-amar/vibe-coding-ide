@@ -4,18 +4,31 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, type Rectangle, type WebContents } from 'electron'
 import { mapPanes, sessionIdsOf } from '@shared/layout'
-import type { TestRunRequest, GitOpRequest,LayoutNode, PtyCreateRequest, PtyCreateResult, TabSnapshot, WindowInit, WindowTabsState, PackageUpdateInfo } from '@shared/types'
+import type { Profile, TestRunRequest, GitOpRequest,LayoutNode, PtyCreateRequest, PtyCreateResult, TabSnapshot, WindowInit, WindowTabsState, PackageUpdateInfo } from '@shared/types'
 import { gitLog, gitOp, GitWatcher } from './git'
 import { loadLayout, saveLayout, visibleBounds, type SavedWindow } from './layout-store'
 import { profileIcon } from './icons'
-import { findProfile, listProfiles, wslAgents } from './profiles'
+import { findProfile, listProfiles, wslAgents, wslHome } from './profiles'
 import { recentProjects, touchProject } from './projects'
 import { PtyManager } from './pty-manager'
 import { checkUpdates, forgetUpdates, type UpdateTarget } from './package-updates'
 import { parseWslPath } from '@shared/wsl-paths'
 import { discoverTests, runTests, stopAllTests, stopTests } from './test-runner'
 import { openInEditor } from './editor'
-import { agentOf, checkMcpServer, compileHarness, directLaunch, HARNESS_SUPPORT, harnessIsEmpty, listSkills, readProjectMcpJson, readSkillFile, sanitizeHarness } from './harness'
+import {
+  agentOf,
+  checkMcpServer,
+  compileHarness,
+  directLaunch,
+  HARNESS_SUPPORT,
+  harnessIsEmpty,
+  listSkills,
+  readProjectMcpJson,
+  readSkillFile,
+  sanitizeHarness,
+  type CompiledHarness,
+  type HarnessTarget
+} from './harness'
 
 app.setName('vibe-coding-ide')
 // VIBE_CODING_IDE_USER_DATA: run with a separate profile (layout, recent projects), e.g. for automated tests.
@@ -276,6 +289,29 @@ function registerIpc(): void {
     return profile ? profileIcon(profile) : null
   })
 
+  /**
+   * An agent profile with its settings added. Host agents: arguments appended (npm command shims
+   * launched directly: cmd.exe would mangle quotes and line breaks). WSL agents (… --exec bash -lic
+   * 'exec <agent>'): the arguments go through "$@", one Linux argument each; environment variables
+   * cross into the distribution through WSLENV.
+   */
+  const withHarness = (launch: Profile, extra: CompiledHarness): Profile => {
+    const env = { ...(launch.env ?? {}), ...extra.env }
+    if (launch.wslDistro) {
+      const last = launch.args.length - 1
+      const agentCmd = /^exec (\S+)$/.exec(launch.args[last] ?? '')?.[1]
+      if (!agentCmd) return launch
+      const names = Object.keys(extra.env)
+      return {
+        ...launch,
+        args: [...launch.args.slice(0, last), `exec ${agentCmd} "$@"`, agentCmd, ...extra.args],
+        env: names.length ? { ...env, WSLENV: [process.env.WSLENV, launch.env?.WSLENV, ...names].filter(Boolean).join(':') } : env
+      }
+    }
+    const direct = extra.args.length ? directLaunch(launch.command, launch.args) : undefined
+    return { ...launch, ...(direct ?? {}), args: [...(direct?.args ?? launch.args), ...extra.args], env }
+  }
+
   ipcMain.handle('pty:create', async (e, req: PtyCreateRequest): Promise<PtyCreateResult> => {
     const profile = await findProfile(req.profileId)
     if (!profile) throw new Error(`Unknown profile: ${req.profileId}`)
@@ -294,23 +330,14 @@ function registerIpc(): void {
     }
     // An AI agent pane's own settings (generated files in app data, passed with flags).
     const harness = req.harness ? sanitizeHarness(req.harness) : undefined
-    if (profile.kind === 'agent' && !profile.wslDistro && harness && !harnessIsEmpty(harness)) {
+    if (profile.kind === 'agent' && harness && !harnessIsEmpty(harness)) {
       const root = req.harnessRoot && isDir(String(req.harnessRoot)) ? String(req.harnessRoot) : (cwd ?? homedir())
       const outDir = join(harnessRuns(), createHash('sha1').update(root + JSON.stringify(harness)).digest('hex').slice(0, 16))
       const agent = agentOf(profile.id)
-      const outDirFor = join(outDir, agent ?? 'agent')
-      const extra = compileHarness(agent, harness, root, outDirFor)
-      if (extra.args.length || Object.keys(extra.env).length) {
-        // Arguments with quotes / line breaks (Codex's -c values) must not go through cmd.exe: npm
-        // command shims (codex.cmd…) are launched directly.
-        const direct = extra.args.length ? directLaunch(launch.command, launch.args) : undefined
-        launch = {
-          ...launch,
-          ...(direct ?? {}),
-          args: [...(direct?.args ?? launch.args), ...extra.args],
-          env: { ...(launch.env ?? {}), ...extra.env }
-        }
-      }
+      const outDirFor = join(outDir, `${agent ?? 'agent'}${profile.wslDistro ? `-${profile.wslDistro}` : ''}`)
+      const target: HarnessTarget = profile.wslDistro ? { kind: 'wsl', distro: profile.wslDistro, home: await wslHome(profile.wslDistro) } : { kind: 'host' }
+      const extra = compileHarness(agent, harness, root, outDirFor, target)
+      if (extra.args.length || Object.keys(extra.env).length) launch = withHarness(launch, extra)
     }
     const sessionId = ptys.create(launch, req.cols, req.rows, e.sender, cwd)
     // A shell starting: check (once, in the background) whether its system has package updates —

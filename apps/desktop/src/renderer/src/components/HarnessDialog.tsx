@@ -109,7 +109,7 @@ export function HarnessDialog({
         )}
         <div className="harness-body">
           {view === 'mcp' && <McpView root={root} harness={harness} save={save} support={current} />}
-          {view === 'skills' && <SkillsView root={root} harness={harness} save={save} />}
+          {view === 'skills' && <SkillsView root={root} harness={harness} save={save} support={current} />}
           {view === 'instructions' && <InstructionsView harness={harness} save={save} />}
         </div>
       </div>
@@ -407,7 +407,19 @@ const SOURCE_LABEL: Record<SkillInfo['source'], string> = {
   user: 'your skills (~/.claude/skills)'
 }
 
-function SkillsView({ root, harness, save }: { root: string; harness: Harness; save: (h: Harness) => Promise<void> }): React.JSX.Element {
+function SkillsView({
+  root,
+  harness,
+  save,
+  support
+}: {
+  root: string
+  harness: Harness
+  save: (h: Harness) => Promise<void>
+  /** What the pane's agent supports (undefined: unknown agent). */
+  support?: AgentHarnessSupport
+}): React.JSX.Element {
+  const canStrict = !support || support.strictSkills
   const [skills, setSkills] = useState<SkillInfo[]>([])
   const [preview, setPreview] = useState<{ path: string; text: string }>()
 
@@ -446,6 +458,23 @@ function SkillsView({ root, harness, save }: { root: string; harness: Harness; s
           + Add skill folder…
         </button>
         <span className="muted">A folder with a SKILL.md, or a folder of skills.</span>
+        <span className="spacer" />
+        <label
+          className="harness-check"
+          title={
+            canStrict
+              ? 'The agent ignores its other skills (yours, the repository’s, the bundled ones)'
+              : `${support!.label} cannot be made to ignore its other skills`
+          }
+        >
+          <input
+            type="checkbox"
+            checked={!!harness.strictSkills && canStrict}
+            disabled={!canStrict}
+            onChange={(e) => void save({ ...harness, strictSkills: e.target.checked || undefined })}
+          />{' '}
+          Only these skills
+        </label>
       </div>
       {own.length === 0 && <p className="muted harness-empty">No skills added to this project's harness.</p>}
       <ul className="harness-list">

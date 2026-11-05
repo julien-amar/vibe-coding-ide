@@ -206,8 +206,8 @@ function TerminalPane({ tab, pane, visible, autoFocus }: { tab: Tab; pane: PaneN
         <HarnessDialog
           root={tab.project?.root ?? ''}
           agent={profiles.find((p) => p.id === pane.profileId)?.name ?? 'AI agent'}
-          // "agent:codex", "wslagent:Ubuntu:codex" → "codex" (WSL agents do not get the settings yet).
-          agentId={pane.profileId?.startsWith('agent:') ? pane.profileId.slice('agent:'.length) : undefined}
+          // "agent:codex", "wslagent:Ubuntu:codex" → "codex".
+          agentId={/^(?:agent:|wslagent:[^:]+:)(.+)$/.exec(pane.profileId ?? '')?.[1]}
           harness={pane.harness ?? emptyHarness()}
           stale={harnessStale}
           onChange={(h) => useTabs.getState().setPaneHarness(tab.id, pane.id, h)}
