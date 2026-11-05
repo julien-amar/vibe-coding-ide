@@ -155,7 +155,7 @@ function TerminalPane({ tab, pane, visible, autoFocus }: { tab: Tab; pane: PaneN
           />
           <span className="pane-path" title={tab.project?.root}>
             {/* LRM marks keep slashes in place despite the rtl trick that ellipsizes from the left. */}
-            {'‎' + displayPath(tab.project?.root ?? '') + '‎'}
+            {'\u200E' + displayPath(tab.project?.root ?? '') + '\u200E'}
           </span>
         </>
       }

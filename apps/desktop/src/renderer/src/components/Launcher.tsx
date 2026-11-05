@@ -150,7 +150,7 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
                   >
                     {item.profile ? <ProfileIcon profile={item.profile} /> : <KindBadge kind={item.badge} />}
                     <span className="launcher-item-name">{item.label}</span>
-                    <span className="launcher-item-source">{item.detail}</span>
+                    <span className="launcher-item-source">{item.detail && `\u200E${item.detail}\u200E`}</span>
                   </button>
                 )
               })}
