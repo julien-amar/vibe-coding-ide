@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { basename, delimiter, dirname, extname, join } from 'node:path'
 import type { Profile } from '@shared/types'
 
@@ -25,7 +25,14 @@ function isFile(p: string): boolean {
   try {
     return statSync(p).isFile()
   } catch {
-    return false
+    // Windows "app execution aliases" (e.g. WindowsApps\winget.exe) cannot be stat'ed
+    // (EACCES) but are runnable: they show up as reparse points (symbolic links).
+    if (!isWin) return false
+    try {
+      return lstatSync(p).isSymbolicLink() && /\\WindowsApps\\/i.test(p)
+    } catch {
+      return false
+    }
   }
 }
 

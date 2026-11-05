@@ -3,7 +3,7 @@ import { Terminal, type ITheme } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { WebLinksAddon } from '@xterm/addon-web-links'
-import type { WslUpdateInfo } from '@shared/types'
+import type { PackageUpdateInfo } from '@shared/types'
 import { onSessionData, onSessionExit } from '../pty-bus'
 import { handleAppShortcut } from '../shortcuts'
 
@@ -189,19 +189,19 @@ export function TerminalView({ sessionId, restoredScrollback, visible, autoFocus
   return (
     <div className="terminal-view">
       <div ref={hostRef} className="terminal-host" />
-      <WslUpdateBar sessionId={sessionId} onAccept={() => termRef.current?.focus()} />
+      <UpdateBar sessionId={sessionId} onAccept={() => termRef.current?.focus()} />
     </div>
   )
 }
 
 /**
- * Status bar under a WSL terminal when its distribution has package updates
- * (checked once when the shell starts). "Update now" types the update command
- * into the terminal, where the user sees the progress and enters the sudo
- * password; × hides the bar.
+ * Status bar under a terminal when its system (Windows via winget, or the WSL
+ * distribution) has package updates, checked once when the shell starts.
+ * "Update now" types the update command into the terminal, where the user sees
+ * the progress and answers prompts (sudo password, UAC); × hides the bar.
  */
-function WslUpdateBar({ sessionId, onAccept }: { sessionId: string; onAccept: () => void }): React.JSX.Element | null {
-  const [info, setInfo] = useState<WslUpdateInfo | null>(null)
+function UpdateBar({ sessionId, onAccept }: { sessionId: string; onAccept: () => void }): React.JSX.Element | null {
+  const [info, setInfo] = useState<PackageUpdateInfo | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -230,7 +230,8 @@ function WslUpdateBar({ sessionId, onAccept }: { sessionId: string; onAccept: ()
         ⬆
       </span>
       <span className="update-text">
-        {info.count} package update{info.count > 1 ? 's' : ''} available for <strong>{info.distro}</strong>
+        {info.count} package update{info.count > 1 ? 's' : ''} available for <strong>{info.system}</strong>
+        <span className="muted"> ({info.manager})</span>
       </span>
       <button
         className="link-button"

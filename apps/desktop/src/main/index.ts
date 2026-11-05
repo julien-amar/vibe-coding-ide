@@ -2,14 +2,14 @@ import { existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, type Rectangle, type WebContents } from 'electron'
 import { mapPanes, sessionIdsOf } from '@shared/layout'
-import type { GitOpRequest, LayoutNode, PtyCreateRequest, PtyCreateResult, TabSnapshot, WindowInit, WindowTabsState, WslUpdateInfo } from '@shared/types'
+import type { GitOpRequest, LayoutNode, PtyCreateRequest, PtyCreateResult, TabSnapshot, WindowInit, WindowTabsState, PackageUpdateInfo } from '@shared/types'
 import { gitLog, gitOp, GitWatcher } from './git'
 import { loadLayout, saveLayout, visibleBounds, type SavedWindow } from './layout-store'
 import { profileIcon } from './icons'
 import { findProfile, listProfiles, wslAgents } from './profiles'
 import { recentProjects, touchProject } from './projects'
 import { PtyManager } from './pty-manager'
-import { checkWslUpdates, forgetWslUpdates } from './wsl-updates'
+import { checkUpdates, forgetUpdates, type UpdateTarget } from './package-updates'
 import { parseWslPath } from '@shared/wsl-paths'
 
 app.setName('DevHub')
@@ -17,8 +17,8 @@ app.setName('DevHub')
 app.setPath('userData', process.env.DEVHUB_USER_DATA || join(app.getPath('appData'), 'DevHub'))
 
 const ptys = new PtyManager()
-/** Pending WSL updates per session, until the user accepts or dismisses the bar. */
-const sessionUpdates = new Map<string, WslUpdateInfo>()
+/** Pending package updates per session (and what was checked), until the user accepts or dismisses the bar. */
+const sessionUpdates = new Map<string, { info: PackageUpdateInfo; target: UpdateTarget }>()
 const gitWatcher = new GitWatcher()
 const TITLEBAR_HEIGHT = 40
 /** Expose debugging hooks to the UI (automated checks over DevTools). */
@@ -284,11 +284,18 @@ function registerIpc(): void {
       cwd = req.cwd && isDir(req.cwd) ? req.cwd : undefined
     }
     const sessionId = ptys.create(launch, req.cols, req.rows, e.sender, cwd)
-    // A WSL shell starting: check (once, in the background) whether the distro has package updates.
-    if (profile.kind === 'wsl' && profile.wslDistro) {
-      void checkWslUpdates(profile.wslDistro).then((info) => {
+    // A shell starting: check (once, in the background) whether its system has package updates —
+    // the WSL distribution for WSL shells, Windows (winget) for PowerShell / cmd / Git Bash…
+    const target: UpdateTarget | undefined =
+      profile.kind === 'wsl' && profile.wslDistro
+        ? { kind: 'wsl', distro: profile.wslDistro }
+        : profile.kind === 'shell' && process.platform === 'win32'
+          ? { kind: 'windows' }
+          : undefined
+    if (target) {
+      void checkUpdates(target).then((info) => {
         if (!info || !ptys.has(sessionId)) return
-        sessionUpdates.set(sessionId, info)
+        sessionUpdates.set(sessionId, { info, target })
         ptys.notify(sessionId, 'pty:updates', info)
       })
     }
@@ -301,12 +308,12 @@ function registerIpc(): void {
     ptys.kill(id, e.sender)
     sessionUpdates.delete(id)
   })
-  ipcMain.handle('pty:updates', (e, id: string) => (ptys.isSubscribed(id, e.sender) ? (sessionUpdates.get(id) ?? null) : null))
+  ipcMain.handle('pty:updates', (e, id: string) => (ptys.isSubscribed(id, e.sender) ? (sessionUpdates.get(id)?.info ?? null) : null))
   ipcMain.on('pty:dismissUpdates', (e, id: string, accepted: boolean) => {
-    const info = sessionUpdates.get(id)
-    if (!info || !ptys.isSubscribed(id, e.sender)) return
+    const entry = sessionUpdates.get(id)
+    if (!entry || !ptys.isSubscribed(id, e.sender)) return
     sessionUpdates.delete(id)
-    if (accepted) forgetWslUpdates(info.distro)
+    if (accepted) forgetUpdates(entry.target)
   })
 
   ipcMain.handle('window:init', (e): WindowInit => {

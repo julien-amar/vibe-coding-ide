@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import type { DevHubApi, WslUpdateInfo } from '@shared/types'
+import type { DevHubApi, PackageUpdateInfo } from '@shared/types'
 
 const api: DevHubApi = {
   platform: process.platform,
@@ -28,7 +28,7 @@ const api: DevHubApi = {
     updates: (id) => ipcRenderer.invoke('pty:updates', id),
     dismissUpdates: (id, accepted) => ipcRenderer.send('pty:dismissUpdates', id, accepted),
     onUpdates: (cb) => {
-      const listener = (_e: IpcRendererEvent, id: string, info: WslUpdateInfo): void => cb(id, info)
+      const listener = (_e: IpcRendererEvent, id: string, info: PackageUpdateInfo): void => cb(id, info)
       ipcRenderer.on('pty:updates', listener)
       return () => ipcRenderer.off('pty:updates', listener)
     }
