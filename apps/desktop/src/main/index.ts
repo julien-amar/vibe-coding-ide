@@ -2,19 +2,23 @@ import { existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, type Rectangle, type WebContents } from 'electron'
 import { mapPanes, sessionIdsOf } from '@shared/layout'
-import type { GitOpRequest, LayoutNode, PtyCreateRequest, PtyCreateResult, TabSnapshot, WindowInit, WindowTabsState } from '@shared/types'
+import type { GitOpRequest, LayoutNode, PtyCreateRequest, PtyCreateResult, TabSnapshot, WindowInit, WindowTabsState, WslUpdateInfo } from '@shared/types'
 import { gitLog, gitOp, GitWatcher } from './git'
 import { loadLayout, saveLayout, visibleBounds, type SavedWindow } from './layout-store'
 import { profileIcon } from './icons'
 import { findProfile, listProfiles, wslAgents } from './profiles'
 import { recentProjects, touchProject } from './projects'
 import { PtyManager } from './pty-manager'
+import { checkWslUpdates, forgetWslUpdates } from './wsl-updates'
 import { parseWslPath } from '@shared/wsl-paths'
 
 app.setName('DevHub')
-app.setPath('userData', join(app.getPath('appData'), 'DevHub'))
+// DEVHUB_USER_DATA: run with a separate profile (layout, recent projects), e.g. for automated tests.
+app.setPath('userData', process.env.DEVHUB_USER_DATA || join(app.getPath('appData'), 'DevHub'))
 
 const ptys = new PtyManager()
+/** Pending WSL updates per session, until the user accepts or dismisses the bar. */
+const sessionUpdates = new Map<string, WslUpdateInfo>()
 const gitWatcher = new GitWatcher()
 const TITLEBAR_HEIGHT = 40
 /** Expose debugging hooks to the UI (automated checks over DevTools). */
@@ -280,12 +284,30 @@ function registerIpc(): void {
       cwd = req.cwd && isDir(req.cwd) ? req.cwd : undefined
     }
     const sessionId = ptys.create(launch, req.cols, req.rows, e.sender, cwd)
+    // A WSL shell starting: check (once, in the background) whether the distro has package updates.
+    if (profile.kind === 'wsl' && profile.wslDistro) {
+      void checkWslUpdates(profile.wslDistro).then((info) => {
+        if (!info || !ptys.has(sessionId)) return
+        sessionUpdates.set(sessionId, info)
+        ptys.notify(sessionId, 'pty:updates', info)
+      })
+    }
     return { sessionId, title: profile.name }
   })
   ipcMain.handle('pty:attach', (e, id: string) => ptys.attach(id, e.sender))
   ipcMain.on('pty:write', (e, id: string, data: string) => ptys.write(id, data, e.sender))
   ipcMain.on('pty:resize', (e, id: string, cols: number, rows: number) => ptys.resize(id, cols, rows, e.sender))
-  ipcMain.on('pty:kill', (e, id: string) => ptys.kill(id, e.sender))
+  ipcMain.on('pty:kill', (e, id: string) => {
+    ptys.kill(id, e.sender)
+    sessionUpdates.delete(id)
+  })
+  ipcMain.handle('pty:updates', (e, id: string) => (ptys.isSubscribed(id, e.sender) ? (sessionUpdates.get(id) ?? null) : null))
+  ipcMain.on('pty:dismissUpdates', (e, id: string, accepted: boolean) => {
+    const info = sessionUpdates.get(id)
+    if (!info || !ptys.isSubscribed(id, e.sender)) return
+    sessionUpdates.delete(id)
+    if (accepted) forgetWslUpdates(info.distro)
+  })
 
   ipcMain.handle('window:init', (e): WindowInit => {
     const entry = entryFor(e.sender)

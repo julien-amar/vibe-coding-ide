@@ -98,6 +98,16 @@ export class PtyManager {
     return true
   }
 
+  /** Send an event to the windows showing a session. */
+  notify(id: string, channel: string, ...args: unknown[]): void {
+    for (const wc of this.sessions.get(id)?.subscribers ?? []) if (!wc.isDestroyed()) wc.send(channel, id, ...args)
+  }
+
+  /** Whether a window may act on a session (it shows it). */
+  isSubscribed(id: string, wc: WebContents): boolean {
+    return !!this.owned(id, wc)
+  }
+
   cwd(id: string): string | undefined {
     return this.sessions.get(id)?.cwd
   }

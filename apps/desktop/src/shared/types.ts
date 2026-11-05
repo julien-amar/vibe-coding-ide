@@ -22,6 +22,16 @@ export interface PtyCreateRequest {
   cwd?: string
 }
 
+/** Pending package updates in a WSL distribution (shown as a status bar on its terminal). */
+export interface WslUpdateInfo {
+  distro: string
+  /** apt, dnf, pacman, apk, zypper */
+  manager: string
+  count: number
+  /** Typed into the terminal when the user accepts. */
+  command: string
+}
+
 export interface PtyCreateResult {
   sessionId: string
   title: string
@@ -244,6 +254,11 @@ export interface DevHubApi {
     kill(sessionId: string): void
     onData(cb: (sessionId: string, data: string) => void): () => void
     onExit(cb: (sessionId: string, exitCode: number) => void): () => void
+    /** Pending WSL package updates for a session (null if none / not WSL / dismissed). */
+    updates(sessionId: string): Promise<WslUpdateInfo | null>
+    /** Hide the update bar of a session; `accepted` = the user ran the update. */
+    dismissUpdates(sessionId: string, accepted: boolean): void
+    onUpdates(cb: (sessionId: string, info: WslUpdateInfo) => void): () => void
   }
   window: {
     init(): Promise<WindowInit>

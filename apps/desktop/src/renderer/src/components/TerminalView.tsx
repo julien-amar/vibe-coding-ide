@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Terminal, type ITheme } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { WebLinksAddon } from '@xterm/addon-web-links'
+import type { WslUpdateInfo } from '@shared/types'
 import { onSessionData, onSessionExit } from '../pty-bus'
 import { handleAppShortcut } from '../shortcuts'
 
@@ -185,5 +186,67 @@ export function TerminalView({ sessionId, restoredScrollback, visible, autoFocus
     })
   }, [visible, autoFocus])
 
-  return <div ref={hostRef} className="terminal-host" />
+  return (
+    <div className="terminal-view">
+      <div ref={hostRef} className="terminal-host" />
+      <WslUpdateBar sessionId={sessionId} onAccept={() => termRef.current?.focus()} />
+    </div>
+  )
+}
+
+/**
+ * Status bar under a WSL terminal when its distribution has package updates
+ * (checked once when the shell starts). "Update now" types the update command
+ * into the terminal, where the user sees the progress and enters the sudo
+ * password; × hides the bar.
+ */
+function WslUpdateBar({ sessionId, onAccept }: { sessionId: string; onAccept: () => void }): React.JSX.Element | null {
+  const [info, setInfo] = useState<WslUpdateInfo | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    setInfo(null)
+    // Already known (e.g. the tab moved to another window), or arriving once the check finishes.
+    void window.devhub.pty.updates(sessionId).then((i) => alive && i && setInfo(i))
+    const off = window.devhub.pty.onUpdates((id, i) => {
+      if (id === sessionId) setInfo(i)
+    })
+    return () => {
+      alive = false
+      off()
+    }
+  }, [sessionId])
+
+  if (!info) return null
+
+  const close = (accepted: boolean): void => {
+    window.devhub.pty.dismissUpdates(sessionId, accepted)
+    setInfo(null)
+  }
+
+  return (
+    <div className="update-bar" role="status">
+      <span className="update-icon" aria-hidden>
+        ⬆
+      </span>
+      <span className="update-text">
+        {info.count} package update{info.count > 1 ? 's' : ''} available for <strong>{info.distro}</strong>
+      </span>
+      <button
+        className="link-button"
+        title={`Runs in this terminal: ${info.command}`}
+        onClick={() => {
+          window.devhub.pty.write(sessionId, `${info.command}\r`)
+          close(true)
+          onAccept()
+        }}
+      >
+        Update now
+      </button>
+      <span className="spacer" />
+      <button className="icon-button" title="Dismiss" aria-label="Dismiss update notice" onClick={() => close(false)}>
+        ×
+      </button>
+    </div>
+  )
 }
