@@ -44,7 +44,7 @@ export type TabKind = ProfileKind | 'project'
 export type PaneType = 'terminal' | 'agent' | 'git' | 'tests'
 
 /** Test frameworks the Tests panel can discover and run. */
-export type TestFramework = 'vitest' | 'playwright'
+export type TestFramework = 'vitest' | 'jest' | 'playwright' | 'pytest'
 
 /** A test (one per Playwright project when a config defines several). */
 export interface TestCase {
@@ -362,5 +362,10 @@ export interface IdeApi {
   }
   app: {
     openExternal(url: string): void
+    /**
+     * Open a file of the project at a line in the user's code editor (VS Code, Cursor, Zed…;
+     * otherwise the system's default app). `file` may be relative to `base` (default: root).
+     */
+    openInEditor(root: string, file: string, line?: number, column?: number, base?: string): Promise<{ ok: boolean; error?: string }>
   }
 }

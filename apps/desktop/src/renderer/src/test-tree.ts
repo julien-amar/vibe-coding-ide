@@ -14,7 +14,7 @@ export interface TestTreeNode {
   test?: TestCase
 }
 
-export const FRAMEWORK_LABEL: Record<TestProject['framework'], string> = { vitest: 'Vitest', playwright: 'Playwright' }
+export const FRAMEWORK_LABEL: Record<TestProject['framework'], string> = { vitest: 'Vitest', jest: 'Jest', playwright: 'Playwright', pytest: 'pytest' }
 
 /** Tree of a test project: files, then nested suites, then tests (in listing order). */
 export function buildTestTree(project: TestProject): TestTreeNode {
@@ -110,5 +110,37 @@ export const stripAnsi = (s: string): string =>
   // eslint-disable-next-line no-control-regex
   s.replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[@-Z\\-_]/g, '')
 
-export const formatDuration = (ms?: number): string =>
+/** A file location in test output ("src/a.ts:12:5", "C:\x\a.py:3", "file:///…/a.js:1:2"). */
+export interface TextLocation {
+  text: string
+  file: string
+  line: number
+  column?: number
+}
+
+// Absolute Windows / POSIX paths or file:// URLs, or relative paths with an extension, then :line[:col].
+const LOCATION = /(?:file:\/\/\/?)?(?:[A-Za-z]:[\\/]|\/)?(?:[\w.@~+-]+[\\/])*[\w.@~+-]+\.[A-Za-z]\w*:(\d+)(?::(\d+))?/g
+
+/** Split text into plain parts and file locations (for clickable stack traces). */
+export function splitLocations(text: string): (string | TextLocation)[] {
+  const parts: (string | TextLocation)[] = []
+  let last = 0
+  for (const m of text.matchAll(LOCATION)) {
+    const raw = m[0]
+    const pathEnd = raw.length - m[1].length - 1 - (m[2] ? m[2].length + 1 : 0)
+    const file = raw.slice(0, pathEnd)
+    // Not a location: URLs (http://host:port), version-like numbers.
+    const before = text.slice(Math.max(0, m.index - 3), m.index)
+    if (/:\/\/?$/.test(before) || /^\d+(\.\d+)*$/.test(file)) continue
+    if (m.index > last) parts.push(text.slice(last, m.index))
+    // Shown without the file:// scheme (file:///C:/x → C:/x, file:///home/x → /home/x).
+    const shown = raw.replace(/^file:\/\/\/?([A-Za-z]:)/i, '$1').replace(/^file:\/\//i, '')
+    parts.push({ text: shown, file, line: Number(m[1]), column: m[2] ? Number(m[2]) : undefined })
+    last = m.index + raw.length
+  }
+  if (last < text.length) parts.push(text.slice(last))
+  return parts
+}
+
+export const formatDuration =(ms?: number): string =>
   ms === undefined ? '' : ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(ms < 10_000 ? 2 : 1)} s`

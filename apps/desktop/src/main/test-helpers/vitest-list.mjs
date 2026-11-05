@@ -6,7 +6,8 @@ import { pathToFileURL } from 'node:url'
 
 const [vitestNode, out] = process.argv.slice(2)
 const { createVitest } = await import(pathToFileURL(vitestNode).href)
-const ctx = await createVitest('test', { watch: false, run: true })
+// includeTaskLocation: line numbers of the tests (for "open in editor" and the agent prompt).
+const ctx = await createVitest('test', { watch: false, run: true, includeTaskLocation: true })
 try {
   // staticParse: false = load the test files to collect their tests. Vitest 5 otherwise reads them
   // as text, which gets names with escapes or computed titles wrong and mistakes some calls for

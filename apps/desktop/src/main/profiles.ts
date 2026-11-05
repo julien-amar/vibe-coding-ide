@@ -56,7 +56,7 @@ export function which(name: string): string | undefined {
 }
 
 /** On Windows, .cmd/.bat shims must be started through cmd.exe. */
-function launchSpec(exe: string, args: string[] = []): { command: string; args: string[] } {
+export function launchSpec(exe: string, args: string[] = []): { command: string; args: string[] } {
   if (isWin && ['.cmd', '.bat'].includes(extname(exe).toLowerCase())) {
     return { command: process.env.ComSpec ?? 'cmd.exe', args: ['/d', '/c', exe, ...args] }
   }

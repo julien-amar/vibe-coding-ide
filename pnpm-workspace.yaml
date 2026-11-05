@@ -8,5 +8,7 @@ allowBuilds:
   esbuild: true
   # Squirrel.Windows installer helper pulled in by electron-builder; not used (NSIS target)
   electron-winstaller: false
+  # Native file watcher pulled in by Jest (used only for its watch mode, which the Tests panel does not use)
+  '@parcel/watcher': false
 
 nodeLinker: hoisted

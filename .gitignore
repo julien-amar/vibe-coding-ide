@@ -6,3 +6,7 @@ dist/
 /node_modules
 test-results/
 playwright-report/
+# Python (the Tests panel's pytest fixture has its own virtualenv)
+.venv/
+__pycache__/
+.pytest_cache/

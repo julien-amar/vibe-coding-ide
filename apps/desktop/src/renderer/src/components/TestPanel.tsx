@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { TestResult, TestStatus } from '@shared/types'
-import { aggregateStatus, buildTestTree, filterTestTree, formatDuration, stripAnsi, type TestTreeNode } from '../test-tree'
+import type { TestCase, TestProject, TestResult, TestStatus } from '@shared/types'
+import { sendToAgent } from '../agent-bridge'
+import { fixPrompt, type Failure } from '../test-prompt'
+import { aggregateStatus, buildTestTree, filterTestTree, formatDuration, splitLocations, stripAnsi, type TestTreeNode } from '../test-tree'
 import { resultKey, useProjectTests, useTestsStore } from '../tests-store'
+import { notify } from './Dialogs'
 
 const STATUS_ICON: Record<TestStatus | 'none', string> = { passed: '✓', failed: '✗', skipped: '○', running: '◌', none: '·' }
 const STATUS_TEXT: Record<TestStatus, string> = { passed: 'Passed', failed: 'Failed', skipped: 'Skipped', running: 'Running' }
@@ -36,7 +39,7 @@ interface Row {
  * file, a suite or a single test. The bottom area shows the selected test's
  * failure or the console output of the runs.
  */
-export function TestPanel({ root, visible }: { root: string; visible: boolean }): React.JSX.Element {
+export function TestPanel({ root, tabId, visible }: { root: string; tabId: string; visible: boolean }): React.JSX.Element {
   const st = useProjectTests(root)
   const { discover, run, stop, clearOutput } = useTestsStore.getState()
   const [filter, setFilter] = useState('')
@@ -179,7 +182,11 @@ export function TestPanel({ root, visible }: { root: string; visible: boolean })
                   setSelected(node.key)
                   show('details')
                 }}
-                onDoubleClick={() => node.kind !== 'test' && setExpanded((e) => ({ ...e, [node.key]: !isOpen }))}
+                onDoubleClick={() => {
+                  // A test opens in the editor at its line; a group folds / unfolds.
+                  if (node.test) void openFile(root, project, node.test.file, node.test.line)
+                  else setExpanded((e) => ({ ...e, [node.key]: !isOpen }))
+                }}
               >
                 <button
                   className="test-chevron"
@@ -243,7 +250,7 @@ export function TestPanel({ root, visible }: { root: string; visible: boolean })
             {stripAnsi(st.output) || 'Run tests to see their output here.'}
           </pre>
         ) : (
-          <TestDetails node={selectedRow} results={st.results} fileErrors={st.fileErrors} />
+          <TestDetails node={selectedRow} root={root} tabId={tabId} projects={st.projects ?? []} results={st.results} fileErrors={st.fileErrors} />
         )}
       </div>
     </div>
@@ -260,53 +267,133 @@ function findNode(trees: TestTreeNode[], key?: string): TestTreeNode | undefined
   return undefined
 }
 
+/** Open a file of the project in the user's editor (relative paths: from the test project folder). */
+async function openFile(root: string, project: TestProject | undefined, file: string, line?: number, column?: number): Promise<void> {
+  const r = await window.ide.app.openInEditor(root, file, line, column, project?.dir)
+  if (!r.ok) notify(r.error ?? `Cannot open ${file}`, 'error')
+}
+
+/** Text of a test failure, with its file locations as links that open the editor at that line. */
+function LinkedText({ text, root, project }: { text: string; root: string; project?: TestProject }): React.JSX.Element {
+  return (
+    <pre className="tests-message">
+      {splitLocations(stripAnsi(text)).map((part, i) =>
+        typeof part === 'string' ? (
+          part
+        ) : (
+          <a
+            key={i}
+            className="tests-location"
+            href="#"
+            title={`Open ${part.file} at line ${part.line}`}
+            onClick={(e) => {
+              e.preventDefault()
+              void openFile(root, project, part.file, part.line, part.column)
+            }}
+          >
+            {part.text}
+          </a>
+        )
+      )}
+    </pre>
+  )
+}
+
+/** "Fix with agent" button: sends the failures to the project's AI agent panel. */
+function FixButton({ tabId, project, failures }: { tabId: string; project?: TestProject; failures: Failure[] }): React.JSX.Element | null {
+  const [sending, setSending] = useState(false)
+  if (!project || failures.length === 0) return null
+  const label = failures.length === 1 ? 'Fix with agent' : `Fix ${failures.length} failures with agent`
+  return (
+    <button
+      className="tool-button primary tests-fix"
+      disabled={sending}
+      title="Send the failure to the project's AI agent panel (opens one if needed), with how to re-run the test"
+      onClick={async () => {
+        setSending(true)
+        const r = await sendToAgent(tabId, fixPrompt(project, failures))
+        setSending(false)
+        notify(r.ok ? 'Sent to the AI agent' : (r.error ?? 'Could not reach the AI agent'), r.ok ? 'success' : 'error')
+      }}
+    >
+      ✦ {sending ? 'Sending…' : label}
+    </button>
+  )
+}
+
 /** Failure (or status) of the selected test; for a group, its failed tests. */
 function TestDetails({
   node,
+  root,
+  tabId,
+  projects,
   results,
   fileErrors
 }: {
   node?: TestTreeNode
+  root: string
+  tabId: string
+  projects: TestProject[]
   results: ReturnType<typeof useProjectTests>['results']
   fileErrors: ReturnType<typeof useProjectTests>['fileErrors']
 }): React.JSX.Element {
   if (!node) return <div className="tests-details muted">Select a test to see its result.</div>
+  const project = projects.find((p) => p.id === node.projectId)
   const errors = (fileErrors[node.projectId] ?? []).filter((e) => node.kind === 'project' || (node.req.file && e.file === node.req.file))
+  const testOf = (id: string): TestCase | undefined => project?.tests.find((t) => t.id === id)
+
   if (node.test) {
-    const r = results[resultKey(node.projectId, node.test.id)]
+    const test = node.test
+    const r = results[resultKey(node.projectId, test.id)]
+    const message = r && 'message' in r ? r.message : undefined
     return (
       <div className="tests-details">
         <div className="tests-details-head">
           <StatusIcon status={r?.status} />
-          <strong>{[...node.test.suite, node.test.name].join(' › ')}</strong>
+          <strong>{[...test.suite, test.name].join(' › ')}</strong>
+          <span className="spacer" />
+          {r?.status === 'failed' && <FixButton tabId={tabId} project={project} failures={[{ test, message }]} />}
         </div>
         <div className="muted">
-          {node.test.file}
-          {node.test.line ? `:${node.test.line}` : ''}
+          <a
+            className="tests-location"
+            href="#"
+            title="Open in your editor"
+            onClick={(e) => {
+              e.preventDefault()
+              void openFile(root, project, test.file, test.line)
+            }}
+          >
+            {test.file}
+            {test.line ? `:${test.line}` : ''}
+          </a>
           {r && 'duration' in r && r.duration !== undefined ? ` · ${formatDuration(r.duration)}` : ''}
           {r && r.status !== 'running' && r.flaky ? ' · passed after a retry' : ''}
         </div>
         {!r && <p className="muted">Not run yet.</p>}
-        {r && 'message' in r && r.message && <pre className="tests-message">{stripAnsi(r.message)}</pre>}
+        {message && <LinkedText text={message} root={root} project={project} />}
         {errors.map((e, i) => (
-          <pre key={i} className="tests-message">
-            {stripAnsi(e.message)}
-          </pre>
+          <LinkedText key={i} text={e.message} root={root} project={project} />
         ))}
       </div>
     )
   }
+
   const failed = node.testIds.filter((id) => results[resultKey(node.projectId, id)]?.status === 'failed')
+  const failures: Failure[] = failed.flatMap((id) => {
+    const test = testOf(id)
+    const r = results[resultKey(node.projectId, id)] as TestResult
+    return test ? [{ test, message: r.message }] : []
+  })
   return (
     <div className="tests-details">
       <div className="tests-details-head">
         <strong>{node.label}</strong>
+        <span className="spacer" />
+        <FixButton tabId={tabId} project={project} failures={failures} />
       </div>
       {errors.map((e, i) => (
-        <pre key={`e${i}`} className="tests-message">
-          {e.file ? `${e.file}\n` : ''}
-          {stripAnsi(e.message)}
-        </pre>
+        <LinkedText key={`e${i}`} text={`${e.file ? `${e.file}\n` : ''}${e.message}`} root={root} project={project} />
       ))}
       {failed.length === 0 && errors.length === 0 && <p className="muted">{node.testIds.length} tests, no failures.</p>}
       {failed.map((id) => {
@@ -316,7 +403,7 @@ function TestDetails({
             <div>
               <StatusIcon status="failed" /> {id.split('::')[1]}
             </div>
-            {r.message && <pre className="tests-message">{stripAnsi(r.message)}</pre>}
+            {r.message && <LinkedText text={r.message} root={root} project={project} />}
           </div>
         )
       })}

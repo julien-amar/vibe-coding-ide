@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TestProject } from '@shared/types'
-import { aggregateStatus, buildTestTree, filterTestTree, formatDuration, stripAnsi } from './test-tree'
+import { aggregateStatus, buildTestTree, filterTestTree, formatDuration, splitLocations, stripAnsi } from './test-tree'
 
 const project: TestProject = {
   id: 'vitest:apps/web',
@@ -47,6 +47,27 @@ describe('Tests panel tree', () => {
     expect(tree.testIds).toEqual(['a.test.ts::math > deep > mul'])
     expect(tree.children).toHaveLength(1)
     expect(tree.children[0].children[0].children[0].label).toBe('deep')
+  })
+
+  it('finds file locations in stack traces (Node, Windows, WSL, pytest, file URLs)', () => {
+    const loc = (t: string): (string | { file: string; line: number; column?: number })[] =>
+      splitLocations(t).map((p) => (typeof p === 'string' ? p : { file: p.file, line: p.line, column: p.column }))
+    expect(loc('    at C:/Users/me/app/src/a.test.ts:9:19')).toEqual(['    at ', { file: 'C:/Users/me/app/src/a.test.ts', line: 9, column: 19 }])
+    expect(loc('at Object.<anonymous> (C:\\app\\jest\\x.check.js:7:30)')).toEqual([
+      'at Object.<anonymous> (',
+      { file: 'C:\\app\\jest\\x.check.js', line: 7, column: 30 },
+      ')'
+    ])
+    expect(loc('/home/me/app/test/x.spec.ts:12:3')).toEqual([{ file: '/home/me/app/test/x.spec.ts', line: 12, column: 3 }])
+    expect(loc('py/check_math.py:9: AssertionError')).toEqual([{ file: 'py/check_math.py', line: 9, column: undefined }, ': AssertionError'])
+    expect(loc('at file:///C:/app/node_modules/vitest/dist/x.js:1:2')).toEqual(['at ', { file: 'file:///C:/app/node_modules/vitest/dist/x.js', line: 1, column: 2 }])
+    // file:// URLs are shown as plain paths (the link still opens the file).
+    const shown = (t: string): string[] => splitLocations(t).flatMap((p) => (typeof p === 'string' ? [] : [p.text]))
+    expect(shown('at file:///C:/app/node_modules/x.js:1:2')).toEqual(['C:/app/node_modules/x.js:1:2'])
+    expect(shown('at file:///home/me/app/x.js:3:4')).toEqual(['/home/me/app/x.js:3:4'])
+    expect(shown('at (C:\\app\\x.js:5:6)')).toEqual(['C:\\app\\x.js:5:6'])
+    // Not locations: URLs with a port, versions, plain numbers.
+    expect(loc('see http://localhost:3000 and v5.1.0:2 or 12:30')).toEqual(['see http://localhost:3000 and v5.1.0:2 or 12:30'])
   })
 
   it('formats output and durations', () => {

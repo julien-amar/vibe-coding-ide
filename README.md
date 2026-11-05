@@ -27,7 +27,9 @@ A tabbed development environment — see [PLAN.md](PLAN.md) for the full design.
   - *Branches* — switch, create, rename, merge into the current branch, delete (with a confirmation for unmerged branches), check out remote branches.
   - **New feature…** — creates `feature/<name>` in its own folder next to the repository (a git worktree) and opens it as a new project with its own terminal and agent, so you can work on it in parallel. Worktrees can be reopened or removed from the Branches view.
   - Fetch / Pull / Push (Publish for a branch without upstream), ahead/behind counts. Refreshes automatically when the repository changes.
-- **Tests panel:** finds the project's **Vitest** and **Playwright** tests (from their config files, also in sub-folders of a monorepo) and lists them by file and `describe()` block. **Run all**, or hover any project, file, suite or test and click **▶**; each test turns passed / failed / skipped **as soon as it finishes**, with its duration, and files with failures open automatically. Skipped tests are listed too. Click a test for its error and stack trace; **Output** shows the console output of the runs. Connected filter buttons show **All**, **✓ Passed**, **○ Skipped** or **✗ Failed** tests (with their counts), combined with a name filter; **■ Stop** ends a run. Tests run with the project's own installed tools (from `node_modules`), inside the distribution for WSL projects. Other frameworks (pytest, Jest, .NET, Go, Rust, JVM) are planned.
+- **Tests panel:** finds the project's **Vitest**, **Jest**, **Playwright** and **pytest** tests (from their config files — `vitest.config.*`, `jest.config.*` or a `jest` section in package.json, `playwright.config.*`, `pytest.ini` / `pyproject.toml` / `setup.cfg` / `tox.ini` — also in sub-folders of a monorepo) and lists them by file and `describe()` block / test class. **Run all**, or hover any project, file, suite or test and click **▶**; each test turns passed / failed / skipped **as soon as it finishes**, with its duration, and files with failures open automatically. Skipped tests are listed too. Click a test for its error and stack trace; **Output** shows the console output of the runs. Connected filter buttons show **All**, **✓ Passed**, **○ Skipped** or **✗ Failed** tests (with their counts), combined with a name filter; **■ Stop** ends a run. JavaScript tests run with the project's own installed tools (from `node_modules`), pytest with the project's virtualenv (`.venv`, `venv` or `env`) or Python on PATH; inside the distribution for WSL projects. Other frameworks (.NET, Go, Rust, JVM) are planned.
+  - **✦ Fix with agent** on a failed test (or a file / suite with failures) sends the failure to the project's **AI agent** panel — the test, its file and line, the error and the command that re-runs just that test — opening an agent panel first if none is running.
+  - **Open in your editor:** the `file:line` under a test, every location in an error's stack trace, and double-clicking a test open that file at that line in **VS Code**, Cursor, Windsurf, VSCodium, Zed or Sublime Text (the first one found on PATH; otherwise the system's default app).
 - **WSL projects** (`\\wsl.localhost\<distro>\...`): git runs inside the distribution, the terminal opens the distro's shell in the project folder, and the agent defaults to one installed inside the distro (e.g. `claude` in Ubuntu), falling back to the Windows one.
 - Project tabs move between windows like any other tab and are restored on start.
 
@@ -54,6 +56,12 @@ pnpm build
 pnpm test:e2e    # end-to-end tests (Playwright): launches the built app with throwaway profiles and repos
 ```
 Unit tests live next to the code (`src/**/*.test.ts`), end-to-end tests in `apps/desktop/e2e/`.
+The Tests panel is tested on a sample project (`apps/desktop/e2e/fixtures/sample-tests`) with Vitest, Jest, Playwright and pytest tests. Its pytest tests need a virtualenv there (CI creates it; they are skipped without it):
+```sh
+cd apps/desktop/e2e/fixtures/sample-tests
+python -m venv .venv && .venv/Scripts/python -m pip install pytest   # macOS / Linux: .venv/bin/python
+```
+End-to-end tests put fake `claude` and `code` commands first on PATH (`e2e/fixtures/fake-tools`), so they never start a real AI agent or open your editor.
 
 ## CI & releases (GitHub Actions)
 - **CI** (`.github/workflows/ci.yml`): on every push and pull request, type-check, unit tests, build and end-to-end tests on Windows, macOS and Linux.

@@ -12,6 +12,7 @@ import { PtyManager } from './pty-manager'
 import { checkUpdates, forgetUpdates, type UpdateTarget } from './package-updates'
 import { parseWslPath } from '@shared/wsl-paths'
 import { discoverTests, runTests, stopAllTests, stopTests } from './test-runner'
+import { openInEditor } from './editor'
 
 app.setName('vibe-coding-ide')
 // VIBE_CODING_IDE_USER_DATA: run with a separate profile (layout, recent projects), e.g. for automated tests.
@@ -386,6 +387,12 @@ function registerIpc(): void {
       : { ok: false, error: 'Folder not found', results: [], fileErrors: [] }
   )
   ipcMain.on('tests:stop', (_e, root: string) => stopTests(String(root)))
+
+  ipcMain.handle('app:openInEditor', (_e, root: string, file: string, line?: number, column?: number, base?: string) =>
+    isDir(String(root))
+      ? openInEditor(String(root), String(file ?? ''), line, column, base ? String(base) : undefined)
+      : { ok: false, error: 'Folder not found' }
+  )
 
   ipcMain.on('app:openExternal', (_e, url: string) => {
     try {

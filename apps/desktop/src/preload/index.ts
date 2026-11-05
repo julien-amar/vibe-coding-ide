@@ -77,7 +77,8 @@ const api: IdeApi = {
     }
   },
   app: {
-    openExternal: (url) => ipcRenderer.send('app:openExternal', url)
+    openExternal: (url) => ipcRenderer.send('app:openExternal', url),
+    openInEditor: (root, file, line, column, base) => ipcRenderer.invoke('app:openInEditor', root, file, line, column, base)
   }
 }
 

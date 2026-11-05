@@ -287,3 +287,18 @@
 .tests-failure {
   margin-top: 8px;
 }
+
+/* File locations in failures: open the editor at that line. */
+.tests-location {
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.tests-location:hover {
+  text-decoration: underline;
+}
+
+.tests-details-head .tests-fix {
+  flex-shrink: 0;
+}

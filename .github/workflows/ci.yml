@@ -46,6 +46,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # The Tests panel's pytest fixture runs with its own virtualenv, like a real Python project
+      # (the pytest tests are skipped when it is missing).
+      - name: Python environment for the pytest fixture
+        shell: bash
+        run: |
+          venv=apps/desktop/e2e/fixtures/sample-tests/.venv
+          python -m venv "$venv"
+          if [ -x "$venv/bin/python" ]; then py="$venv/bin/python"; else py="$venv/Scripts/python.exe"; fi
+          "$py" -m pip install --quiet pytest
+
       - name: Type-check
         run: pnpm typecheck
 

@@ -221,7 +221,7 @@ function TestsPane({ tab, pane, visible }: { tab: Tab; pane: PaneNode; visible: 
         </>
       }
     >
-      <TestPanel root={tab.project!.root} visible={visible} />
+      <TestPanel root={tab.project!.root} tabId={tab.id} visible={visible} />
     </PaneFrame>
   )
 }

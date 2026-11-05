@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { WebContents } from 'electron'
@@ -17,7 +17,10 @@ import {
   parseVitestReport,
   relFile,
   runArgs,
-  runTests
+  runTests,
+  parseJestListing,
+  pytestCase,
+  findPython
 } from './test-runner'
 
 const FIXTURE = resolve(__dirname, '../../e2e/fixtures/sample-tests')
@@ -106,23 +109,59 @@ describe('test runner parsers', () => {
   })
 
   it('builds run arguments for a project, a file, a suite and a test', () => {
-    expect(runArgs('vitest', { projectId: 'x' }, 'r.json')).toEqual(['run', '--reporter=default', '--reporter=json', '--outputFile.json=r.json'])
-    expect(runArgs('vitest', { projectId: 'x', file: 'a.test.ts', titlePath: ['math (x)', 'adds'] }, 'r.json').slice(0, 4)).toEqual([
+    const f = { report: 'r.json', live: 'live.js' }
+    expect(runArgs('vitest', { projectId: 'x' }, f)).toEqual(['run', '--reporter=default', '--reporter=json', '--reporter=live.js', '--outputFile.json=r.json'])
+    expect(runArgs('vitest', { projectId: 'x', file: 'a.test.ts', titlePath: ['math (x)', 'adds'] }, f).slice(0, 4)).toEqual([
       'run',
       'a.test.ts',
       '-t',
       '^math \\(x\\) > adds( > |$)'
     ])
-    expect(runArgs('playwright', { projectId: 'x', file: 'e2e/a.spec.ts' }, 'r.json')).toEqual(['test', 'e2e/a.spec.ts', '--reporter=list,json'])
-    expect(runArgs('playwright', { projectId: 'x', file: 'e2e/a.spec.ts', titlePath: ['t'], line: 7 }, 'r.json')[1]).toBe('e2e/a.spec.ts:7')
-    expect(runArgs('playwright', { projectId: 'x', file: 'e2e/a.spec.ts', titlePath: ['group (1)'] }, 'r.json')).toEqual([
+    expect(runArgs('playwright', { projectId: 'x', file: 'e2e/a.spec.ts' }, f)).toEqual(['test', 'e2e/a.spec.ts', '--reporter=list,json,live.js'])
+    expect(runArgs('playwright', { projectId: 'x', file: 'e2e/a.spec.ts', titlePath: ['t'], line: 7 }, f)[1]).toBe('e2e/a.spec.ts:7')
+    expect(runArgs('playwright', { projectId: 'x', file: 'e2e/a.spec.ts', titlePath: ['group (1)'] }, f)).toEqual([
       'test',
       'e2e/a.spec.ts',
       '-g',
       'group \\(1\\)',
-      '--reporter=list,json'
+      '--reporter=list,json,live.js'
+    ])
+    // Jest: by path, and -t on titles joined with spaces.
+    expect(runArgs('jest', { projectId: 'x', file: 'a.test.js', titlePath: ['strings', 'trims (x)'] }, f).slice(-4)).toEqual([
+      '--runTestsByPath',
+      'a.test.js',
+      '-t',
+      '^strings trims \\(x\\)( |$)'
+    ])
+    // pytest: node ids.
+    expect(runArgs('pytest', { projectId: 'x' }, f).slice(-1)).toEqual(['--rootdir=.'])
+    expect(runArgs('pytest', { projectId: 'x', file: 'py/check_a.py' }, f).slice(-1)).toEqual(['py/check_a.py'])
+    expect(runArgs('pytest', { projectId: 'x', file: 'py/check_a.py', titlePath: ['TestGroup', 'test_x[1]'] }, f).slice(-1)).toEqual([
+      'py/check_a.py::TestGroup::test_x[1]'
     ])
     expect(escapeRegex('a.b*c')).toBe('a\\.b\\*c')
+  })
+
+  it('reads Jest listings and pytest node ids', () => {
+    const listed = parseJestListing('/p', {
+      testResults: [
+        {
+          name: '/p/jest/a.test.js',
+          status: 'skipped',
+          assertionResults: [{ ancestorTitles: ['strings', 'nested'], title: 'trims', status: 'pending', location: { line: 12 } }]
+        }
+      ]
+    })
+    expect(listed.tests).toEqual([{ id: 'jest/a.test.js::strings > nested > trims', file: 'jest/a.test.js', suite: ['strings', 'nested'], name: 'trims', line: 12 }])
+    expect(pytestCase('py/check_a.py::TestGroup::test_x[1]', 9)).toEqual({
+      id: 'py/check_a.py::TestGroup > test_x[1]',
+      file: 'py/check_a.py',
+      suite: ['TestGroup'],
+      name: 'test_x[1]',
+      line: 9
+    })
+    expect(liveResult('pytest', '/p', { nodeid: 'py/check_a.py::test_y', status: 'passed', duration: 3 }).id).toBe('py/check_a.py::test_y')
+    expect(liveResult('jest', 'C:\\p', { file: 'C:\\p\\jest\\a.test.js', titles: ['s', 't'], status: 'failed' }).id).toBe('jest/a.test.js::s > t')
   })
 })
 
@@ -163,7 +202,7 @@ describe('test framework detection', () => {
   const base = mkdtempSync(join(tmpdir(), 'vibe-coding-ide-detect-'))
   afterAll(() => rmSync(base, { recursive: true, force: true }))
 
-  it('finds configs in sub-folders and packages whose scripts call vitest, skipping node_modules', () => {
+  it('finds configs in sub-folders, packages whose scripts call a framework, and pytest configs, skipping node_modules / venvs', () => {
     const w = (f: string, s = ''): void => {
       mkdirSync(join(base, f, '..'), { recursive: true })
       writeFileSync(join(base, f), s)
@@ -171,15 +210,38 @@ describe('test framework detection', () => {
     w('apps/web/vitest.config.ts')
     w('apps/web/playwright.config.ts')
     w('packages/lib/package.json', JSON.stringify({ scripts: { test: 'vitest run' } }))
-    w('packages/other/package.json', JSON.stringify({ scripts: { test: 'jest' } }))
+    w('packages/other/package.json', JSON.stringify({ scripts: { test: 'jest --coverage' } }))
+    w('packages/cfg/package.json', JSON.stringify({ jest: { testEnvironment: 'node' } }))
+    w('packages/old/jest.config.js')
+    w('services/api/pyproject.toml', '[project]\nname = "api"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    w('services/worker/setup.cfg', '[tool:pytest]\n')
+    w('services/plain/pyproject.toml', '[project]\nname = "plain"\n')
+    w('tools/pytest.ini', '[pytest]\n')
     w('node_modules/dep/vitest.config.ts')
+    w('.venv/lib/site/pytest.ini')
     const found = detectTestProjects(base).map((p) => `${p.framework}:${p.relDir}`).sort()
-    expect(found).toEqual(['playwright:apps/web', 'vitest:apps/web', 'vitest:packages/lib'])
+    expect(found).toEqual([
+      'jest:packages/cfg',
+      'jest:packages/old',
+      'jest:packages/other',
+      'playwright:apps/web',
+      'pytest:services/api',
+      'pytest:services/worker',
+      'pytest:tools',
+      'vitest:apps/web',
+      'vitest:packages/lib'
+    ])
   })
 
-  it('finds the framework CLI in a parent node_modules (hoisted install)', () => {
+  it('finds the framework CLI in a parent node_modules (hoisted install), and a project virtualenv', () => {
     expect(findCli(FIXTURE, 'vitest')).toMatch(/vitest[\\/]vitest\.mjs$/)
+    expect(findCli(FIXTURE, 'jest')).toMatch(/jest[\\/]bin[\\/]jest\.js$/)
     expect(findCli(FIXTURE, 'playwright')).toMatch(/cli\.js$/)
+    const venv = join(base, 'pyproj')
+    mkdirSync(join(venv, '.venv', process.platform === 'win32' ? 'Scripts' : 'bin'), { recursive: true })
+    writeFileSync(join(venv, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python'), '')
+    mkdirSync(join(venv, 'src'))
+    expect(findPython(join(venv, 'src')).venv).toBe(join(venv, '.venv'))
   })
 })
 
@@ -211,6 +273,8 @@ describe('discovering and running real tests (fixture project)', () => {
       'unit/names.check.ts::names > is not confused by callbacks',
       'unit/names.check.ts::names > keeps \\\\wsl.localhost escapes'
     ])
+    // Line numbers (for "open in editor" and "Fix with agent").
+    expect(vitest.tests.find((t) => t.name === 'fails on purpose')?.line).toBe(8)
     expect(pw.error).toBeUndefined()
     expect(pw.tests.map((t) => t.id)).toEqual(['pw/basic.pw.ts::basic > passes', 'pw/basic.pw.ts::basic > fails on purpose'])
   }, 120_000)
@@ -251,5 +315,67 @@ describe('discovering and running real tests (fixture project)', () => {
   it('runs a Playwright describe() block by its title', async () => {
     const r = await runTests(FIXTURE, { projectId: 'playwright:', file: 'pw/basic.pw.ts', titlePath: ['basic'] }, sender)
     expect(r.results.map((x) => x.status).sort()).toEqual(['failed', 'passed'])
+  }, 120_000)
+
+  it('lists and runs Jest tests (the listing matches the run)', async () => {
+    const jest = (await discoverTests(FIXTURE)).find((p) => p.framework === 'jest')!
+    expect(jest.error).toBeUndefined()
+    expect(jest.tests.map((t) => t.id).sort()).toEqual([
+      'jest/strings.check.js::is skipped',
+      'jest/strings.check.js::strings > fails on purpose',
+      'jest/strings.check.js::strings > joins words',
+      'jest/strings.check.js::strings > nested > trims (spaces)'
+    ])
+    expect(jest.tests.find((t) => t.name === 'joins words')?.line).toBe(2)
+
+    progress.length = 0
+    const all = await runTests(FIXTURE, { projectId: 'jest:' }, sender)
+    expect(all.ok).toBe(true)
+    expect(all.results.map((r) => r.id).sort()).toEqual(jest.tests.map((t) => t.id).sort())
+    const byId = Object.fromEntries(all.results.map((r) => [r.id, r]))
+    expect(byId['jest/strings.check.js::strings > fails on purpose']).toMatchObject({ status: 'failed' })
+    expect(byId['jest/strings.check.js::strings > fails on purpose'].message).toMatch(/Expected: "Vibe"/)
+    expect(byId['jest/strings.check.js::is skipped'].status).toBe('skipped')
+    // Live results for the tests that ran (Jest reports skipped ones only in the final report).
+    const ran = all.results.filter((r) => r.status !== 'skipped')
+    expect(progress.map((p) => `${p.id}=${p.status}`).sort()).toEqual(ran.map((r) => `${r.id}=${r.status}`).sort())
+
+    const one = await runTests(FIXTURE, { projectId: 'jest:', file: 'jest/strings.check.js', titlePath: ['strings', 'nested', 'trims (spaces)'] }, sender)
+    expect(one.results.filter((r) => r.status !== 'skipped').map((r) => r.id)).toEqual(['jest/strings.check.js::strings > nested > trims (spaces)'])
+  }, 120_000)
+
+  // pytest runs with the fixture's virtualenv (created by CI; locally: python -m venv .venv && pip install pytest).
+  const hasVenv = existsSync(join(FIXTURE, '.venv'))
+  it.skipIf(!hasVenv)('lists and runs pytest tests (classes, parametrized tests, live results)', async () => {
+    const py = (await discoverTests(FIXTURE)).find((p) => p.framework === 'pytest')!
+    expect(py.error).toBeUndefined()
+    expect(py.tests.map((t) => t.id)).toEqual([
+      'py/check_math.py::test_adds',
+      'py/check_math.py::test_fails_on_purpose',
+      'py/check_math.py::TestGroup > test_inside_class',
+      'py/check_math.py::test_param[1]',
+      'py/check_math.py::test_param[2]',
+      'py/check_math.py::test_skipped'
+    ])
+    expect(py.tests.find((t) => t.name === 'test_adds')?.line).toBe(4)
+
+    progress.length = 0
+    const all = await runTests(FIXTURE, { projectId: 'pytest:' }, sender)
+    expect(all.ok).toBe(true)
+    const status = Object.fromEntries(all.results.map((r) => [r.id, r.status]))
+    expect(status).toEqual({
+      'py/check_math.py::test_adds': 'passed',
+      'py/check_math.py::test_fails_on_purpose': 'failed',
+      'py/check_math.py::TestGroup > test_inside_class': 'passed',
+      'py/check_math.py::test_param[1]': 'passed',
+      'py/check_math.py::test_param[2]': 'passed',
+      'py/check_math.py::test_skipped': 'skipped'
+    })
+    expect(all.results.find((r) => r.status === 'failed')?.message).toMatch(/assert \(2 \* 2\) == 5|assert 4 == 5/)
+    expect(progress).toHaveLength(6)
+    expect(output.join('')).not.toContain(RESULT_MARK)
+
+    const cls = await runTests(FIXTURE, { projectId: 'pytest:', file: 'py/check_math.py', titlePath: ['TestGroup'] }, sender)
+    expect(cls.results.map((r) => r.id)).toEqual(['py/check_math.py::TestGroup > test_inside_class'])
   }, 120_000)
 })

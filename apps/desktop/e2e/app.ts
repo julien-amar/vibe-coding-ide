@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { delimiter, join, resolve } from 'node:path'
 import { _electron as electron, expect, type ElectronApplication, type Page } from '@playwright/test'
 
 const MAIN = resolve(__dirname, '..', 'out', 'main', 'index.js')
@@ -10,6 +10,10 @@ export interface TestApp {
   app: ElectronApplication
   page: Page
   userData: string
+  /** What the fake AI agent received (typed / pasted text). */
+  agentLog: string
+  /** The fake editor's calls (JSON arguments, one call per line). */
+  editorLog: string
 }
 
 /** A throwaway folder (removed by `cleanup`). */
@@ -31,16 +35,35 @@ export function cleanup(dir: string): void {
  * like picking a folder in the native dialog.
  */
 export async function launch(userData: string): Promise<TestApp> {
+  // Fake `claude` and `code` first on PATH: project tabs never start a real AI agent, and
+  // "open in editor" never opens a real editor. What they receive is logged in the profile folder.
+  const agentLog = join(userData, 'fake-agent.log')
+  const editorLog = join(userData, 'fake-editor.log')
   const app = await electron.launch({
     // CI Linux runners do not allow Chromium's sandbox (unprivileged user namespaces).
     args: [MAIN, ...(process.platform === 'linux' ? ['--no-sandbox'] : [])],
-    env: { ...process.env, VIBE_CODING_IDE_USER_DATA: userData, VIBE_CODING_IDE_DEBUG: '1', ELECTRON_ENABLE_LOGGING: '0' } as Record<string, string>
+    env: {
+      ...process.env,
+      ...fakeToolsEnv(agentLog, editorLog),
+      VIBE_CODING_IDE_USER_DATA: userData,
+      VIBE_CODING_IDE_DEBUG: '1',
+      ELECTRON_ENABLE_LOGGING: '0'
+    } as Record<string, string>
   })
   const page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
   // The app is ready when the first tab exists.
   await expect(page.locator('.tab').first()).toBeVisible()
-  return { app, page, userData }
+  return { app, page, userData, agentLog, editorLog }
+}
+
+/** Contents of a fake tool's log ('' while it does not exist). */
+export function readLog(file: string): string {
+  try {
+    return readFileSync(file, 'utf8')
+  } catch {
+    return ''
+  }
 }
 
 /** Close the window like a user (saves the layout) and wait for the app to exit. */
@@ -71,6 +94,18 @@ export async function typeInTerminal(page: Page, text: string): Promise<void> {
   await page.locator('.tab-panel.visible .terminal-host').first().click()
   await page.keyboard.type(text)
   await page.keyboard.press('Enter')
+}
+
+/**
+ * Environment that puts fake tools first on PATH: `claude` (the AI agent: records what it
+ * receives in `agentLog`) and `code` (the editor: records its arguments in `editorLog`).
+ * Tests never send anything to a real agent or open a real editor.
+ */
+export function fakeToolsEnv(agentLog: string, editorLog: string): Record<string, string> {
+  const dir = resolve(__dirname, 'fixtures', 'fake-tools')
+  if (process.platform !== 'win32') for (const f of ['claude', 'code']) chmodSync(join(dir, f), 0o755)
+  const pathKey = Object.keys(process.env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH'
+  return { [pathKey]: `${dir}${delimiter}${process.env[pathKey] ?? ''}`, FAKE_AGENT_LOG: agentLog, FAKE_EDITOR_LOG: editorLog }
 }
 
 /** A small git repository: main with 2 commits, a feature branch merged into it, a renamed file. */
