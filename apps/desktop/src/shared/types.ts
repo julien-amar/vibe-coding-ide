@@ -357,6 +357,8 @@ export interface IdeApi {
     run(root: string, req: TestRunRequest): Promise<TestRunResult>
     stop(root: string): void
     onOutput(cb: (root: string, text: string) => void): () => void
+    /** A test's result as soon as it finishes (the final report follows when the run ends). */
+    onProgress(cb: (root: string, projectId: string, result: TestResult) => void): () => void
   }
   app: {
     openExternal(url: string): void

@@ -14,6 +14,15 @@ function StatusIcon({ status }: { status?: TestStatus }): React.JSX.Element {
   )
 }
 
+type StatusFilter = 'all' | 'passed' | 'skipped' | 'failed'
+
+const STATUS_FILTERS: { value: StatusFilter; label: string; title: string }[] = [
+  { value: 'all', label: 'All', title: 'Show all tests' },
+  { value: 'passed', label: 'Passed', title: 'Show passed tests' },
+  { value: 'skipped', label: 'Skipped', title: 'Show skipped tests' },
+  { value: 'failed', label: 'Failed', title: 'Show failed tests' }
+]
+
 interface Row {
   node: TestTreeNode
   depth: number
@@ -31,7 +40,7 @@ export function TestPanel({ root, visible }: { root: string; visible: boolean })
   const st = useProjectTests(root)
   const { discover, run, stop, clearOutput } = useTestsStore.getState()
   const [filter, setFilter] = useState('')
-  const [failedOnly, setFailedOnly] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [selected, setSelected] = useState<string>()
   const [view, setView] = useState<'details' | 'output'>('details')
@@ -58,18 +67,18 @@ export function TestPanel({ root, visible }: { root: string; visible: boolean })
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase()
-    if (!q && !failedOnly) return trees
+    if (!q && statusFilter === 'all') return trees
     return trees
       .map((tree) =>
         filterTestTree(tree, (t) => {
-          if (failedOnly && st.results[resultKey(tree.projectId, t.id)]?.status !== 'failed') return false
+          if (statusFilter !== 'all' && st.results[resultKey(tree.projectId, t.id)]?.status !== statusFilter) return false
           return !q || [t.file, ...t.suite, t.name].some((s) => s.toLowerCase().includes(q))
         })
       )
-      .filter((t): t is TestTreeNode => !!t)
-  }, [trees, filter, failedOnly, st.results])
+      .filter((t): t is TestTreeNode => !!t && t.testIds.length > 0)
+  }, [trees, filter, statusFilter, st.results])
 
-  const searching = filter.trim() !== '' || failedOnly
+  const searching = filter.trim() !== '' || statusFilter !== 'all'
   const rows: Row[] = []
   const walk = (node: TestTreeNode, depth: number): void => {
     const status = aggregateStatus(node.projectId, node.testIds, st.results)
@@ -114,25 +123,32 @@ export function TestPanel({ root, visible }: { root: string; visible: boolean })
         <button className="tool-button" disabled={st.discovering || st.running} title="Find tests again (after adding or renaming tests)" onClick={() => void discover(root)}>
           ⟳
         </button>
-        <input className="tests-filter" placeholder="Filter tests" value={filter} onChange={(e) => setFilter(e.target.value)} />
-        <label className="tests-failed-only" title="Show failed tests only">
-          <input type="checkbox" checked={failedOnly} onChange={(e) => setFailedOnly(e.target.checked)} /> Failed
-        </label>
         <span className="spacer" />
         <span className="tests-summary">
-          {st.discovering ? (
-            <span className="busy">Finding tests…</span>
-          ) : st.running ? (
-            <span className="busy">Running…</span>
-          ) : (
-            <>
-              {counts.failed > 0 && <span className="st-failed">{counts.failed} failed</span>}
-              {counts.passed > 0 && <span className="st-passed">{counts.passed} passed</span>}
-              {counts.skipped > 0 && <span className="st-skipped">{counts.skipped} skipped</span>}
-              <span>{counts.total} tests</span>
-            </>
-          )}
+          {st.discovering ? <span className="busy">Finding tests…</span> : st.running ? <span className="busy">Running…</span> : null}
         </span>
+      </div>
+
+      <div className="pane-toolbar tests-filterbar">
+        <div className="segmented tests-status-filter" role="radiogroup" aria-label="Show tests">
+          {STATUS_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              role="radio"
+              aria-checked={statusFilter === f.value}
+              className={statusFilter === f.value ? 'active' : ''}
+              title={f.title}
+              aria-label={`${f.title} (${f.value === 'all' ? counts.total : counts[f.value]})`}
+              data-filter={f.value}
+              onClick={() => setStatusFilter(f.value)}
+            >
+              {f.value !== 'all' && <StatusIcon status={f.value} />}
+              <span className="filter-label">{f.label}</span>
+              <span className="count">{f.value === 'all' ? counts.total : counts[f.value]}</span>
+            </button>
+          ))}
+        </div>
+        <input className="tests-filter" placeholder="Filter by name" value={filter} onChange={(e) => setFilter(e.target.value)} />
       </div>
 
       <div className="tests-tree" role="tree" aria-label="Tests">
@@ -143,6 +159,11 @@ export function TestPanel({ root, visible }: { root: string; visible: boolean })
           </div>
         )}
         {!st.projects && st.discovering && <div className="tests-empty muted">Finding tests…</div>}
+        {rows.length === 0 && counts.total > 0 && (
+          <div className="tests-empty muted">
+            No {statusFilter === 'all' ? '' : `${statusFilter} `}tests{filter.trim() ? ` matching “${filter.trim()}”` : ''}.
+          </div>
+        )}
         {rows.map(({ node, depth, status, expanded: isOpen }) => {
           const project = st.projects?.find((p) => p.id === node.projectId)
           const result = node.test ? (st.results[resultKey(node.projectId, node.test.id)] as TestResult | undefined) : undefined

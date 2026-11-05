@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import type { IdeApi, PackageUpdateInfo } from '@shared/types'
+import type { IdeApi, PackageUpdateInfo, TestResult } from '@shared/types'
 
 const api: IdeApi = {
   platform: process.platform,
@@ -69,6 +69,11 @@ const api: IdeApi = {
       const listener = (_e: IpcRendererEvent, root: string, text: string): void => cb(root, text)
       ipcRenderer.on('tests:output', listener)
       return () => ipcRenderer.off('tests:output', listener)
+    },
+    onProgress: (cb) => {
+      const listener = (_e: IpcRendererEvent, root: string, projectId: string, result: TestResult): void => cb(root, projectId, result)
+      ipcRenderer.on('tests:progress', listener)
+      return () => ipcRenderer.off('tests:progress', listener)
     }
   },
   app: {

@@ -51,6 +51,22 @@ export const useTestsStore = create<TestsStore>((set, get) => {
     patch(root, (s) => ({ output: (s.output + text).slice(-MAX_OUTPUT) }))
   })
 
+  // Each test's result as soon as it finishes. A filtered run also reports the tests it did not
+  // select (as skipped): only tests of the run (shown as running) or tests not listed yet are updated.
+  window.ide.tests.onProgress((root, projectId, result) => {
+    const s = get().byRoot[root]
+    if (!s?.running) return
+    const key = resultKey(projectId, result.id)
+    const listed = s.projects?.find((p) => p.id === projectId)?.tests.some((t) => t.id === result.id)
+    if (s.results[key]?.status !== 'running' && listed) return
+    patch(root, (cur) => {
+      const projects = listed
+        ? cur.projects
+        : cur.projects?.map((p) => (p.id === projectId ? { ...p, tests: [...p.tests, testFromId(result.id)] } : p))
+      return { results: { ...cur.results, [key]: result }, projects }
+    })
+  })
+
   return {
     byRoot: {},
 

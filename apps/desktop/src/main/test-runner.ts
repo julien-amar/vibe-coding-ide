@@ -1,18 +1,23 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, type Dirent } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync, type Dirent } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import type { WebContents } from 'electron'
 import type { TestCase, TestFramework, TestProject, TestResult, TestRunRequest, TestRunResult } from '@shared/types'
 import { parseWslPath } from '@shared/wsl-paths'
 import { which } from './profiles'
+// Helper scripts run by the project's Node.js (written to a temp folder at run time: an external
+// Node cannot read files inside the app's archive, and WSL reaches the temp folder via /mnt).
+import VITEST_LIST from './test-helpers/vitest-list.mjs?raw'
+import VITEST_REPORTER from './test-helpers/vitest-reporter.mjs?raw'
+import PLAYWRIGHT_REPORTER from './test-helpers/playwright-reporter.cjs?raw'
 
 /**
  * Tests panel backend: finds test frameworks in a project (config files, also in
- * monorepo sub-folders), lists their tests with the framework's own JSON listing,
- * and runs them with its JSON reporter while streaming the console output.
- * Frameworks run from the project's node_modules (no global install needed);
- * WSL projects run inside their distribution.
+ * monorepo sub-folders), lists their tests, and runs them with the framework's
+ * JSON reporter plus a small live reporter (each result as soon as the test
+ * finishes), streaming the console output. Frameworks run from the project's
+ * node_modules (no global install needed); WSL projects run inside their distribution.
  */
 
 const SKIP_DIRS = new Set([
@@ -33,6 +38,9 @@ const CLI: Record<TestFramework, { packages: string[]; bin: string }> = {
 }
 
 const LIST_TIMEOUT = 180_000
+
+/** Prefix of the lines printed by the live reporters (see test-helpers/). */
+export const RESULT_MARK = '@@vibe-coding-ide:test '
 
 // ---------------------------------------------------------------------------
 // Detection
@@ -106,8 +114,14 @@ export function relFile(dir: string, file: string): string {
 
 const vitestId = (file: string, titles: string[]): string => `${file}::${titles.join(' > ')}`
 
-/** `vitest list --json`: [{ name: "suite > test", file, location? }] */
-export function parseVitestList(dir: string, list: { name: string; file: string; location?: { line: number } }[]): TestCase[] {
+interface VitestListed {
+  name: string
+  file: string
+  location?: { line: number }
+}
+
+/** `vitest list --json` / the list helper: [{ name: "suite > test", file, location? }] */
+export function parseVitestList(dir: string, list: VitestListed[]): TestCase[] {
   return list.map((t) => {
     const parts = t.name.split(' > ')
     const file = relFile(dir, t.file)
@@ -202,23 +216,86 @@ export function parsePlaywrightReport(dir: string, report: PwReport): { tests: T
   return { tests, results, fileErrors }
 }
 
+/** A line printed by a live reporter (test-helpers/*-reporter). */
+interface LiveLine {
+  file: string
+  /** Vitest: "suite > test". */
+  name?: string
+  /** Playwright: describe titles and the test title. */
+  titles?: string[]
+  projectName?: string
+  status: TestResult['status']
+  duration?: number
+  message?: string
+}
+
+/** A live reporter line as a TestResult with the same id as the listing / final report. */
+export function liveResult(framework: TestFramework, dir: string, l: LiveLine): TestResult {
+  const file = relFile(dir, l.file)
+  const id = framework === 'vitest' ? vitestId(file, (l.name ?? '').split(' > ')) : pwId(file, l.titles ?? [], l.projectName)
+  return { id, status: l.status, duration: l.duration, message: l.message }
+}
+
+/**
+ * Separates the live reporters' marked lines from the console output. Output is
+ * passed on line by line (a partial line waits for its end, or for `flush`).
+ */
+export class LiveOutput {
+  private pending = ''
+  constructor(
+    private onText: (text: string) => void,
+    private onResult: (line: LiveLine) => void
+  ) {}
+
+  push(chunk: string): void {
+    const text = this.pending + chunk
+    const end = text.lastIndexOf('\n')
+    if (end < 0) {
+      this.pending = text
+      return
+    }
+    this.pending = text.slice(end + 1)
+    let out = ''
+    for (const line of text.slice(0, end + 1).split(/(?<=\n)/)) {
+      const at = line.indexOf(RESULT_MARK)
+      if (at < 0) {
+        out += line
+        continue
+      }
+      out += line.slice(0, at)
+      try {
+        this.onResult(JSON.parse(line.slice(at + RESULT_MARK.length)) as LiveLine)
+      } catch {
+        out += line.slice(at)
+      }
+    }
+    if (out) this.onText(out)
+  }
+
+  flush(): void {
+    if (this.pending) this.onText(this.pending)
+    this.pending = ''
+  }
+}
+
 export const escapeRegex = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /** Command-line arguments of a run (relative to the test project folder). */
-export function runArgs(framework: TestFramework, req: TestRunRequest, reportFile: string): string[] {
+export function runArgs(framework: TestFramework, req: TestRunRequest, reportFile: string, liveReporter?: string): string[] {
   if (framework === 'vitest') {
     const args = ['run']
     if (req.file) args.push(req.file)
     // -t matches "suite > test" names: the item itself and everything under it.
     if (req.titlePath?.length) args.push('-t', `^${escapeRegex(req.titlePath.join(' > '))}( > |$)`)
-    return [...args, '--reporter=default', '--reporter=json', `--outputFile.json=${reportFile}`]
+    const live = liveReporter ? [`--reporter=${liveReporter}`] : []
+    return [...args, '--reporter=default', '--reporter=json', ...live, `--outputFile.json=${reportFile}`]
   }
   const args = ['test']
   // A test runs by file:line; a describe() block (no line known) by its titles (--grep matches
   // "file describe… test" joined with spaces).
   if (req.file) args.push(req.line && req.titlePath?.length ? `${req.file}:${req.line}` : req.file)
   if (req.titlePath?.length && !req.line) args.push('-g', escapeRegex(req.titlePath.join(' ')))
-  return [...args, '--reporter=list,json']
+  return [...args, `--reporter=list,json${liveReporter ? `,${liveReporter}` : ''}`]
 }
 
 // ---------------------------------------------------------------------------
@@ -230,20 +307,27 @@ interface Command {
   env: Record<string, string>
 }
 
-/** Windows temp file path as seen from WSL (/mnt/c/...). */
-const toWslPath = (p: string): string => p.replace(/^([A-Za-z]):[\\/]/, (_m, d: string) => `/mnt/${d.toLowerCase()}/`).replace(/\\/g, '/')
+/** Windows path as seen from WSL (/mnt/c/...). */
+export const toWslPath = (p: string): string => p.replace(/^([A-Za-z]):[\\/]/, (_m, d: string) => `/mnt/${d.toLowerCase()}/`).replace(/\\/g, '/')
 
-/** `node <script> <args>` in the test project folder: inside WSL for WSL folders. */
+const isWslDir = (dir: string): boolean => process.platform === 'win32' && parseWslPath(dir) !== undefined
+
+/** A path as the test process sees it: inside WSL, \\wsl.localhost paths and C:\ paths become Linux paths. */
+function childPath(dir: string, p: string): string {
+  if (!isWslDir(dir)) return p
+  return parseWslPath(p)?.path ?? toWslPath(p)
+}
+
+/** `node <script> <args>` in the test project folder (script and args already as the child sees them). */
 function nodeCommand(dir: string, script: string, args: string[], env: Record<string, string>): Command {
-  const wsl = process.platform === 'win32' ? parseWslPath(dir) : undefined
+  const wsl = isWslDir(dir) ? parseWslPath(dir) : undefined
   if (wsl) {
     const wslExe = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe')
-    const linuxScript = parseWslPath(script)?.path ?? script
     // Login + interactive shell so node installed by nvm / fnm (set up in .bashrc) is on PATH.
     const names = Object.keys(env)
     return {
       file: wslExe,
-      args: ['-d', wsl.distro, '--cd', wsl.path, '--exec', 'bash', '-lic', 'exec node "$@"', 'node', linuxScript, ...args],
+      args: ['-d', wsl.distro, '--cd', wsl.path, '--exec', 'bash', '-lic', 'exec node "$@"', 'node', script, ...args],
       env: { ...env, WSLENV: [process.env.WSLENV, ...names].filter(Boolean).join(':') }
     }
   }
@@ -252,12 +336,17 @@ function nodeCommand(dir: string, script: string, args: string[], env: Record<st
   return node ? { file: node, args: [script, ...args], env } : { file: process.execPath, args: [script, ...args], env: { ...env, ELECTRON_RUN_AS_NODE: '1' } }
 }
 
-/** Report file shared with the child process (a Windows path is converted for WSL). */
-function reportPath(dir: string): { local: string; forChild: string; cleanup: () => void } {
+/** Temp folder for a run: report file and helper scripts, shared with the child process. */
+function workDir(): { path: (name: string) => string; write: (name: string, content: string) => string; cleanup: () => void } {
   const tmp = mkdtempSync(join(tmpdir(), 'vibe-coding-ide-tests-'))
-  const local = join(tmp, 'report.json')
-  const wsl = process.platform === 'win32' && parseWslPath(dir)
-  return { local, forChild: wsl ? toWslPath(local) : local, cleanup: () => rmSync(tmp, { recursive: true, force: true }) }
+  return {
+    path: (name) => join(tmp, name),
+    write: (name, content) => {
+      writeFileSync(join(tmp, name), content)
+      return join(tmp, name)
+    },
+    cleanup: () => rmSync(tmp, { recursive: true, force: true })
+  }
 }
 
 function killTree(child: ChildProcess): void {
@@ -272,7 +361,13 @@ function killTree(child: ChildProcess): void {
   }
 }
 
-function exec(cmd: Command, cwd: string, onOutput: (text: string) => void, timeout?: number): { done: Promise<number | null>; child: ChildProcess } {
+function exec(
+  cmd: Command,
+  cwd: string,
+  onStdout: (text: string) => void,
+  onStderr: (text: string) => void,
+  timeout?: number
+): { done: Promise<number | null>; child: ChildProcess } {
   const child = spawn(cmd.file, cmd.args, {
     cwd: parseWslPath(cwd) ? undefined : cwd,
     windowsHide: true,
@@ -280,11 +375,11 @@ function exec(cmd: Command, cwd: string, onOutput: (text: string) => void, timeo
     env: { ...process.env, ...cmd.env }
   })
   const timer = timeout ? setTimeout(() => killTree(child), timeout) : undefined
-  child.stdout?.on('data', (b: Buffer) => onOutput(b.toString('utf8')))
-  child.stderr?.on('data', (b: Buffer) => onOutput(b.toString('utf8')))
+  child.stdout?.on('data', (b: Buffer) => onStdout(b.toString('utf8')))
+  child.stderr?.on('data', (b: Buffer) => onStderr(b.toString('utf8')))
   const done = new Promise<number | null>((resolve) => {
     child.on('error', (err) => {
-      onOutput(`\n${err.message}\n`)
+      onStderr(`\n${err.message}\n`)
       resolve(null)
     })
     child.on('close', (code) => {
@@ -306,23 +401,39 @@ const readJson = <T>(file: string): T | undefined => {
 /** Last lines of a command's output, for error messages. */
 const tail = (s: string, n = 30): string => s.trim().split(/\r?\n/).slice(-n).join('\n')
 
+async function runForJson(dir: string, script: string, args: string[], env: Record<string, string>, reportFile: string): Promise<{ json?: unknown; output: string; code: number | null }> {
+  let output = ''
+  const collect = (t: string): void => {
+    output += t
+  }
+  const { done } = exec(nodeCommand(dir, script, args, { ...env, FORCE_COLOR: '0' }), dir, collect, collect, LIST_TIMEOUT)
+  const code = await done
+  return { json: readJson<unknown>(reportFile), output, code }
+}
+
 async function listTests(framework: TestFramework, dir: string): Promise<{ tests: TestCase[]; error?: string }> {
   const cli = findCli(dir, framework)
   if (!cli) return { tests: [], error: `${framework} is not installed (run your package manager's install first).` }
-  const report = reportPath(dir)
-  let output = ''
+  const work = workDir()
+  const report = work.path('list.json')
   try {
-    const args = framework === 'vitest' ? ['list', `--json=${report.forChild}`] : ['test', '--list', '--reporter=json']
-    const env: Record<string, string> = framework === 'playwright' ? { PLAYWRIGHT_JSON_OUTPUT_FILE: report.forChild } : {}
-    const { done } = exec(nodeCommand(dir, cli, args, { ...env, FORCE_COLOR: '0' }), dir, (t) => (output += t), LIST_TIMEOUT)
-    const code = await done
-    const json = readJson<unknown>(report.local)
-    if (json === undefined) return { tests: [], error: tail(output) || `Listing tests failed (exit code ${code}).` }
-    if (framework === 'vitest') return { tests: parseVitestList(dir, json as Parameters<typeof parseVitestList>[1]) }
-    const pw = parsePlaywrightReport(dir, json as PwReport)
+    if (framework === 'vitest') {
+      // The helper also lists skipped tests; older Vitest versions without its Node API use `vitest list`.
+      const helper = work.write('vitest-list.mjs', VITEST_LIST)
+      const vitestNode = join(dirname(cli), 'dist', 'node.js')
+      const viaHelper = await runForJson(dir, childPath(dir, helper), [childPath(dir, vitestNode), childPath(dir, report)], {}, report)
+      const listed = viaHelper.json as { tests: VitestListed[]; errors: string[] } | undefined
+      if (listed) return { tests: parseVitestList(dir, listed.tests), error: listed.errors.length ? listed.errors.join('\n\n') : undefined }
+      const viaCli = await runForJson(dir, childPath(dir, cli), ['list', `--json=${childPath(dir, report)}`], {}, report)
+      if (viaCli.json === undefined) return { tests: [], error: tail(viaCli.output || viaHelper.output) || `Listing tests failed (exit code ${viaCli.code}).` }
+      return { tests: parseVitestList(dir, viaCli.json as VitestListed[]) }
+    }
+    const r = await runForJson(dir, childPath(dir, cli), ['test', '--list', '--reporter=json'], { PLAYWRIGHT_JSON_OUTPUT_FILE: childPath(dir, report) }, report)
+    if (r.json === undefined) return { tests: [], error: tail(r.output) || `Listing tests failed (exit code ${r.code}).` }
+    const pw = parsePlaywrightReport(dir, r.json as PwReport)
     return { tests: pw.tests, error: pw.fileErrors.length ? pw.fileErrors.map((e) => e.message).join('\n') : undefined }
   } finally {
-    report.cleanup()
+    work.cleanup()
   }
 }
 
@@ -350,27 +461,33 @@ export async function runTests(root: string, req: TestRunRequest, sender: WebCon
   const send = (text: string): void => {
     if (!sender.isDestroyed()) sender.send('tests:output', root, text)
   }
-  const report = reportPath(dir)
+  const live = new LiveOutput(send, (line) => {
+    if (!sender.isDestroyed()) sender.send('tests:progress', root, req.projectId, liveResult(framework, dir, line))
+  })
+  const work = workDir()
   try {
-    const args = runArgs(framework, req, report.forChild)
-    const env: Record<string, string> = framework === 'playwright' ? { PLAYWRIGHT_JSON_OUTPUT_FILE: report.forChild } : {}
-    const cmd = nodeCommand(dir, cli, args, env)
-    send(`$ ${framework} ${args.filter((a) => !a.startsWith('--outputFile')).join(' ')}\n`)
-    const { done, child } = exec(cmd, dir, send)
+    const report = childPath(dir, work.path('report.json'))
+    const reporter = childPath(dir, work.write(framework === 'vitest' ? 'live-reporter.mjs' : 'live-reporter.cjs', framework === 'vitest' ? VITEST_REPORTER : PLAYWRIGHT_REPORTER))
+    const args = runArgs(framework, req, report, reporter)
+    const env: Record<string, string> = framework === 'playwright' ? { PLAYWRIGHT_JSON_OUTPUT_FILE: report } : {}
+    const shown = args.filter((a) => !a.startsWith('--outputFile') && a !== `--reporter=${reporter}`).map((a) => a.replace(`,${reporter}`, ''))
+    send(`$ ${framework} ${shown.join(' ')}\n`)
+    const { done, child } = exec(nodeCommand(dir, childPath(dir, cli), args, env), dir, (t) => live.push(t), send)
     const entry = { child, cancelled: false }
     running.set(root, entry)
     const code = await done
+    live.flush()
     running.delete(root)
     send(`\n[exit code ${code ?? '?'}]\n`)
     if (entry.cancelled) return { ok: false, cancelled: true, results: [], fileErrors: [] }
-    const json = readJson<unknown>(report.local)
+    const json = readJson<unknown>(work.path('report.json'))
     if (json === undefined) return { ok: false, error: 'The test run produced no report: see the output.', results: [], fileErrors: [] }
     if (framework === 'vitest') return { ok: true, ...parseVitestReport(dir, json as VitestReport) }
     const pw = parsePlaywrightReport(dir, json as PwReport)
     return { ok: true, results: pw.results, fileErrors: pw.fileErrors }
   } finally {
     running.delete(root)
-    report.cleanup()
+    work.cleanup()
   }
 }
 

@@ -22,20 +22,27 @@ test('the Tests panel discovers Vitest and Playwright tests, runs them and shows
   const { page } = hub
   await openProject(page, FIXTURE)
   const panel = page.locator('.tab-panel.visible .tests-panel')
+  // Count shown on a status filter button (all / passed / skipped / failed).
+  const count = (f: string) => panel.locator('.tests-status-filter [data-filter="' + f + '"] .count')
 
   // Collapsed in the side rail by default: discovery starts when it is shown.
   await page.locator('.tab-panel.visible .side-rail .rail-item.tests').click()
   await expect(panel).toBeVisible()
   await expect(panel.locator('.test-row.kind-project')).toHaveText([/Vitest/, /Playwright/], { timeout: 60_000 })
-  await expect(panel.locator('.tests-summary')).toContainText('5 tests')
+  // Skipped tests are listed too.
+  await expect(count('all')).toHaveText('6')
 
   // Run everything.
   await panel.getByRole('button', { name: /Run all/ }).click()
-  await expect(panel.locator('.tests-summary')).toContainText('2 failed', { timeout: 90_000 })
-  await expect(panel.locator('.tests-summary')).toContainText('3 passed')
-  // The skipped Vitest test is not listed by Vitest; it appears once the run reports it.
-  await expect(panel.locator('.tests-summary')).toContainText('1 skipped')
-  await expect(panel.locator('.tests-summary')).toContainText('6 tests')
+  await expect(panel.locator('.tests-summary .busy')).toHaveCount(0, { timeout: 90_000 })
+  await expect(count('failed')).toHaveText('2')
+  await expect(count('passed')).toHaveText('3')
+  await expect(count('skipped')).toHaveText('1')
+  await expect(count('all')).toHaveText('6')
+  // The marked live-result lines are hidden from the output.
+  await panel.getByRole('button', { name: 'Output' }).click()
+  await expect(panel.locator('.tests-output')).not.toContainText('@@vibe-coding-ide')
+  await panel.getByRole('button', { name: 'Details' }).click()
 
   // Files holding a failure are expanded; selecting a failed test shows its error.
   const failing = panel.locator('.test-row.kind-test', { hasText: 'fails on purpose' }).first()
@@ -47,13 +54,24 @@ test('the Tests panel discovers Vitest and Playwright tests, runs them and shows
   await adds.hover()
   await adds.locator('.test-run').click()
   await expect(adds.locator('.test-status')).toHaveClass(/st-passed/, { timeout: 60_000 })
-  await expect(panel.locator('.tests-summary')).toContainText('2 failed')
+  await expect(count('failed')).toHaveText('2')
 
   // The console output of the runs.
   await panel.getByRole('button', { name: 'Output' }).click()
   await expect(panel.locator('.tests-output')).toContainText('$ vitest run')
 
-  // Filter: failed only.
-  await panel.locator('.tests-failed-only input').check()
-  await expect(panel.locator('.test-row.kind-test')).toHaveCount(2)
+  // Status filters (connected buttons): failed, passed, skipped, then all again.
+  const filter = (name: string) => panel.getByRole('radio', { name: new RegExp(name) })
+  await filter('Show failed').click()
+  await expect(filter('Show failed')).toHaveAttribute('aria-checked', 'true')
+  await expect(panel.locator('.test-row.kind-test')).toHaveText([/fails on purpose/, /fails on purpose/])
+  await filter('Show passed').click()
+  await expect(panel.locator('.test-row.kind-test')).toHaveCount(3)
+  await filter('Show skipped').click()
+  await expect(panel.locator('.test-row.kind-test')).toHaveText([/is skipped/])
+  // Combined with the name filter; nothing matches: a message.
+  await panel.locator('.tests-filter').fill('nested')
+  await expect(panel.locator('.tests-empty')).toHaveText('No skipped tests matching “nested”.')
+  await filter('Show all').click()
+  await expect(panel.locator('.test-row.kind-test')).toHaveText([/multiplies/])
 })

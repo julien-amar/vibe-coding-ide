@@ -145,7 +145,9 @@ function defaultProjectLayout(shell?: Profile, agent?: Profile): LayoutNode {
     kind: 'split',
     dir: 'row',
     sizes: [0.6, 0.4],
-    children: [{ kind: 'split', dir: 'column', sizes: [0.4, 0.3, 0.3], children: [git, tests, term] }, ai]
+    // Shown, Tests gets the largest share of the column (a test tree needs height); hidden, its
+    // share goes to the other panels.
+    children: [{ kind: 'split', dir: 'column', sizes: [0.33, 0.42, 0.25], children: [git, tests, term] }, ai]
   }
 }
 

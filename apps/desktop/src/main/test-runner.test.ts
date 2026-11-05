@@ -8,7 +8,11 @@ import {
   discoverTests,
   escapeRegex,
   findCli,
+  liveResult,
+  LiveOutput,
   parsePlaywrightReport,
+  RESULT_MARK,
+  toWslPath,
   parseVitestList,
   parseVitestReport,
   relFile,
@@ -122,6 +126,39 @@ describe('test runner parsers', () => {
   })
 })
 
+describe('live results', () => {
+  it('separates marked result lines from the output, across chunk boundaries', () => {
+    const text: string[] = []
+    const lines: unknown[] = []
+    const live = new LiveOutput((t) => text.push(t), (l) => lines.push(l))
+    live.push('RUN v5\n ✓ adds')
+    live.push(` 2ms\n${RESULT_MARK}{"file":"/p/a.test.ts","name":"math > ad`)
+    live.push(`ds","status":"passed","duration":2}\ntail without newline`)
+    expect(lines).toEqual([{ file: '/p/a.test.ts', name: 'math > adds', status: 'passed', duration: 2 }])
+    expect(text.join('')).toBe('RUN v5\n ✓ adds 2ms\n')
+    live.flush()
+    expect(text.join('')).toBe('RUN v5\n ✓ adds 2ms\ntail without newline')
+  })
+
+  it('keeps output printed on the same line before a marker, and bad JSON as text', () => {
+    const text: string[] = []
+    const live = new LiveOutput((t) => text.push(t), () => undefined)
+    live.push(`dots...${RESULT_MARK}{"file":"x","status":"passed"}\n${RESULT_MARK}{oops\n`)
+    expect(text.join('')).toBe(`dots...${RESULT_MARK}{oops\n`)
+  })
+
+  it('gives live results the same ids as the listing', () => {
+    expect(liveResult('vitest', 'C:\\p', { file: 'C:/p/unit/a.test.ts', name: 'math > adds', status: 'passed' }).id).toBe('unit/a.test.ts::math > adds')
+    expect(liveResult('playwright', '/p', { file: '/p/e2e/a.spec.ts', titles: ['group', 'works'], projectName: 'chromium', status: 'failed' }).id).toBe(
+      'e2e/a.spec.ts::group > works::chromium'
+    )
+  })
+
+  it('converts Windows paths for WSL', () => {
+    expect(toWslPath('C:\\Users\\me\\AppData\\Local\\Temp\\x\\r.json')).toBe('/mnt/c/Users/me/AppData/Local/Temp/x/r.json')
+  })
+})
+
 describe('test framework detection', () => {
   const base = mkdtempSync(join(tmpdir(), 'vibe-coding-ide-detect-'))
   afterAll(() => rmSync(base, { recursive: true, force: true }))
@@ -148,15 +185,23 @@ describe('test framework detection', () => {
 
 describe('discovering and running real tests (fixture project)', () => {
   const output: string[] = []
-  const sender = { isDestroyed: () => false, send: (_ch: string, _root: string, text: string) => output.push(text) } as unknown as WebContents
+  const progress: { id: string; status: string }[] = []
+  const sender = {
+    isDestroyed: () => false,
+    send: (ch: string, _root: string, a: unknown, b: unknown) => {
+      if (ch === 'tests:output') output.push(a as string)
+      if (ch === 'tests:progress') progress.push(b as { id: string; status: string })
+    }
+  } as unknown as WebContents
 
   it('lists Vitest and Playwright tests', async () => {
     const projects = await discoverTests(FIXTURE)
     const vitest = projects.find((p) => p.framework === 'vitest')!
     const pw = projects.find((p) => p.framework === 'playwright')!
     expect(vitest.error).toBeUndefined()
-    // `vitest list` leaves out .skip tests (they appear once a run reports them).
+    // Skipped tests are listed too (`vitest list` would leave them out).
     expect(vitest.tests.map((t) => t.id).sort()).toEqual([
+      'unit/math.check.ts::is skipped',
       'unit/math.check.ts::math > adds numbers',
       'unit/math.check.ts::math > fails on purpose',
       'unit/math.check.ts::math > nested > multiplies'
@@ -174,6 +219,15 @@ describe('discovering and running real tests (fixture project)', () => {
     expect(byId['unit/math.check.ts::math > fails on purpose'].message).toMatch(/expected 4 to be 5/)
     expect(byId['unit/math.check.ts::is skipped'].status).toBe('skipped')
     expect(output.join('')).toMatch(/\$ vitest run/)
+    // Live results arrived during the run (and the marked lines are not in the output).
+    expect(progress.map((p) => `${p.id}=${p.status}`).sort()).toEqual([
+      'unit/math.check.ts::is skipped=skipped',
+      'unit/math.check.ts::math > adds numbers=passed',
+      'unit/math.check.ts::math > fails on purpose=failed',
+      'unit/math.check.ts::math > nested > multiplies=passed'
+    ])
+    expect(output.join('')).not.toContain(RESULT_MARK)
+    progress.length = 0
 
     const one = await runTests(FIXTURE, { projectId: 'vitest:', file: 'unit/math.check.ts', titlePath: ['math', 'nested'] }, sender)
     const ran = one.results.filter((r) => r.status !== 'skipped').map((r) => r.id)
@@ -188,6 +242,7 @@ describe('discovering and running real tests (fixture project)', () => {
     expect(r.results).toHaveLength(1)
     expect(r.results[0]).toMatchObject({ id: t.id, status: 'failed' })
     expect(r.results[0].message).toMatch(/toHaveLength/)
+    expect(progress).toContainEqual(expect.objectContaining({ id: t.id, status: 'failed' }))
   }, 120_000)
 
   it('runs a Playwright describe() block by its title', async () => {

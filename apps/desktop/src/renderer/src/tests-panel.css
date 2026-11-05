@@ -6,15 +6,57 @@
   display: flex;
   flex-direction: column;
   font-size: 12px;
+  container-type: inline-size;
 }
 
 .tests-toolbar {
   gap: 6px;
 }
 
+/* Status filter (connected buttons) and name filter. */
+.tests-filterbar {
+  gap: 8px;
+}
+
+.tests-status-filter {
+  flex-shrink: 0;
+}
+
+.tests-status-filter button {
+  gap: 5px;
+}
+
+.tests-status-filter .test-status {
+  width: auto;
+}
+
+.tests-status-filter .count {
+  min-width: 16px;
+  padding: 0 4px;
+  line-height: 15px;
+}
+
+.tests-status-filter button.active .count {
+  background: var(--selection);
+  color: var(--text);
+}
+
+/* Narrow panel: icons and counts only. */
+@container (max-width: 430px) {
+  .tests-status-filter .filter-label {
+    display: none;
+  }
+
+  .tests-status-filter button[data-filter='all'] .filter-label {
+    display: inline;
+  }
+}
+
 .tests-filter {
+  flex: 1;
   width: 140px;
   min-width: 60px;
+  max-width: 260px;
   height: 24px;
   padding: 0 8px;
   border: 1px solid var(--border);
@@ -22,13 +64,6 @@
   background: var(--surface);
   color: var(--text);
   font: inherit;
-}
-
-.tests-failed-only {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--text-muted);
 }
 
 .tests-summary {
