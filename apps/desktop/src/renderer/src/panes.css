@@ -1,0 +1,96 @@
+/* ---------- Project panels: header actions, drag & drop, add menu ---------- */
+
+.pane-header {
+  cursor: grab;
+}
+
+.pane-header:active {
+  cursor: grabbing;
+}
+
+.pane-header button,
+.pane-header .profile-select {
+  cursor: pointer;
+}
+
+.pane-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.pane-header:hover .pane-action {
+  opacity: 1;
+}
+
+.pane-action:hover:not(:disabled) {
+  color: var(--text);
+}
+
+/* Drop zone shown while dragging a panel over another one. */
+.pane-drop-zone {
+  position: absolute;
+  z-index: 20;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border: 2px solid var(--accent);
+  border-radius: 6px;
+  transition: all 0.08s ease-out;
+}
+
+.pane-drop-zone.left {
+  inset: 4px 50% 4px 4px;
+}
+
+.pane-drop-zone.right {
+  inset: 4px 4px 4px 50%;
+}
+
+.pane-drop-zone.top {
+  inset: 4px 4px 50% 4px;
+}
+
+.pane-drop-zone.bottom {
+  inset: 50% 4px 4px 4px;
+}
+
+.rail-add {
+  position: relative;
+}
+
+.rail-item.add {
+  padding: 4px 0;
+}
+
+.rail-plus {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.rail-separator {
+  height: 1px;
+  margin: 2px 4px;
+  background: var(--border);
+}
+
+.rail-menu {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 6px);
+  z-index: 40;
+}
+
+.rail-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rail-menu .pane-icon {
+  width: 18px;
+  text-align: center;
+}

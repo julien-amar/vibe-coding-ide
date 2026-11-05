@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import { mapPanes, panesOf, sessionIdsOf, type PaneNode } from '@shared/layout'
-import type { LayoutNode, Profile, ProjectSnapshot, TabKind, TabSnapshot } from '@shared/types'
+import { appendPane, insertPane, mapPanes, movePane, newPaneId, panesOf, removePane, sessionIdsOf, type DropSide, type PaneNode } from '@shared/layout'
+import type { LayoutNode, PaneType, Profile, ProjectSnapshot, TabKind, TabSnapshot } from '@shared/types'
 
 export interface Tab {
   id: string
@@ -22,6 +22,12 @@ export interface Tab {
 export interface DropTarget {
   tabId: string
   side: 'before' | 'after'
+}
+
+/** Where a dragged project pane would land. */
+export interface PaneDropTarget {
+  paneId: string
+  side: DropSide
 }
 
 export const tabTitle = (t: Tab): string => t.customTitle ?? t.autoTitle
@@ -47,6 +53,7 @@ interface State {
   drop?: DropTarget
   /** Exit codes of project pane sessions. */
   paneExit: Record<string, number>
+  paneDrop?: PaneDropTarget
   init(): Promise<void>
   openProfile(profile: Profile): Promise<void>
   openProject(root: string): Promise<void>
@@ -69,6 +76,13 @@ interface State {
   setPaneCollapsed(tabId: string, paneId: string, collapsed: boolean): void
   /** (Re)start a project pane, optionally with another profile (e.g. switch agent). */
   restartPane(tabId: string, paneId: string, profileId?: string): Promise<void>
+  /** Add a panel to a project: next to `target` on `side`, or on the right edge. */
+  addPane(tabId: string, type: PaneType, opts?: { target?: string; side?: DropSide; profileId?: string }): Promise<void>
+  /** Close a project panel (stops its process). */
+  closePane(tabId: string, paneId: string): void
+  /** Move a project panel next to another one. */
+  movePane(tabId: string, paneId: string, targetId: string, side: DropSide): void
+  setPaneDrop(drop: PaneDropTarget | undefined): void
 }
 
 let nextId = 1
@@ -311,6 +325,46 @@ export const useTabs = create<State>((set, get) => ({
     const tab = get().tabs.find((t) => t.id === tabId)
     if (!tab?.project) return
     get().setLayout(tabId, mapPanes(tab.project.layout, (p) => (p.id === paneId ? { ...p, collapsed: collapsed || undefined } : p)))
+  },
+
+  async addPane(tabId, type, opts = {}) {
+    const tab = get().tabs.find((t) => t.id === tabId)
+    if (!tab?.project) return
+    const list = await profiles()
+    const profileId =
+      type === 'git' ? undefined : (opts.profileId ?? (type === 'agent' ? defaultAgent(list) : defaultShell(list))?.id)
+    const pane: PaneNode = { kind: 'pane', id: newPaneId(), type, profileId }
+    if (profileId) {
+      const s = await createSession(profileId, tab.project.root)
+      pane.sessionId = s?.sessionId
+    }
+    const cur = get().tabs.find((t) => t.id === tabId)
+    if (!cur?.project) return
+    const layout =
+      opts.target && opts.side ? insertPane(cur.project.layout, opts.target, pane, opts.side) : appendPane(cur.project.layout, pane)
+    get().setLayout(tabId, layout)
+  },
+
+  closePane(tabId, paneId) {
+    const tab = get().tabs.find((t) => t.id === tabId)
+    const pane = tab?.project && panesOf(tab.project.layout).find((p) => p.id === paneId)
+    if (!tab?.project || !pane) return
+    const rest = removePane(tab.project.layout, paneId)
+    if (!rest) return // a project keeps at least one panel
+    if (pane.sessionId && get().paneExit[pane.sessionId] === undefined) window.devhub.pty.kill(pane.sessionId)
+    get().setLayout(tabId, rest)
+  },
+
+  movePane(tabId, paneId, targetId, side) {
+    const tab = get().tabs.find((t) => t.id === tabId)
+    if (!tab?.project) return
+    get().setLayout(tabId, movePane(tab.project.layout, paneId, targetId, side))
+  },
+
+  setPaneDrop(drop) {
+    const cur = get().paneDrop
+    if (cur?.paneId === drop?.paneId && cur?.side === drop?.side) return
+    set({ paneDrop: drop })
   },
 
   async restartPane(tabId, paneId, profileId) {

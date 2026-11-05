@@ -1,5 +1,6 @@
-import { hasVisiblePane, panesOf, updateAt, type PaneNode } from '@shared/layout'
-import type { LayoutNode, Profile } from '@shared/types'
+import { useEffect, useRef, useState } from 'react'
+import { hasVisiblePane, panesOf, updateAt, type DropSide, type PaneNode } from '@shared/layout'
+import type { LayoutNode, PaneType, Profile } from '@shared/types'
 import { useProfiles } from '../profiles'
 import { useTabs, type Tab } from '../store'
 import { GitPanel } from './GitPanel'
@@ -9,6 +10,7 @@ import { SplitView } from './SplitView'
 import { TerminalView } from './TerminalView'
 
 const PANE_ICON: Record<PaneNode['type'], string> = { git: '⎇', terminal: '>_', agent: 'AI' }
+const PANE_MIME = 'application/x-devhub-pane'
 
 /** Human label for a pane (used in the side rail). */
 function paneLabel(pane: PaneNode, profiles: Profile[]): string {
@@ -18,19 +20,103 @@ function paneLabel(pane: PaneNode, profiles: Profile[]): string {
   return name ?? 'Terminal'
 }
 
-function CollapseButton({ tab, pane }: { tab: Tab; pane: PaneNode }): React.JSX.Element {
+const Icon = ({ d }: { d: string }): React.JSX.Element => (
+  <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+    <path d={d} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
+
+const ICONS = {
+  collapse: 'M3 2v10M11 3.5L7 7l4 3.5',
+  splitRight: 'M2 2.5h10v9H2zM7 2.5v9',
+  splitDown: 'M2 2.5h10v9H2zM2 7h10',
+  close: 'M3.5 3.5l7 7M10.5 3.5l-7 7'
+}
+
+/** Which edge of a pane the pointer is closest to (drop zones for moving panes). */
+function sideAt(e: React.DragEvent, el: HTMLElement): DropSide {
+  const r = el.getBoundingClientRect()
+  const x = (e.clientX - r.left) / r.width
+  const y = (e.clientY - r.top) / r.height
+  const d = { left: x, right: 1 - x, top: y, bottom: 1 - y }
+  return (Object.keys(d) as DropSide[]).reduce((a, b) => (d[a] <= d[b] ? a : b))
+}
+
+/**
+ * Common frame of a project panel: a header (drag handle to move the panel,
+ * split / collapse / close buttons) and a body that accepts dropped panels.
+ */
+function PaneFrame({ tab, pane, title, actions, children }: { tab: Tab; pane: PaneNode; title: React.ReactNode; actions?: React.ReactNode; children: React.ReactNode }): React.JSX.Element {
+  const addPane = useTabs((s) => s.addPane)
+  const closePane = useTabs((s) => s.closePane)
+  const movePaneTo = useTabs((s) => s.movePane)
   const setPaneCollapsed = useTabs((s) => s.setPaneCollapsed)
+  const setPaneDrop = useTabs((s) => s.setPaneDrop)
+  const dropSide = useTabs((s) => (s.paneDrop?.paneId === pane.id ? s.paneDrop.side : undefined))
+  const onlyPane = tab.project ? panesOf(tab.project.layout).length <= 1 : true
+  // A split duplicates the panel kind (git splits into a terminal).
+  const splitType: PaneType = pane.type === 'git' ? 'terminal' : pane.type
+  const split = (side: DropSide): void => void addPane(tab.id, splitType, { target: pane.id, side, profileId: pane.type === 'git' ? undefined : pane.profileId })
+
+  const isPaneDrag = (e: React.DragEvent): boolean => e.dataTransfer.types.includes(PANE_MIME)
+
   return (
-    <button
-      className="icon-button collapse-button"
-      title="Collapse to the side bar (the process keeps running)"
-      aria-label="Collapse panel"
-      onClick={() => setPaneCollapsed(tab.id, pane.id, true)}
-    >
-      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
-        <path d="M3 2v10M11 3.5L7 7l4 3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </button>
+    <div className="pane">
+      <div
+        className="pane-header"
+        draggable
+        title="Drag to move this panel"
+        onDragStart={(e) => {
+          e.dataTransfer.setData(PANE_MIME, JSON.stringify({ tabId: tab.id, paneId: pane.id }))
+          e.dataTransfer.effectAllowed = 'move'
+        }}
+        onDragEnd={() => setPaneDrop(undefined)}
+      >
+        {title}
+        <span className="spacer" />
+        {actions}
+        <button className="icon-button pane-action" title="Split right" onClick={() => split('right')}>
+          <Icon d={ICONS.splitRight} />
+        </button>
+        <button className="icon-button pane-action" title="Split down" onClick={() => split('bottom')}>
+          <Icon d={ICONS.splitDown} />
+        </button>
+        <button className="icon-button pane-action collapse-button" title="Collapse to the side bar (the process keeps running)" onClick={() => setPaneCollapsed(tab.id, pane.id, true)}>
+          <Icon d={ICONS.collapse} />
+        </button>
+        <button className="icon-button pane-action" title={onlyPane ? 'A project keeps at least one panel' : 'Close panel (stops its process)'} disabled={onlyPane} onClick={() => closePane(tab.id, pane.id)}>
+          <Icon d={ICONS.close} />
+        </button>
+      </div>
+      <div
+        className="pane-body"
+        onDragOver={(e) => {
+          if (!isPaneDrag(e)) return
+          e.preventDefault()
+          e.stopPropagation()
+          e.dataTransfer.dropEffect = 'move'
+          setPaneDrop({ paneId: pane.id, side: sideAt(e, e.currentTarget) })
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) setPaneDrop(undefined)
+        }}
+        onDrop={(e) => {
+          if (!isPaneDrag(e)) return
+          e.preventDefault()
+          e.stopPropagation()
+          setPaneDrop(undefined)
+          try {
+            const { tabId, paneId } = JSON.parse(e.dataTransfer.getData(PANE_MIME)) as { tabId: string; paneId: string }
+            if (tabId === tab.id && paneId !== pane.id) movePaneTo(tab.id, paneId, pane.id, sideAt(e, e.currentTarget))
+          } catch {
+            /* not a pane drag */
+          }
+        }}
+      >
+        {children}
+        {dropSide && <div className={`pane-drop-zone ${dropSide}`} />}
+      </div>
+    </div>
   )
 }
 
@@ -42,68 +128,116 @@ function TerminalPane({ tab, pane, visible, autoFocus }: { tab: Tab; pane: PaneN
   const choices = profiles.filter((p) => (isAgent ? p.kind === 'agent' : p.kind !== 'agent'))
 
   return (
-    <div className="pane">
-      <div className="pane-header">
-        <ProfileSelect
-          value={pane.profileId}
-          choices={choices}
-          placeholder={isAgent ? 'No agent' : 'No shell'}
-          title={isAgent ? 'Switch AI agent (restarts the pane)' : 'Switch shell (restarts the pane)'}
-          onChange={(id) => void restartPane(tab.id, pane.id, id)}
-        />
-        <span className="pane-path" title={tab.project?.root}>
-          {tab.project?.root}
-        </span>
-        <span className="spacer" />
-        {pane.profileId && (
-          <button className="icon-button" title="Restart" onClick={() => void restartPane(tab.id, pane.id)}>
+    <PaneFrame
+      tab={tab}
+      pane={pane}
+      title={
+        <>
+          <ProfileSelect
+            value={pane.profileId}
+            choices={choices}
+            placeholder={isAgent ? 'No agent' : 'No shell'}
+            title={isAgent ? 'Switch AI agent (restarts the pane)' : 'Switch shell (restarts the pane)'}
+            onChange={(id) => void restartPane(tab.id, pane.id, id)}
+          />
+          <span className="pane-path" title={tab.project?.root}>
+            {tab.project?.root}
+          </span>
+        </>
+      }
+      actions={
+        pane.profileId && (
+          <button className="icon-button pane-action" title="Restart" onClick={() => void restartPane(tab.id, pane.id)}>
             ⟳
           </button>
-        )}
-        <CollapseButton tab={tab} pane={pane} />
-      </div>
-      <div className="pane-body">
-        {pane.sessionId ? (
-          <TerminalView key={pane.sessionId} sessionId={pane.sessionId} restoredScrollback={pane.scrollback} visible={visible} autoFocus={autoFocus} />
-        ) : (
-          <div className="pane-message">
-            {isAgent ? <p>No AI agent CLI found on PATH (claude, codex, gemini, opencode, pi).</p> : <p>No shell available.</p>}
-          </div>
-        )}
-        {exitCode !== undefined && (
-          <div className="pane-exited">
-            <span>Process exited with code {exitCode}</span>
-            <button onClick={() => void restartPane(tab.id, pane.id)}>Restart</button>
-          </div>
-        )}
-      </div>
-    </div>
+        )
+      }
+    >
+      {pane.sessionId ? (
+        <TerminalView key={pane.sessionId} sessionId={pane.sessionId} restoredScrollback={pane.scrollback} visible={visible} autoFocus={autoFocus} />
+      ) : (
+        <div className="pane-message">
+          {isAgent ? <p>No AI agent CLI found on PATH (claude, codex, gemini, opencode, pi).</p> : <p>No shell available.</p>}
+        </div>
+      )}
+      {exitCode !== undefined && (
+        <div className="pane-exited">
+          <span>Process exited with code {exitCode}</span>
+          <button onClick={() => void restartPane(tab.id, pane.id)}>Restart</button>
+        </div>
+      )}
+    </PaneFrame>
   )
 }
 
 function GitPane({ tab, pane, visible }: { tab: Tab; pane: PaneNode; visible: boolean }): React.JSX.Element {
   return (
-    <div className="pane">
-      <div className="pane-header">
-        <span className="pane-icon git">{PANE_ICON.git}</span>
-        <span className="pane-title">Git</span>
-        <span className="spacer" />
-        <CollapseButton tab={tab} pane={pane} />
-      </div>
-      <div className="pane-body">
-        <GitPanel root={tab.project!.root} visible={visible} openProject={(path) => void useTabs.getState().openProject(path)} />
-      </div>
+    <PaneFrame
+      tab={tab}
+      pane={pane}
+      title={
+        <>
+          <span className="pane-icon git">{PANE_ICON.git}</span>
+          <span className="pane-title">Git</span>
+        </>
+      }
+    >
+      <GitPanel root={tab.project!.root} visible={visible} openProject={(path) => void useTabs.getState().openProject(path)} />
+    </PaneFrame>
+  )
+}
+
+/** "+" menu of the side rail: add a panel to the project. */
+function AddPanelButton({ tab }: { tab: Tab }): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const addPane = useTabs((s) => s.addPane)
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent): void => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false)
+    }
+    window.addEventListener('mousedown', onDown)
+    return () => window.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  const add = (type: PaneType): void => {
+    setOpen(false)
+    void addPane(tab.id, type)
+  }
+
+  return (
+    <div className="rail-add" ref={ref}>
+      <button className="rail-item add" title="Add a panel" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span className="rail-plus">+</span>
+      </button>
+      {open && (
+        <div className="context-menu rail-menu" role="menu">
+          <button onClick={() => add('terminal')}>
+            <span className="pane-icon">{PANE_ICON.terminal}</span> Terminal
+          </button>
+          <button onClick={() => add('agent')}>
+            <span className="pane-icon agent">{PANE_ICON.agent}</span> AI agent
+          </button>
+          <button onClick={() => add('git')}>
+            <span className="pane-icon git">{PANE_ICON.git}</span> Git
+          </button>
+        </div>
+      )}
     </div>
   )
 }
 
-/** Vertical bar on the left listing collapsed panels; click one to bring it back. */
+/** Vertical bar on the left: add panels, and buttons for collapsed panels (click to bring back). */
 function SideRail({ tab, panes }: { tab: Tab; panes: PaneNode[] }): React.JSX.Element {
   const profiles = useProfiles()
   const setPaneCollapsed = useTabs((s) => s.setPaneCollapsed)
   const paneExit = useTabs((s) => s.paneExit)
   return (
-    <nav className="side-rail" aria-label="Collapsed panels">
+    <nav className="side-rail" aria-label="Panels">
+      <AddPanelButton tab={tab} />
+      {panes.length > 0 && <div className="rail-separator" />}
       {panes.map((p) => {
         const label = paneLabel(p, profiles)
         const profile = profiles.find((x) => x.id === p.profileId)
@@ -152,13 +286,13 @@ export function ProjectView({ tab, visible }: { tab: Tab; visible: boolean }): R
         />
       )
     }
-    if (node.type === 'git') return <GitPane tab={tab} pane={node} visible={visible} />
-    return <TerminalPane tab={tab} pane={node} visible={visible} autoFocus={node.id === focusId} />
+    if (node.type === 'git') return <GitPane key={node.id} tab={tab} pane={node} visible={visible} />
+    return <TerminalPane key={node.id} tab={tab} pane={node} visible={visible} autoFocus={node.id === focusId} />
   }
 
   return (
     <div className="project-view">
-      {collapsed.length > 0 && <SideRail tab={tab} panes={collapsed} />}
+      <SideRail tab={tab} panes={collapsed} />
       <div className="project-main">
         {hasVisiblePane(layout) ? (
           render(layout, [])
