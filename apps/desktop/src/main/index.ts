@@ -1,4 +1,6 @@
-import { existsSync, statSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, rmSync, statSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, type Rectangle, type WebContents } from 'electron'
 import { mapPanes, sessionIdsOf } from '@shared/layout'
@@ -13,6 +15,7 @@ import { checkUpdates, forgetUpdates, type UpdateTarget } from './package-update
 import { parseWslPath } from '@shared/wsl-paths'
 import { discoverTests, runTests, stopAllTests, stopTests } from './test-runner'
 import { openInEditor } from './editor'
+import { agentOf, checkMcpServer, compileHarness, HARNESS_SUPPORT, harnessIsEmpty, listSkills, readProjectMcpJson, readSkillFile, sanitizeHarness } from './harness'
 
 app.setName('vibe-coding-ide')
 // VIBE_CODING_IDE_USER_DATA: run with a separate profile (layout, recent projects), e.g. for automated tests.
@@ -22,6 +25,8 @@ const ptys = new PtyManager()
 /** Pending package updates per session (and what was checked), until the user accepts or dismisses the bar. */
 const sessionUpdates = new Map<string, { info: PackageUpdateInfo; target: UpdateTarget }>()
 const gitWatcher = new GitWatcher()
+/** Generated files of the AI agents' settings (one folder per distinct harness; sessions do not outlive the app). */
+const harnessRuns = (): string => join(app.getPath('userData'), 'harness-runs')
 const TITLEBAR_HEIGHT = 40
 /** Expose debugging hooks to the UI (automated checks over DevTools). */
 const DEBUG = app.commandLine.hasSwitch('remote-debugging-port') || process.env.VIBE_CODING_IDE_DEBUG === '1'
@@ -208,7 +213,9 @@ function sanitizeLayout(n: LayoutNode | undefined, depth = 0): LayoutNode | unde
       type: n.type,
       profileId: n.profileId ? String(n.profileId) : undefined,
       sessionId: n.sessionId ? String(n.sessionId) : undefined,
-      collapsed: n.collapsed === true ? true : undefined
+      collapsed: n.collapsed === true ? true : undefined,
+      // AI agent panes keep their own settings.
+      harness: n.type === 'agent' && n.harness && !harnessIsEmpty(sanitizeHarness(n.harness)) ? sanitizeHarness(n.harness) : undefined
     }
   }
   return undefined
@@ -284,6 +291,14 @@ function registerIpc(): void {
       }
     } else {
       cwd = req.cwd && isDir(req.cwd) ? req.cwd : undefined
+    }
+    // An AI agent pane's own settings (generated files in app data, passed with flags).
+    const harness = req.harness ? sanitizeHarness(req.harness) : undefined
+    if (profile.kind === 'agent' && !profile.wslDistro && harness && !harnessIsEmpty(harness)) {
+      const root = req.harnessRoot && isDir(String(req.harnessRoot)) ? String(req.harnessRoot) : (cwd ?? homedir())
+      const outDir = join(harnessRuns(), createHash('sha1').update(root + JSON.stringify(harness)).digest('hex').slice(0, 16))
+      const extra = compileHarness(agentOf(profile.id), harness, root, outDir)
+      if (extra.length) launch = { ...launch, args: [...launch.args, ...extra] }
     }
     const sessionId = ptys.create(launch, req.cols, req.rows, e.sender, cwd)
     // A shell starting: check (once, in the background) whether its system has package updates —
@@ -388,6 +403,24 @@ function registerIpc(): void {
   )
   ipcMain.on('tests:stop', (_e, root: string) => stopTests(String(root)))
 
+  ipcMain.handle('harness:check', (_e, root: string, server: unknown) => checkMcpServer(String(root), server))
+  ipcMain.handle('harness:skills', (_e, root: string, harness: unknown) => (isDir(String(root)) ? listSkills(String(root), sanitizeHarness(harness)) : []))
+  ipcMain.handle('harness:readSkill', (_e, path: string) => {
+    try {
+      return readSkillFile(String(path))
+    } catch {
+      return ''
+    }
+  })
+  ipcMain.handle('harness:pickSkillFolder', async (e, root: string) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    const opts = { title: 'Choose a skill folder (with a SKILL.md), or a folder of skills', defaultPath: String(root), properties: ['openDirectory' as const] }
+    const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    return res.canceled || !res.filePaths[0] ? null : res.filePaths[0]
+  })
+  ipcMain.handle('harness:projectMcp', (_e, root: string) => (isDir(String(root)) ? readProjectMcpJson(String(root)) : []))
+  ipcMain.handle('harness:support', () => HARNESS_SUPPORT)
+
   ipcMain.handle('app:openInEditor', (_e, root: string, file: string, line?: number, column?: number, base?: string) =>
     isDir(String(root))
       ? openInEditor(String(root), String(file ?? ''), line, column, base ? String(base) : undefined)
@@ -405,6 +438,8 @@ function registerIpc(): void {
 }
 
 app.whenReady().then(() => {
+  // Generated agent settings of earlier runs (their agents are gone).
+  rmSync(harnessRuns(), { recursive: true, force: true })
   registerIpc()
   void listProfiles() // warm the cache
   restoreOrCreate()

@@ -677,6 +677,8 @@ body.resizing-row * {
   border: 1px solid var(--border);
   border-radius: 6px;
   box-shadow: var(--shadow);
+  /* Above the terminal's own layers (xterm's link layer would take the clicks). */
+  z-index: 10;
 }
 
 .pane-exited button {

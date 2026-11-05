@@ -20,6 +20,76 @@ export interface PtyCreateRequest {
   cols: number
   rows: number
   cwd?: string
+  /** AI agent panes: the pane's own settings (MCP servers, skills, instructions), given to the agent at launch. */
+  harness?: Harness
+  /** Folder that relative skill paths of `harness` start from (the project). */
+  harnessRoot?: string
+}
+
+/** An MCP server of a harness. */
+export interface McpServer {
+  /** Unique within the harness (the server's name for the agent). */
+  name: string
+  /** stdio: a command the agent starts; http: a Streamable HTTP endpoint; sse: legacy HTTP + Server-Sent Events. */
+  transport: 'stdio' | 'http' | 'sse'
+  command?: string
+  args?: string[]
+  /** stdio: environment variables of the server process. */
+  env?: Record<string, string>
+  url?: string
+  /** http / sse: request headers (e.g. Authorization). */
+  headers?: Record<string, string>
+  enabled: boolean
+}
+
+/** A skill of a harness: a folder with a SKILL.md (or a folder of such folders). */
+export interface HarnessSkill {
+  path: string
+  enabled: boolean
+}
+
+/**
+ * Settings of one AI agent pane (kept with the pane in the app's layout, not in the repository):
+ * MCP servers, skills and instructions, given to the agent in its own format at launch.
+ */
+export interface Harness {
+  mcpServers: McpServer[]
+  skills: HarnessSkill[]
+  /** Added to the agent's system prompt. */
+  instructions: string
+  /** Use only the harness's MCP servers (not the user's or the repository's .mcp.json). */
+  strictMcp?: boolean
+}
+
+/** Result of starting an MCP server and listing its tools. */
+export interface McpCheckResult {
+  ok: boolean
+  error?: string
+  server?: { name?: string; version?: string }
+  tools?: { name: string; description?: string }[]
+  /** Last lines the server printed on stderr (stdio). */
+  log?: string
+}
+
+/** A skill found on disk (SKILL.md front matter). */
+export interface SkillInfo {
+  path: string
+  name: string
+  description?: string
+  /** harness: added to this project's harness; project: the repository's .claude/skills; user: ~/.claude/skills. */
+  source: 'harness' | 'project' | 'user'
+  /** Harness skills: the folder has no SKILL.md (moved or deleted). */
+  missing?: boolean
+}
+
+/** What an agent supports of a harness. */
+export interface AgentHarnessSupport {
+  agent: string
+  label: string
+  mcp: boolean
+  skills: boolean
+  instructions: boolean
+  note?: string
 }
 
 /** Pending package updates of the system a shell runs on (shown as a status bar on its terminal). */
@@ -131,6 +201,8 @@ export type LayoutNode =
       collapsed?: boolean
       /** Last known working directory (saved on exit, used on restore). */
       cwd?: string
+      /** AI agent panes: this pane's own MCP servers, skills and instructions. */
+      harness?: Harness
     }
 
 export interface ProjectSnapshot {
@@ -366,6 +438,21 @@ export interface IdeApi {
     onOutput(cb: (root: string, text: string) => void): () => void
     /** A test's result as soon as it finishes (the final report follows when the run ends). */
     onProgress(cb: (root: string, projectId: string, result: TestResult) => void): () => void
+  }
+  /** AI agent pane settings (each pane has its own harness, kept in the layout). */
+  harness: {
+    /** Start an MCP server (stdio) or call its endpoint (http) and list its tools. */
+    check(root: string, server: McpServer): Promise<McpCheckResult>
+    /** Skills of a harness, plus those the agent already finds in the repository and the user's folder. */
+    skills(root: string, harness: Harness): Promise<SkillInfo[]>
+    /** Contents of a skill's SKILL.md (for the preview). */
+    readSkill(path: string): Promise<string>
+    /** Folder picker for a skill (or a folder of skills). */
+    pickSkillFolder(root: string): Promise<string | null>
+    /** MCP servers of the repository's .mcp.json (to import). */
+    projectMcpServers(root: string): Promise<McpServer[]>
+    /** Which agents support which parts of a harness. */
+    support(): Promise<AgentHarnessSupport[]>
   }
   app: {
     openExternal(url: string): void

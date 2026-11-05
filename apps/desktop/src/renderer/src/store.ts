@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { appendPane, insertPane, mapPanes, movePane, newPaneId, panesOf, removePane, sessionIdsOf, type DropSide, type PaneNode } from '@shared/layout'
-import type { LayoutNode, PaneType, Profile, ProjectSnapshot, TabKind, TabSnapshot } from '@shared/types'
+import type { Harness, LayoutNode, PaneType, Profile, ProjectSnapshot, TabKind, TabSnapshot } from '@shared/types'
 import { parseWslPath } from '@shared/wsl-paths'
 import { loadProfiles } from './profiles'
 
@@ -55,6 +55,8 @@ interface State {
   drop?: DropTarget
   /** Exit codes of project pane sessions. */
   paneExit: Record<string, number>
+  /** AI agent sessions started before their pane's settings changed (restart to apply). */
+  harnessStale: Record<string, true>
   paneDrop?: PaneDropTarget
   init(): Promise<void>
   openProfile(profile: Profile): Promise<void>
@@ -85,6 +87,8 @@ interface State {
   /** Move a project panel next to another one. */
   movePane(tabId: string, paneId: string, targetId: string, side: DropSide): void
   setPaneDrop(drop: PaneDropTarget | undefined): void
+  /** Change an AI agent pane's own settings (MCP servers, skills, instructions); its running agent is marked stale. */
+  setPaneHarness(tabId: string, paneId: string, harness: Harness): void
 }
 
 let nextId = 1
@@ -116,9 +120,10 @@ async function profilesFor(root: string): Promise<Profile[]> {
   return profiles()
 }
 
-async function createSession(profileId: string, cwd?: string): Promise<{ sessionId: string; title: string } | undefined> {
+async function createSession(profileId: string, cwd?: string, harnessRoot?: string, harness?: Harness): Promise<{ sessionId: string; title: string } | undefined> {
   try {
-    return await window.ide.pty.create({ profileId, cols: 80, rows: 24, cwd })
+    // harness: an AI agent pane's own settings (relative skill paths start from harnessRoot, the project).
+    return await window.ide.pty.create({ profileId, cols: 80, rows: 24, cwd, harnessRoot, harness })
   } catch {
     return undefined
   }
@@ -128,8 +133,8 @@ async function createSession(profileId: string, cwd?: string): Promise<{ session
 async function startPaneSessions(layout: LayoutNode, cwd: string): Promise<LayoutNode> {
   const started = new Map<string, string>()
   for (const p of panesOf(layout)) {
-    if (p.type === 'git' || p.type === 'tests' || p.sessionId || !p.profileId) continue
-    const s = await createSession(p.profileId, p.cwd ?? cwd)
+    if ((p.type !== 'terminal' && p.type !== 'agent') || p.sessionId || !p.profileId) continue
+    const s = await createSession(p.profileId, p.cwd ?? cwd, cwd, p.harness)
     if (s) started.set(p.id, s.sessionId)
   }
   return mapPanes(layout, (p) => (started.has(p.id) ? { ...p, sessionId: started.get(p.id) } : p))
@@ -181,6 +186,7 @@ export const useTabs = create<State>((set, get) => ({
   launcherOpen: false,
   drop: undefined,
   paneExit: {},
+  harnessStale: {},
 
   async init() {
     const init = await window.ide.window.init()
@@ -359,10 +365,10 @@ export const useTabs = create<State>((set, get) => ({
     const list = await profilesFor(tab.project.root)
     const root = tab.project.root
     const profileId =
-      type === 'git' || type === 'tests' ? undefined : (opts.profileId ?? (type === 'agent' ? defaultAgent(list, root) : defaultShell(list, root))?.id)
+      type !== 'terminal' && type !== 'agent' ? undefined : (opts.profileId ?? (type === 'agent' ? defaultAgent(list, root) : defaultShell(list, root))?.id)
     const pane: PaneNode = { kind: 'pane', id: newPaneId(), type, profileId }
     if (profileId) {
-      const s = await createSession(profileId, tab.project.root)
+      const s = await createSession(profileId, tab.project.root, tab.project.root)
       pane.sessionId = s?.sessionId
     }
     const cur = get().tabs.find((t) => t.id === tabId)
@@ -388,6 +394,16 @@ export const useTabs = create<State>((set, get) => ({
     get().setLayout(tabId, movePane(tab.project.layout, paneId, targetId, side))
   },
 
+  setPaneHarness(tabId, paneId, harness) {
+    const tab = get().tabs.find((t) => t.id === tabId)
+    const pane = tab?.project && panesOf(tab.project.layout).find((p) => p.id === paneId)
+    if (!tab?.project || !pane) return
+    const empty = !harness.mcpServers.length && !harness.skills.length && !harness.instructions.trim() && !harness.strictMcp
+    get().setLayout(tabId, mapPanes(tab.project.layout, (p) => (p.id === paneId ? { ...p, harness: empty ? undefined : harness } : p)))
+    // Its running agent started with the previous settings.
+    if (pane.sessionId && get().paneExit[pane.sessionId] === undefined) set((st) => ({ harnessStale: { ...st.harnessStale, [pane.sessionId!]: true } }))
+  },
+
   setPaneDrop(drop) {
     const cur = get().paneDrop
     if (cur?.paneId === drop?.paneId && cur?.side === drop?.side) return
@@ -401,7 +417,7 @@ export const useTabs = create<State>((set, get) => ({
     const nextProfile = profileId ?? pane.profileId
     if (!nextProfile) return
     if (pane.sessionId && get().paneExit[pane.sessionId] === undefined) window.ide.pty.kill(pane.sessionId)
-    const s = await createSession(nextProfile, tab.project.root)
+    const s = await createSession(nextProfile, tab.project.root, tab.project.root, pane.harness)
     const cur = get().tabs.find((t) => t.id === tabId)
     if (!cur?.project) return
     get().setLayout(

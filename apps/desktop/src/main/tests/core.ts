@@ -97,8 +97,11 @@ export function findFiles(dir: string, exts: string[], maxDepth = 12): string[] 
 
 /** Line (1-based) of the first match of `re` in `text`, or undefined. */
 export function lineOf(text: string, re: RegExp): number | undefined {
-  const m = re.exec(text)
-  return m ? text.slice(0, m.index).split('\n').length : undefined
+  // CRLF files (a Windows checkout): in multiline mode `^` also matches between \r and \n, so a
+  // pattern starting with \s* would begin on the line before. Count on LF-only text.
+  const lf = text.replace(/\r\n?/g, '\n')
+  const m = re.exec(lf)
+  return m ? lf.slice(0, m.index + (m[0].length - m[0].trimStart().length)).split('\n').length : undefined
 }
 
 // ---------------------------------------------------------------------------
@@ -241,14 +244,22 @@ export function exec(
   child.stdout?.on('data', (b: Buffer) => onStdout(b.toString('utf8')))
   child.stderr?.on('data', (b: Buffer) => onStderr(b.toString('utf8')))
   const done = new Promise<number | null>((resolve) => {
-    child.on('error', (err) => {
-      onStderr(`\n${err.message}\n`)
-      resolve(null)
-    })
-    child.on('close', (code) => {
+    let settled = false
+    const finish = (code: number | null): void => {
+      if (settled) return
+      settled = true
       clearTimeout(timer)
       resolve(code)
+    }
+    child.on('error', (err) => {
+      onStderr(`\n${err.message}\n`)
+      finish(null)
     })
+    child.on('close', finish)
+    // A build tool can leave a background process (the Gradle daemon) holding the output pipes:
+    // 'close' would never come. Once the process itself has exited, wait briefly for its last
+    // output, then finish.
+    child.on('exit', (code) => setTimeout(() => finish(code), 1500))
   })
   return { done, child }
 }

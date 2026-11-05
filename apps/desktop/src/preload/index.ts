@@ -76,6 +76,14 @@ const api: IdeApi = {
       return () => ipcRenderer.off('tests:progress', listener)
     }
   },
+  harness: {
+    check: (root, server) => ipcRenderer.invoke('harness:check', root, server),
+    skills: (root, harness) => ipcRenderer.invoke('harness:skills', root, harness),
+    readSkill: (path) => ipcRenderer.invoke('harness:readSkill', path),
+    pickSkillFolder: (root) => ipcRenderer.invoke('harness:pickSkillFolder', root),
+    projectMcpServers: (root) => ipcRenderer.invoke('harness:projectMcp', root),
+    support: () => ipcRenderer.invoke('harness:support')
+  },
   app: {
     openExternal: (url) => ipcRenderer.send('app:openExternal', url),
     openInEditor: (root, file, line, column, base) => ipcRenderer.invoke('app:openInEditor', root, file, line, column, base)

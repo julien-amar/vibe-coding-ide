@@ -11,6 +11,7 @@ import { ProfileSelect } from './ProfileSelect'
 import { SplitView } from './SplitView'
 import { TerminalView } from './TerminalView'
 import { TestPanel } from './TestPanel'
+import { emptyHarness, HarnessDialog, harnessSize } from './HarnessDialog'
 
 const PANE_ICON: Record<PaneNode['type'], string> = { git: '⎇', terminal: '>_', agent: 'AI', tests: '✓' }
 const PANE_MIME = 'application/x-vibe-coding-ide-pane'
@@ -139,6 +140,9 @@ function TerminalPane({ tab, pane, visible, autoFocus }: { tab: Tab; pane: PaneN
   const profiles = useProfiles()
   const restartPane = useTabs((s) => s.restartPane)
   const exitCode = useTabs((s) => (pane.sessionId ? s.paneExit[pane.sessionId] : undefined))
+  const harnessStale = useTabs((s) => !!pane.sessionId && !!s.harnessStale[pane.sessionId])
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const settingsCount = harnessSize(pane.harness)
   const isAgent = pane.type === 'agent'
   // Agents installed in another WSL distro than the project's cannot run there: hide them.
   const distro = parseWslPath(tab.project?.root ?? '')?.distro.toLowerCase()
@@ -168,11 +172,23 @@ function TerminalPane({ tab, pane, visible, autoFocus }: { tab: Tab; pane: PaneN
         </>
       }
       actions={
-        pane.profileId && (
-          <button className="icon-button pane-action" title="Restart" onClick={() => void restartPane(tab.id, pane.id)}>
-            ⟳
-          </button>
-        )
+        <>
+          {isAgent && (
+            <button
+              className={`icon-button pane-action agent-settings${settingsCount ? ' set' : ''}`}
+              title="AI agent settings: MCP servers, skills, instructions (this panel only)"
+              aria-label="AI agent settings"
+              onClick={() => setSettingsOpen(true)}
+            >
+              ⚙{settingsCount > 0 && <span className="agent-settings-count">{settingsCount}</span>}
+            </button>
+          )}
+          {pane.profileId && (
+            <button className="icon-button pane-action" title="Restart" onClick={() => void restartPane(tab.id, pane.id)}>
+              ⟳
+            </button>
+          )}
+        </>
       }
     >
       {pane.sessionId ? (
@@ -180,6 +196,23 @@ function TerminalPane({ tab, pane, visible, autoFocus }: { tab: Tab; pane: PaneN
       ) : (
         <div className="pane-message">
           {isAgent ? <p>No AI agent CLI found on PATH (claude, codex, gemini, opencode, pi).</p> : <p>No shell available.</p>}
+        </div>
+      )}
+      {settingsOpen && (
+        <HarnessDialog
+          root={tab.project?.root ?? ''}
+          agent={profiles.find((p) => p.id === pane.profileId)?.name ?? 'AI agent'}
+          harness={pane.harness ?? emptyHarness()}
+          stale={harnessStale}
+          onChange={(h) => useTabs.getState().setPaneHarness(tab.id, pane.id, h)}
+          onRestart={() => void restartPane(tab.id, pane.id)}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
+      {isAgent && harnessStale && exitCode === undefined && (
+        <div className="pane-exited harness-stale-bar">
+          <span>This agent's settings changed: restart it to apply them (the conversation starts over).</span>
+          <button onClick={() => void restartPane(tab.id, pane.id)}>Restart</button>
         </div>
       )}
       {exitCode !== undefined && (

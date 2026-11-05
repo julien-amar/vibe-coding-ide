@@ -6,7 +6,7 @@ import type { TestResult } from '@shared/types'
 import { which } from '../profiles'
 import { discoverTests, runTests } from '../test-runner'
 import { parseCargoArtifacts, parseCargoList, parseCargoOutput } from './cargo'
-import { parseJUnitXml } from './core'
+import { lineOf, parseJUnitXml } from './core'
 import { dotnetCase, dotnetFilter, parseDotnetLine, parseDotnetList, parseTrx } from './dotnet'
 import { goRunArgs, packageDir, parseGoList } from './go'
 import { jvmFilter, junitId, mergeJUnit, parseJavaTests, surefirePatterns, surefireRuns } from './jvm'
@@ -36,6 +36,16 @@ describe('Go', () => {
       '-run',
       '^TestTable$/^small \\(1\\)$'
     ])
+  })
+})
+
+describe('source lines', () => {
+  it('finds the same line in LF and CRLF files (a Windows checkout)', () => {
+    const lf = 'mod tests {\n    #[test]\n    fn adds() {}\n}\n'
+    const re = /^\s*(?:pub\s+)?fn\s+adds\s*\(/m
+    expect(lineOf(lf, re)).toBe(3)
+    expect(lineOf(lf.replace(/\n/g, '\r\n'), re)).toBe(3)
+    expect(lineOf('fn x() {}', /^fn\s+y/m)).toBeUndefined()
   })
 })
 
