@@ -133,7 +133,7 @@ export interface DevHubApi {
     /** Take over a tab dragged from another window. */
     adoptTab(tab: TabSnapshot, fromWindowId: number): Promise<boolean>
     /** Fired when one of this window's tabs was moved to another window. */
-    onTabTransferred(cb: (sessionId: string) => void): () => void
+    onTabTransferred(cb: (key: string) => void): () => void
     close(): void
   }
   project: {

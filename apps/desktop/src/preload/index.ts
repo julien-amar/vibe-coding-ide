@@ -29,7 +29,7 @@ const api: DevHubApi = {
     detachTab: (tab, x, y) => ipcRenderer.invoke('window:detach', tab, x, y),
     adoptTab: (tab, fromWindowId) => ipcRenderer.invoke('window:adopt', tab, fromWindowId),
     onTabTransferred: (cb) => {
-      const listener = (_e: IpcRendererEvent, sessionId: string): void => cb(sessionId)
+      const listener = (_e: IpcRendererEvent, key: string): void => cb(key)
       ipcRenderer.on('window:tabTransferred', listener)
       return () => ipcRenderer.off('window:tabTransferred', listener)
     },

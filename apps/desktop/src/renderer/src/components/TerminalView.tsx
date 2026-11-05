@@ -144,7 +144,8 @@ export function TerminalView({ sessionId, restoredScrollback, visible, autoFocus
 
     // Output saved from the previous app session: show it, then push it into the
     // scrollback so the new shell starts on a clean screen below it. Done after the
-    // first fit so term.rows is the real height.
+    // first fit so term.rows is the real height (and before the attach buffer,
+    // which is written asynchronously).
     if (restoredScrollback) {
       term.write(restoredScrollback)
       // Leave any alternate screen (1047, unlike 1049, keeps the cursor), show the
@@ -152,7 +153,6 @@ export function TerminalView({ sessionId, restoredScrollback, visible, autoFocus
       term.write('\x1b[?1047l\x1b[?25h\x1b[0m\r\n\x1b[90m── restored from previous session ──\x1b[0m\r\n')
       term.write('\r\n'.repeat(term.rows) + '\x1b[H')
     }
-
 
     const onScheme = (): void => {
       term.options.theme = currentTheme()

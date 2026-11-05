@@ -1,12 +1,12 @@
-import { join } from 'node:path'
 import { existsSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, type Rectangle, type WebContents } from 'electron'
 import { mapPanes, sessionIdsOf } from '@shared/layout'
 import type { LayoutNode, PtyCreateRequest, PtyCreateResult, TabSnapshot, WindowInit, WindowTabsState } from '@shared/types'
 import { gitLog, GitWatcher } from './git'
-import { recentProjects, touchProject } from './projects'
 import { loadLayout, saveLayout, visibleBounds, type SavedWindow } from './layout-store'
 import { findProfile, listProfiles } from './profiles'
+import { recentProjects, touchProject } from './projects'
 import { PtyManager } from './pty-manager'
 
 app.setName('DevHub')
@@ -167,7 +167,7 @@ function restoreOrCreate(): void {
   }
 }
 
-// ---------- IPC ----------
+// ---------- Validation of renderer input ----------
 
 const PANE_TYPES = new Set(['terminal', 'agent', 'git'])
 const TAB_KINDS = new Set(['shell', 'wsl', 'agent', 'project'])
@@ -234,13 +234,23 @@ function transferAll(ids: string[], from: WebContents, to: WebContents): boolean
   return true
 }
 
+const isDir = (p: string): boolean => {
+  try {
+    return existsSync(p) && statSync(p).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+// ---------- IPC ----------
+
 function registerIpc(): void {
   ipcMain.handle('profiles:list', (_e, refresh?: boolean) => listProfiles(Boolean(refresh)))
 
   ipcMain.handle('pty:create', async (e, req: PtyCreateRequest): Promise<PtyCreateResult> => {
     const profile = await findProfile(req.profileId)
     if (!profile) throw new Error(`Unknown profile: ${req.profileId}`)
-    const cwd = req.cwd && existsSync(req.cwd) ? req.cwd : undefined
+    const cwd = req.cwd && isDir(req.cwd) ? req.cwd : undefined
     const sessionId = ptys.create(profile, req.cols, req.rows, e.sender, cwd)
     return { sessionId, title: profile.name }
   })
@@ -299,13 +309,6 @@ function registerIpc(): void {
   ipcMain.handle('project:recent', () => recentProjects())
   ipcMain.on('project:touch', (_e, root: string) => touchProject(String(root)))
 
-  const isDir = (p: string): boolean => {
-    try {
-      return existsSync(p) && statSync(p).isDirectory()
-    } catch {
-      return false
-    }
-  }
   ipcMain.handle('git:log', (_e, root: string) =>
     isDir(String(root)) ? gitLog(String(root)) : { isRepo: false, error: 'Folder not found', commits: [] }
   )
