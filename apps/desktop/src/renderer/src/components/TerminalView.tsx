@@ -185,7 +185,9 @@ export function TerminalView({ sessionId, restoredScrollback, visible, autoFocus
       // Do not steal focus from a text field the user just opened (e.g. renaming the tab).
       const a = document.activeElement
       const typing = a instanceof HTMLInputElement || (a instanceof HTMLTextAreaElement && !a.closest('.terminal-view'))
-      if (autoFocus && !typing) termRef.current?.focus()
+      // Nor while a dialog is open (e.g. an agent restarted from its settings dialog).
+      const dialogOpen = document.querySelector('[aria-modal="true"]') !== null
+      if (autoFocus && !typing && !dialogOpen) termRef.current?.focus()
     })
   }, [visible, autoFocus])
 

@@ -1,4 +1,5 @@
-// A minimal MCP server over stdio for tests: answers initialize and tools/list (two tools).
+// A minimal MCP server over stdio for tests and demos: initialize, tools/list and tools/call for two
+// tools (echo { text }, add { a, b }).
 // FAKE_MCP_EXIT=<code>: exits at once (a server that fails to start).
 const readline = require('readline')
 
@@ -23,11 +24,20 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
       id: msg.id,
       result: {
         tools: [
-          { name: 'echo', description: 'Echoes its input', inputSchema: { type: 'object' } },
-          { name: 'add', description: 'Adds two numbers', inputSchema: { type: 'object' } }
+          { name: 'echo', description: 'Echoes its input', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
+          {
+            name: 'add',
+            description: 'Adds two numbers',
+            inputSchema: { type: 'object', properties: { a: { type: 'number' }, b: { type: 'number' } }, required: ['a', 'b'] }
+          }
         ]
       }
     })
+  } else if (msg.method === 'tools/call') {
+    const { name, arguments: args = {} } = msg.params ?? {}
+    const text = name === 'echo' ? String(args.text ?? JSON.stringify(args)) : name === 'add' ? String(Number(args.a) + Number(args.b)) : undefined
+    if (text === undefined) send({ id: msg.id, error: { code: -32602, message: `Unknown tool ${name}` } })
+    else send({ id: msg.id, result: { content: [{ type: 'text', text }] } })
   } else if (msg.id !== undefined) {
     send({ id: msg.id, error: { code: -32601, message: `Unknown method ${msg.method}` } })
   }

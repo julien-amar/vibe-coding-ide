@@ -43,12 +43,20 @@ export function HarnessDialog({
   useEffect(() => {
     void window.ide.harness.support().then(setSupport)
   }, [])
+  // Keyboard focus starts in the dialog. Esc closes it wherever the focus is (a button that went
+  // away, a terminal behind): caught before anything else, except inside an open server form,
+  // where Esc only closes the form.
+  const dialogRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
+    if (!dialogRef.current?.contains(document.activeElement)) dialogRef.current?.focus()
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape' && !e.defaultPrevented) onClose()
+      if (e.key !== 'Escape' || (e.target instanceof Element && e.target.closest('.harness-editor'))) return
+      e.preventDefault()
+      e.stopPropagation()
+      onClose()
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [onClose])
 
   const save = async (next: Harness): Promise<void> => onChange(next)
@@ -57,7 +65,14 @@ export function HarnessDialog({
 
   return createPortal(
     <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="dialog harness-dialog" role="dialog" aria-modal="true" aria-label={`${agent} settings`}>
+      <div
+        ref={dialogRef}
+        className="dialog harness-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${agent} settings`}
+        tabIndex={-1}
+      >
         <div className="harness-dialog-head">
           <strong>{agent} settings</strong>
           <span className="muted">— this panel only</span>

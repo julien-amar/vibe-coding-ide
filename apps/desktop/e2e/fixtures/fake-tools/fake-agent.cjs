@@ -3,8 +3,8 @@
 const fs = require('fs')
 
 const log = process.env.FAKE_AGENT_LOG
-// Each start's arguments (e.g. the harness flags), one JSON line per start, next to the log.
-if (log) fs.appendFileSync(`${log}.argv`, JSON.stringify(process.argv.slice(2)) + '\n')
+// Each start's folder and arguments (e.g. the agent settings flags), one JSON line per start, next to the log.
+if (log) fs.appendFileSync(`${log}.argv`, JSON.stringify({ cwd: process.cwd(), args: process.argv.slice(2) }) + '\n')
 process.stdout.write('Fake agent ready\r\n> ')
 if (process.stdin.isTTY) process.stdin.setRawMode(true)
 process.stdin.on('data', (data) => {

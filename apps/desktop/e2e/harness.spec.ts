@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { cleanup, createRepo, launch, openProject, quit, readLog, tempDir, type TestApp } from './app'
@@ -22,12 +22,26 @@ test.afterEach(async () => {
   cleanup(work)
 })
 
-/** Arguments of each start of the fake agent, latest last. */
-const agentStarts = (): string[][] =>
+/** Each start of the fake agent (its folder and arguments), latest last. */
+const agentRuns = (): { cwd: string; args: string[] }[] =>
   readLog(`${hub.agentLog}.argv`)
     .split('\n')
     .filter(Boolean)
-    .map((l) => JSON.parse(l) as string[])
+    .map((l) => JSON.parse(l) as { cwd: string; args: string[] })
+
+/** Arguments of each start of the fake agent (optionally only in one project folder), latest last. */
+const agentStarts = (inFolder?: string): string[][] =>
+  agentRuns()
+    .filter((r) => !inFolder || samePath(r.cwd, inFolder))
+    .map((r) => r.args)
+
+const samePath = (a: string, b: string): boolean => {
+  const n = (p: string): string => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+  return n(a) === n(b)
+}
+
+/** The file given with a flag (e.g. --mcp-config) of an agent start, read. */
+const flagFile = (args: string[], flag: string): string => readFileSync(args[args.indexOf(flag) + 1], 'utf8')
 
 const agentPanes = (page: Page): Locator => page.locator('.tab-panel.visible .pane', { has: page.locator('.pane-header .agent-settings') })
 
@@ -37,6 +51,13 @@ async function openSettings(page: Page, pane: Locator): Promise<Locator> {
   const dialog = page.getByRole('dialog', { name: /settings/ })
   await expect(dialog).toBeVisible()
   return dialog
+}
+
+/** A repository created by createRepo, renamed (tabs are titled after the folder). */
+function renameRepo(repo: string, name: string): string {
+  const to = join(repo, '..', name)
+  renameSync(repo, to)
+  return to
 }
 
 async function addServer(dialog: Locator, name: string, args: string, env = ''): Promise<void> {
@@ -127,6 +148,80 @@ test('each AI agent panel has its own settings (⚙): MCP servers with a health 
   await expect(agentPanes(hub.page).nth(1).locator('.agent-settings-count')).toHaveText('1')
   // Restored agents start with their own settings.
   await expect.poll(() => agentStarts().filter((a) => a.includes('--append-system-prompt-file')).length).toBeGreaterThanOrEqual(3)
+})
+
+test('AI agent settings are isolated between project tabs (and restored per tab)', async () => {
+  const { page } = hub
+  // Two projects, two tabs.
+  const repoA = renameRepo(createRepo(work), 'alpha-repo')
+  const repoB = renameRepo(createRepo(work), 'beta-repo')
+  const tab = (name: string): Locator => page.locator('.tab', { hasText: name })
+
+  // Tab A: an MCP server and instructions, applied by a restart.
+  await openProject(page, repoA)
+  await expect.poll(() => agentStarts(repoA).length).toBe(1)
+  let dialog = await openSettings(page, agentPanes(page).first())
+  await addServer(dialog, 'alpha-tools', `"${FAKE_MCP}"`)
+  await dialog.getByRole('tab', { name: /Instructions/ }).click()
+  await dialog.getByLabel('Instructions').fill('Alpha only.')
+  await dialog.getByRole('tab', { name: /MCP servers/ }).click()
+  await dialog.getByRole('button', { name: 'Restart agent' }).click()
+  // Esc still closes the dialog (its Restart button went away; the restarted terminal does not take the keys).
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+  await expect.poll(() => agentStarts(repoA).length).toBe(2)
+  const startA = agentStarts(repoA)[1]
+
+  // Tab B: its agent starts without any of tab A's settings, and its ⚙ is empty.
+  await openProject(page, repoB)
+  await expect(tab('beta-repo')).toHaveClass(/active/)
+  await expect.poll(() => agentStarts(repoB).length).toBe(1)
+  expect(agentStarts(repoB)[0]).not.toContain('--mcp-config')
+  expect(agentStarts(repoB)[0]).not.toContain('--append-system-prompt-file')
+  const paneB = agentPanes(page).first()
+  await expect(paneB.locator('.agent-settings-count')).toHaveCount(0)
+  dialog = await openSettings(page, paneB)
+  await expect(dialog.locator('.harness-item')).toHaveCount(0)
+  await dialog.getByRole('tab', { name: /Instructions/ }).click()
+  await expect(dialog.getByLabel('Instructions')).toHaveValue('')
+
+  // Tab B gets its own instructions (no MCP server).
+  await dialog.getByLabel('Instructions').fill('Beta only.')
+  await dialog.getByRole('button', { name: 'Restart agent' }).click()
+  await expect.poll(() => agentStarts(repoB).length).toBe(2)
+  // A dialog left open does not follow to another tab: showing tab A closes it.
+  await page.evaluate(() => (window as unknown as { __vibeIdeTabs: { getState(): { activateRelative(d: number): void } } }).__vibeIdeTabs.getState().activateRelative(-1))
+  await expect(dialog).toBeHidden()
+  await tab('beta-repo').click()
+  const startB = agentStarts(repoB)[1]
+  expect(flagFile(startB, '--append-system-prompt-file')).toBe('Beta only.\n')
+  expect(startB).not.toContain('--mcp-config')
+
+  // Tab A is unchanged: its settings, its generated files (separate from B's).
+  expect(flagFile(startA, '--append-system-prompt-file')).toBe('Alpha only.\n')
+  expect(Object.keys(JSON.parse(flagFile(startA, '--mcp-config')).mcpServers)).toEqual(['alpha-tools'])
+  const dirOf = (args: string[]): string => args[args.indexOf('--append-system-prompt-file') + 1].replace(/[\\/][^\\/]+$/, '')
+  expect(dirOf(startA)).not.toBe(dirOf(startB))
+  await tab('alpha-repo').click()
+  const paneA = agentPanes(page).first()
+  await expect(paneA.locator('.agent-settings-count')).toHaveText('2')
+  await expect(paneA.locator('.harness-stale-bar')).toHaveCount(0)
+  dialog = await openSettings(page, paneA)
+  await expect(dialog.locator('.harness-item')).toHaveText([/alpha-tools/])
+  await page.keyboard.press('Escape')
+
+  // After a restart of the app, each tab's agent starts again with its own settings.
+  await quit(hub)
+  const before = { a: agentStarts(repoA).length, b: agentStarts(repoB).length }
+  hub = await launch(profile)
+  await expect.poll(() => agentStarts(repoA).length, { timeout: 30_000 }).toBe(before.a + 1)
+  await expect.poll(() => agentStarts(repoB).length, { timeout: 30_000 }).toBe(before.b + 1)
+  const restoredA = agentStarts(repoA).at(-1)!
+  const restoredB = agentStarts(repoB).at(-1)!
+  expect(flagFile(restoredA, '--append-system-prompt-file')).toBe('Alpha only.\n')
+  expect(Object.keys(JSON.parse(flagFile(restoredA, '--mcp-config')).mcpServers)).toEqual(['alpha-tools'])
+  expect(flagFile(restoredB, '--append-system-prompt-file')).toBe('Beta only.\n')
+  expect(restoredB).not.toContain('--mcp-config')
 })
 
 test('a server that fails to start shows its error and output; disabling servers and "only these servers"', async () => {

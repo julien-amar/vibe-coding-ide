@@ -142,6 +142,10 @@ function TerminalPane({ tab, pane, visible, autoFocus }: { tab: Tab; pane: PaneN
   const exitCode = useTabs((s) => (pane.sessionId ? s.paneExit[pane.sessionId] : undefined))
   const harnessStale = useTabs((s) => !!pane.sessionId && !!s.harnessStale[pane.sessionId])
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // The dialog floats over the whole window: close it when its tab is hidden (another tab shown).
+  useEffect(() => {
+    if (!visible) setSettingsOpen(false)
+  }, [visible])
   const settingsCount = harnessSize(pane.harness)
   const isAgent = pane.type === 'agent'
   // Agents installed in another WSL distro than the project's cannot run there: hide them.
