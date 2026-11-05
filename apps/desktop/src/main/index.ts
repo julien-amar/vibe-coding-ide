@@ -9,6 +9,7 @@ import { profileIcon } from './icons'
 import { findProfile, listProfiles } from './profiles'
 import { recentProjects, touchProject } from './projects'
 import { PtyManager } from './pty-manager'
+import { parseWslPath } from './wsl-paths'
 
 app.setName('DevHub')
 app.setPath('userData', join(app.getPath('appData'), 'DevHub'))
@@ -16,6 +17,8 @@ app.setPath('userData', join(app.getPath('appData'), 'DevHub'))
 const ptys = new PtyManager()
 const gitWatcher = new GitWatcher()
 const TITLEBAR_HEIGHT = 40
+/** Expose debugging hooks to the UI (automated checks over DevTools). */
+const DEBUG = app.commandLine.hasSwitch('remote-debugging-port') || process.env.DEVHUB_DEBUG === '1'
 
 interface WindowEntry {
   win: BrowserWindow
@@ -45,12 +48,18 @@ function snapshotLayout(withScrollback: boolean): SavedWindow[] {
       activeIndex: e.state.activeIndex,
       tabs: e.state.tabs.map(({ sessionId, scrollback: _ignored, ...tab }) => {
         const saved = (id: string | undefined): string | undefined => (withScrollback && id ? ptys.tail(id) || undefined : undefined)
+        const cwd = (id: string | undefined): string | undefined => (id ? ptys.cwd(id) : undefined)
         return {
           ...tab,
           scrollback: saved(sessionId),
+          cwd: cwd(sessionId),
           project: tab.project && {
             ...tab.project,
-            layout: mapPanes(tab.project.layout, ({ sessionId: paneSession, scrollback: _s, ...pane }) => ({ ...pane, scrollback: saved(paneSession) }))
+            layout: mapPanes(tab.project.layout, ({ sessionId: paneSession, scrollback: _s, ...pane }) => ({
+              ...pane,
+              scrollback: saved(paneSession),
+              cwd: cwd(paneSession)
+            }))
           }
         }
       })
@@ -105,7 +114,8 @@ function createWindow(opts: CreateOptions = {}): BrowserWindow {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      additionalArguments: DEBUG ? ['--devhub-debug'] : []
     }
   })
 
@@ -255,8 +265,20 @@ function registerIpc(): void {
   ipcMain.handle('pty:create', async (e, req: PtyCreateRequest): Promise<PtyCreateResult> => {
     const profile = await findProfile(req.profileId)
     if (!profile) throw new Error(`Unknown profile: ${req.profileId}`)
-    const cwd = req.cwd && isDir(req.cwd) ? req.cwd : undefined
-    const sessionId = ptys.create(profile, req.cols, req.rows, e.sender, cwd)
+    let launch = profile
+    let cwd: string | undefined
+    if (profile.wslDistro) {
+      // WSL processes start in a Linux directory: a Linux path, or a \\wsl.localhost\<distro>\… path of the same distro.
+      const wsl = req.cwd ? parseWslPath(req.cwd) : undefined
+      const linuxDir = req.cwd?.startsWith('/') ? req.cwd : wsl && wsl.distro.toLowerCase() === profile.wslDistro.toLowerCase() ? wsl.path : undefined
+      if (linuxDir) {
+        const i = profile.args.indexOf('--cd')
+        launch = { ...profile, args: i >= 0 ? profile.args.map((a, j) => (j === i + 1 ? linuxDir : a)) : ['--cd', linuxDir, ...profile.args] }
+      }
+    } else {
+      cwd = req.cwd && isDir(req.cwd) ? req.cwd : undefined
+    }
+    const sessionId = ptys.create(launch, req.cols, req.rows, e.sender, cwd)
     return { sessionId, title: profile.name }
   })
   ipcMain.handle('pty:attach', (e, id: string) => ptys.attach(id, e.sender))

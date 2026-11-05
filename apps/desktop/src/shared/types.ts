@@ -9,6 +9,10 @@ export interface Profile {
   args: string[]
   /** Where the executable was found (for display). */
   source?: string
+  /** Extra environment for the process (e.g. shell integration). */
+  env?: Record<string, string>
+  /** Runs inside this WSL distribution (WSL shells and agents installed in WSL). */
+  wslDistro?: string
 }
 
 export interface PtyCreateRequest {
@@ -43,6 +47,8 @@ export type LayoutNode =
       scrollback?: string
       /** Hidden from the layout and shown as a button in the project's side rail. */
       collapsed?: boolean
+      /** Last known working directory (saved on exit, used on restore). */
+      cwd?: string
     }
 
 export interface ProjectSnapshot {
@@ -87,6 +93,8 @@ export interface TabSnapshot {
   scrollback?: string
   /** Project tabs: folder and pane layout. */
   project?: ProjectSnapshot
+  /** Last known working directory of a terminal tab (saved on exit, used on restore). */
+  cwd?: string
 }
 
 /** What a window should show when it starts. */
@@ -112,6 +120,8 @@ export interface TabDragPayload {
 /** API exposed by the preload script on `window.devhub`. */
 export interface DevHubApi {
   platform: NodeJS.Platform
+  /** Debugging hooks for automated UI checks are exposed (remote debugging or DEVHUB_DEBUG=1). */
+  debug: boolean
   profiles: {
     list(refresh?: boolean): Promise<Profile[]>
     /** Icon of the installed shell/distro/agent as a data: URL, or null (draw a monogram). */

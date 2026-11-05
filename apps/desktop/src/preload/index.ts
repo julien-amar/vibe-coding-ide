@@ -3,6 +3,7 @@ import type { DevHubApi } from '@shared/types'
 
 const api: DevHubApi = {
   platform: process.platform,
+  debug: process.argv.includes('--devhub-debug'),
   profiles: {
     list: (refresh) => ipcRenderer.invoke('profiles:list', refresh),
     icon: (id) => ipcRenderer.invoke('profiles:icon', id)

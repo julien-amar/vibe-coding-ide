@@ -94,7 +94,7 @@ async function startPaneSessions(layout: LayoutNode, cwd: string): Promise<Layou
   const started = new Map<string, string>()
   for (const p of panesOf(layout)) {
     if (p.type === 'git' || p.sessionId || !p.profileId) continue
-    const s = await createSession(p.profileId, cwd)
+    const s = await createSession(p.profileId, p.cwd ?? cwd)
     if (s) started.set(p.id, s.sessionId)
   }
   return mapPanes(layout, (p) => (started.has(p.id) ? { ...p, sessionId: started.get(p.id) } : p))
@@ -163,7 +163,7 @@ export const useTabs = create<State>((set, get) => ({
       // Restored terminal tab: start a fresh session with the same profile.
       const profile = list.find((p) => p.id === snap.profileId)
       if (!profile) continue
-      const s = await createSession(profile.id)
+      const s = await createSession(profile.id, snap.cwd)
       if (!s) continue
       tabs.push({
         id: newTabId(),
@@ -347,5 +347,5 @@ useTabs.subscribe((s, prev) => {
 
 window.devhub.window.onTabTransferred((key) => useTabs.getState().removeTransferred(key))
 
-// Prototype debugging aid (used by automated UI checks over DevTools).
-;(window as unknown as { __devhubTabs: typeof useTabs }).__devhubTabs = useTabs
+// Debugging aid for automated UI checks over DevTools (only with remote debugging / DEVHUB_DEBUG=1).
+if (window.devhub.debug) (window as unknown as { __devhubTabs: typeof useTabs }).__devhubTabs = useTabs

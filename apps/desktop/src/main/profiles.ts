@@ -56,18 +56,43 @@ function launchSpec(exe: string, args: string[] = []): { command: string; args: 
   return { command: exe, args }
 }
 
+/**
+ * Shell integration: each shell reports its working directory after every prompt
+ * with a standard terminal sequence (OSC 9;9 "path" like Windows Terminal, or
+ * OSC 7 file://host/path). DevHub records it so restored shells reopen there.
+ */
+const POWERSHELL_INTEGRATION = [
+  '$global:__devhubPrompt = $function:prompt',
+  'function global:prompt {',
+  '  $loc = $executionContext.SessionState.Path.CurrentLocation',
+  "  if ($loc.Provider.Name -eq 'FileSystem') { [Console]::Write(\"$([char]27)]9;9;`\"$($loc.ProviderPath)`\"$([char]27)\\\") }",
+  '  & $global:__devhubPrompt',
+  '}'
+].join("\n")
+
+const powershellArgs = (): string[] => ['-NoLogo', '-NoExit', '-EncodedCommand', Buffer.from(POWERSHELL_INTEGRATION, 'utf16le').toString('base64')]
+
+/** cmd.exe expands $e (ESC) and $P (current path) in PROMPT. */
+const CMD_PROMPT = '$e]9;9;$P$e\\$P$G'
+
+/** Git Bash: report the Windows form of the current directory. */
+const GIT_BASH_PROMPT_COMMAND = 'printf "\\033]9;9;%s\\033\\\\" "$(pwd -W 2>/dev/null || pwd)"'
+
+/** bash inside WSL: report the Linux path (OSC 7). */
+export const WSL_PROMPT_COMMAND = 'printf "\\033]7;file://%s%s\\033\\\\" "$HOSTNAME" "$PWD"'
+
 function windowsShells(): Profile[] {
   const profiles: Profile[] = []
   const system32 = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32').toLowerCase()
 
   const pwsh = which('pwsh')
-  if (pwsh) profiles.push({ id: 'shell:pwsh', name: 'PowerShell', kind: 'shell', command: pwsh, args: ['-NoLogo'], source: pwsh })
+  if (pwsh) profiles.push({ id: 'shell:pwsh', name: 'PowerShell', kind: 'shell', command: pwsh, args: powershellArgs(), source: pwsh })
 
   const winps = which('powershell')
-  if (winps) profiles.push({ id: 'shell:powershell', name: 'Windows PowerShell', kind: 'shell', command: winps, args: ['-NoLogo'], source: winps })
+  if (winps) profiles.push({ id: 'shell:powershell', name: 'Windows PowerShell', kind: 'shell', command: winps, args: powershellArgs(), source: winps })
 
   const cmd = process.env.ComSpec ?? which('cmd')
-  if (cmd) profiles.push({ id: 'shell:cmd', name: 'Command Prompt', kind: 'shell', command: cmd, args: [], source: cmd })
+  if (cmd) profiles.push({ id: 'shell:cmd', name: 'Command Prompt', kind: 'shell', command: cmd, args: [], source: cmd, env: { PROMPT: CMD_PROMPT } })
 
   // Git Bash: derive from git.exe on PATH, else default install locations.
   const gitBashCandidates: string[] = []
@@ -80,7 +105,17 @@ function windowsShells(): Profile[] {
     if (base) gitBashCandidates.push(join(base, 'Git', 'bin', 'bash.exe'))
   }
   const gitBash = gitBashCandidates.find(isFile)
-  if (gitBash) profiles.push({ id: 'shell:git-bash', name: 'Git Bash', kind: 'shell', command: gitBash, args: ['--login', '-i'], source: gitBash })
+  if (gitBash) {
+    profiles.push({
+      id: 'shell:git-bash',
+      name: 'Git Bash',
+      kind: 'shell',
+      command: gitBash,
+      args: ['--login', '-i'],
+      source: gitBash,
+      env: { PROMPT_COMMAND: GIT_BASH_PROMPT_COMMAND }
+    })
+  }
 
   // Other shells on PATH. Skip System32\bash.exe (the legacy WSL launcher) and Git's own bash.
   const others: Array<[string, string, string[]]> = [
@@ -140,6 +175,12 @@ function unixShells(): Profile[] {
   return profiles
 }
 
+/** WSLENV with an extra entry, keeping what the user already shares with WSL. */
+export function wslenvWith(entry: string): string {
+  const cur = process.env.WSLENV
+  return cur ? `${cur}:${entry}` : entry
+}
+
 /** Decode `wsl.exe` output, which is UTF-16LE unless WSL_UTF8=1 is honored. */
 function decodeWslOutput(buf: Buffer): string {
   const looksUtf16 = buf.length >= 2 && (buf[1] === 0 || (buf[0] === 0xff && buf[1] === 0xfe))
@@ -164,7 +205,10 @@ function wslDistros(): Promise<Profile[]> {
           kind: 'wsl' as const,
           command: wsl,
           args: ['-d', distro, '--cd', '~'],
-          source: 'WSL'
+          source: 'WSL',
+          wslDistro: distro,
+          // Pass PROMPT_COMMAND into the distro (WSLENV) so bash reports its directory.
+          env: { PROMPT_COMMAND: WSL_PROMPT_COMMAND, WSLENV: wslenvWith('PROMPT_COMMAND/u') }
         }))
       )
     })

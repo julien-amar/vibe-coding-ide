@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { tabTitle, toSnapshot, useTabs, type Tab } from '../store'
 import { onTabDragEnd, onTabDragStart } from '../tab-dnd'
+import { useProfiles } from '../profiles'
 import { KindBadge } from './KindBadge'
+import { ProfileIcon } from './ProfileIcon'
 
 interface MenuState {
   tabId: string
@@ -28,6 +30,7 @@ function TabItem({
   const close = useTabs((s) => s.close)
   const rename = useTabs((s) => s.rename)
   const dropSide = useTabs((s) => (s.drop?.tabId === tab.id ? s.drop.side : undefined))
+  const profile = useProfiles().find((p) => p.id === tab.profileId)
   const [draft, setDraft] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -64,7 +67,7 @@ function TabItem({
       onDragEnd={(e) => onTabDragEnd(e, tab)}
       title={tab.customTitle ? `${tab.customTitle} — ${tab.autoTitle}` : tab.autoTitle}
     >
-      <KindBadge kind={tab.kind} />
+      {profile ? <ProfileIcon profile={profile} /> : <KindBadge kind={tab.kind} />}
       {editing ? (
         <input
           ref={inputRef}

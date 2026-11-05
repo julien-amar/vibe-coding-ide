@@ -84,7 +84,7 @@ export function TerminalView({ sessionId, restoredScrollback, visible, autoFocus
       /* fall back to the DOM renderer */
     }
     termRef.current = term
-    ;(host as unknown as { __xterm: Terminal }).__xterm = term // prototype debugging aid
+    if (window.devhub.debug) (host as unknown as { __xterm: Terminal }).__xterm = term // debugging aid (DevTools checks)
     fitRef.current = fit
 
     term.attachCustomKeyEventHandler((e) => {

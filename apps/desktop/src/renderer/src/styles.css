@@ -663,6 +663,7 @@ body.resizing-row * {
   inset: 0;
   display: flex;
   flex-direction: column;
+  container-type: inline-size;
 }
 
 .git-rows {
@@ -763,8 +764,15 @@ body.resizing-row * {
   font-weight: 600;
 }
 
-@media (max-width: 900px) {
+/* Columns give way to the commit message as the git pane gets narrower. */
+@container (max-width: 640px) {
   .git-author {
+    display: none;
+  }
+}
+
+@container (max-width: 460px) {
+  .git-date {
     display: none;
   }
 }

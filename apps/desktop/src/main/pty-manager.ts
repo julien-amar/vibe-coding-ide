@@ -15,6 +15,28 @@ interface Session {
   size: number
   subscribers: Set<WebContents>
   exitCode?: number
+  /** Working directory last reported by the shell (OSC 7 / OSC 9;9). */
+  cwd?: string
+}
+
+/** OSC 9;9;"path" (Windows Terminal convention) and OSC 7;file://host/path. */
+const OSC_CWD = /\x1b\](?:9;9;"?([^"\x07\x1b]*)"?|7;file:\/\/[^/\x07\x1b]*(\/[^\x07\x1b]*))(?:\x07|\x1b\\)/g
+
+function lastReportedCwd(data: string): string | undefined {
+  let cwd: string | undefined
+  for (const m of data.matchAll(OSC_CWD)) {
+    if (m[1]) cwd = m[1]
+    else if (m[2]) {
+      try {
+        cwd = decodeURIComponent(m[2])
+      } catch {
+        cwd = m[2]
+      }
+    }
+  }
+  // Git Bash reports C:/Users/...; normalise to a Windows path.
+  if (cwd && /^[a-z]:\//i.test(cwd)) cwd = cwd.replace(/\//g, '\\')
+  return cwd
 }
 
 /**
@@ -26,7 +48,7 @@ export class PtyManager {
 
   create(profile: Profile, cols: number, rows: number, owner: WebContents, cwd?: string): string {
     const id = randomUUID()
-    const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor', TERM_PROGRAM: 'DevHub' } as Record<string, string>
+    const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor', TERM_PROGRAM: 'DevHub', ...profile.env } as Record<string, string>
     const proc = pty.spawn(profile.command, profile.args, {
       name: 'xterm-256color',
       cols: Math.max(cols, 2),
@@ -39,6 +61,7 @@ export class PtyManager {
     this.subscribe(session, owner)
 
     proc.onData((data) => {
+      if (data.includes('\x1b]')) session.cwd = lastReportedCwd(data) ?? session.cwd
       session.chunks.push(data)
       session.size += data.length
       while (session.size > MAX_BUFFER && session.chunks.length > 1) {
@@ -73,6 +96,10 @@ export class PtyManager {
     s.subscribers.delete(from)
     this.subscribe(s, to)
     return true
+  }
+
+  cwd(id: string): string | undefined {
+    return this.sessions.get(id)?.cwd
   }
 
   has(id: string): boolean {
