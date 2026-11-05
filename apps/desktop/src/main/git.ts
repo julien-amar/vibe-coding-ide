@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { existsSync, watch, type FSWatcher } from 'node:fs'
 import { join } from 'node:path'
 import type { WebContents } from 'electron'
-import type { GitBranch, GitCommit, GitLog, GitOpRequest, GitOpResult, GitStatus, GitStatusFile, GitWorktree } from '@shared/types'
+import type { GitBranch, GitCommit, GitCommitFile, GitLog, GitOpRequest, GitOpResult, GitStatus, GitStatusFile, GitWorktree } from '@shared/types'
 import { which } from './profiles'
 import { parseWslPath } from '@shared/wsl-paths'
 
@@ -227,6 +227,32 @@ const pathList = (v: unknown): string[] => {
 
 const NETWORK = { timeout: 180000 }
 
+/** Commit ids from the renderer: hex object names only (never options or revision expressions). */
+function validHash(v: unknown): string {
+  const h = String(v ?? '')
+  if (!/^[0-9a-f]{4,64}$/i.test(h)) throw new Error('Invalid commit id')
+  return h
+}
+
+/** Parse `--name-status -z` output: "M\0path\0" or "R100\0old\0new\0". */
+function parseNameStatus(raw: string): GitCommitFile[] {
+  const parts = raw.split('\0')
+  const files: GitCommitFile[] = []
+  for (let i = 0; i < parts.length; i++) {
+    const code = parts[i]
+    if (!code) continue
+    const status = code[0]
+    if (status === 'R' || status === 'C') {
+      files.push({ status, origPath: parts[i + 1], path: parts[i + 2] })
+      i += 2
+    } else {
+      files.push({ status, path: parts[i + 1] })
+      i += 1
+    }
+  }
+  return files
+}
+
 /** Folder name for a new feature worktree: next to the repository, "<repo>-<feature>". */
 function worktreeDir(root: string, feature: string): string {
   const wsl = process.platform === 'win32' ? parseWslPath(root) : undefined
@@ -314,6 +340,23 @@ export async function gitOp(root: string, req: GitOpRequest): Promise<GitOpResul
           await git(root, ['push', remote, '--delete', rest.join('/')], NETWORK)
         } else await git(root, ['branch', req.force ? '-D' : '-d', name])
         return { ok: true }
+      }
+      case 'commitFiles': {
+        // Files changed by a commit, compared with its first parent (root commit: everything added).
+        const hash = validHash(req.hash)
+        const raw = req.parent
+          ? await git(root, ['diff', '--no-color', '--name-status', '-z', '-M', validHash(req.parent), hash])
+          : await git(root, ['diff-tree', '--root', '--no-commit-id', '-r', '--name-status', '-z', '-M', hash])
+        const message = await git(root, ['show', '-s', '--format=%B', hash])
+        return { ok: true, files: parseNameStatus(raw), text: message.trim() }
+      }
+      case 'commitDiff': {
+        const hash = validHash(req.hash)
+        const paths = [pathList(req.path)[0], ...(req.origPath ? [String(req.origPath)] : [])]
+        const text = req.parent
+          ? await git(root, ['diff', '--no-color', '-M', validHash(req.parent), hash, '--', ...paths])
+          : await git(root, ['show', '--no-color', '--format=', hash, '--', ...paths])
+        return { ok: true, text }
       }
       case 'merge': {
         const name = await validBranch(root, req.branch)

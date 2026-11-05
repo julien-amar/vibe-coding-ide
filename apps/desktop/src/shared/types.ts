@@ -140,6 +140,8 @@ export type GitOp =
   | 'push'
   | 'addWorktree'
   | 'removeWorktree'
+  | 'commitFiles'
+  | 'commitDiff'
 
 export interface GitOpRequest {
   op: GitOp
@@ -155,6 +157,19 @@ export interface GitOpRequest {
   checkout?: boolean
   remote?: boolean
   force?: boolean
+  /** commitFiles / commitDiff: the commit, and the parent to compare with (none = root commit). */
+  hash?: string
+  parent?: string
+  /** commitDiff: previous path of a renamed file. */
+  origPath?: string
+}
+
+/** A file changed by a commit. */
+export interface GitCommitFile {
+  path: string
+  origPath?: string
+  /** A, M, D, R, C, T */
+  status: string
 }
 
 export interface GitOpResult {
@@ -167,6 +182,8 @@ export interface GitOpResult {
   worktrees?: GitWorktree[]
   /** New worktree folder (addWorktree). */
   path?: string
+  /** commitFiles: files changed by the commit (text = full commit message). */
+  files?: GitCommitFile[]
 }
 
 /** Serializable description of a tab, used for moving tabs between windows and for layout restore. */

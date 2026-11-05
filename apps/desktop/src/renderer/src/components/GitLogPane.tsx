@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GitCommit, GitLog } from '@shared/types'
 import { computeGraph, laneColor, type GraphRow } from '../git-graph'
 import { relativeTime } from '../time'
+import { CommitDetails } from './CommitDetails'
 
 const ROW_H = 26
 const LANE_W = 14
@@ -97,6 +98,16 @@ export function GitLogPane({ root, visible, tick }: { root: string; visible: boo
 
   const commits = log?.commits ?? []
   const graph = useMemo(() => computeGraph(commits), [commits])
+
+  // Opening the details panel shortens the list: keep the selected commit in view.
+  const selectedIndex = selected ? commits.findIndex((c) => c.hash === selected) : -1
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el || selectedIndex < 0) return
+    const top = selectedIndex * ROW_H
+    if (top < el.scrollTop) el.scrollTop = top
+    else if (top + ROW_H > el.scrollTop + el.clientHeight) el.scrollTop = top + ROW_H - el.clientHeight
+  }, [selectedIndex, viewH])
   const graphWidth = GRAPH_PAD * 2 + graph.maxLanes * LANE_W
   const first = Math.max(0, Math.floor(scrollTop / ROW_H) - 10)
   const last = Math.min(commits.length, Math.ceil((scrollTop + viewH) / ROW_H) + 10)
@@ -142,18 +153,7 @@ export function GitLogPane({ root, visible, tick }: { root: string; visible: boo
         </div>
       )}
 
-      {sel && (
-        <div className="git-details">
-          <div>
-            <span className="git-hash selectable">{sel.hash}</span>
-          </div>
-          <div className="git-details-subject selectable">{sel.subject}</div>
-          <div className="muted">
-            {sel.author} · {new Date(sel.date * 1000).toLocaleString()}
-            {sel.parents.length > 1 && ` · merge of ${sel.parents.map((p) => p.slice(0, 7)).join(', ')}`}
-          </div>
-        </div>
-      )}
+      {sel && <CommitDetails key={sel.hash} root={root} commit={sel} onClose={() => setSelected(undefined)} />}
     </div>
   )
 }
