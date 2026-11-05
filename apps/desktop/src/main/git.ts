@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { existsSync, watch, type FSWatcher } from 'node:fs'
+import { existsSync, realpathSync, watch, type FSWatcher } from 'node:fs'
 import { join } from 'node:path'
 import type { WebContents } from 'electron'
 import type { GitBranch, GitCommit, GitCommitFile, GitLog, GitOpRequest, GitOpResult, GitStatus, GitStatusFile, GitWorktree } from '@shared/types'
@@ -213,6 +213,23 @@ async function gitWorktrees(root: string): Promise<GitWorktree[]> {
   return list
 }
 
+/**
+ * Comparable form of a local path: resolves 8.3 short names (RUNNER~1) and symlinks
+ * (/var -> /private/var on macOS) while the folder exists; case-insensitive on Windows.
+ */
+function pathKey(p: string): string {
+  let r = p
+  if (!parseWslPath(p)) {
+    try {
+      r = realpathSync.native(p)
+    } catch {
+      /* gone or inaccessible: compare as given */
+    }
+  }
+  r = r.replace(/\\/g, '/').replace(/\/+$/, '')
+  return process.platform === 'win32' || parseWslPath(p) ? r.toLowerCase() : r
+}
+
 /** Start point of a new branch / worktree: HEAD (current commit) or a validated branch name. */
 async function startPoint(root: string, v: unknown): Promise<string | undefined> {
   const s = String(v ?? '').trim()
@@ -397,7 +414,8 @@ export async function gitOp(root: string, req: GitOpRequest): Promise<GitOpResul
       }
       case 'removeWorktree': {
         const target = String(req.path ?? '')
-        const wt = (await gitWorktrees(root)).find((w) => w.path.toLowerCase() === target.toLowerCase())
+        const key = pathKey(target)
+        const wt = (await gitWorktrees(root)).find((w) => pathKey(w.path) === key)
         if (!wt || wt.main) throw new Error('Unknown worktree')
         const wsl = parseWslPath(wt.path)
         try {
@@ -405,7 +423,7 @@ export async function gitOp(root: string, req: GitOpRequest): Promise<GitOpResul
         } catch (err) {
           // Windows: git unregisters the worktree and deletes its files, but cannot delete a folder a
           // process still has open. If the worktree is gone from git, that is a success with a note.
-          const stillThere = (await gitWorktrees(root)).some((w) => w.path.toLowerCase() === target.toLowerCase())
+          const stillThere = (await gitWorktrees(root)).some((w) => w.path === wt.path)
           if (stillThere) throw err
           return { ok: true, text: `The worktree was removed, but the folder ${wt.path} is still in use and could not be deleted. Delete it once nothing uses it.` }
         }
