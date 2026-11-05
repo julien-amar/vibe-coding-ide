@@ -53,6 +53,29 @@
   padding-left: 14px;
 }
 
+/* What this panel's agent gets of the settings. */
+.harness-support-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11.5px;
+}
+
+.harness-support-line .ok {
+  color: var(--success);
+}
+
+.harness-support-line .no {
+  color: var(--text-muted);
+}
+
+.harness-support-line.none {
+  background: var(--hover);
+}
+
 .harness-support {
   overflow: hidden;
   text-overflow: ellipsis;

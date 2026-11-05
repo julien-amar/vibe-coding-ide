@@ -45,7 +45,17 @@ A tabbed development environment — see [PLAN.md](PLAN.md) for the full design.
   - **MCP servers** — a command the agent starts (stdio) or an HTTP endpoint, with environment / headers; enable or disable each; **Check** starts the server and lists its tools (or shows its error and output); **Import from .mcp.json** takes the repository's servers; **Only these servers** makes the agent ignore other MCP configurations.
   - **Skills** — add folders with a `SKILL.md` (or folders of skills), enable or disable them, preview them; the skills Claude Code already loads from the repository's `.claude/skills` and `~/.claude/skills` are listed too.
   - **Instructions** — added to the agent's system prompt.
-  - Applied when the agent starts: **Claude Code** gets generated files passed with `--mcp-config` (`--strict-mcp-config`), `--append-system-prompt-file` and `--plugin-dir` (a session-only plugin holding the skills). The other agents are shown as not supported yet. After a change, the running agent shows **Restart** to apply it.
+  - Applied when the agent starts, in each agent's own format — generated files and flags for that session only (your agent configuration and the repository are not changed); the dialog shows what the panel's agent gets:
+
+    | Agent | MCP servers | Skills | Instructions | Only these servers |
+    |---|---|---|---|---|
+    | **Claude Code** | `--mcp-config` | `--plugin-dir` (a session-only plugin) | `--append-system-prompt-file` | `--strict-mcp-config` |
+    | **Codex CLI** | `-c mcp_servers.<name>…` | listed in its instructions (name, description, `SKILL.md` location) | `-c developer_instructions` | ✓ (replaces the server list) |
+    | **opencode** | `OPENCODE_CONFIG` (an extra config file) | `skills.paths` | `instructions` | ✗ (always adds your servers) |
+    | **pi** | ✗ (pi has no MCP support) | `--skill` | `--append-system-prompt` | — |
+    | **Gemini CLI** | ✗ | ✗ | ✗ | Gemini only reads `~/.gemini` or the repository's `.gemini` |
+
+    Checked against Claude Code 2.1, Codex CLI 0.166, opencode 1.19, pi 0.73 and Gemini CLI 0.67. Agents installed with npm on Windows are started directly (not through their `.cmd` shim), so arguments keep their quotes and line breaks. After a change, the running agent shows **Restart** to apply it.
 - **WSL projects** (`\\wsl.localhost\<distro>\...`): git runs inside the distribution, the terminal opens the distro's shell in the project folder, and the agent defaults to one installed inside the distro (e.g. `claude` in Ubuntu), falling back to the Windows one.
 - Project tabs move between windows like any other tab and are restored on start.
 

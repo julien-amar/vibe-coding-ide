@@ -103,7 +103,7 @@ export async function typeInTerminal(page: Page, text: string): Promise<void> {
  */
 export function fakeToolsEnv(agentLog: string, editorLog: string): Record<string, string> {
   const dir = resolve(__dirname, 'fixtures', 'fake-tools')
-  if (process.platform !== 'win32') for (const f of ['claude', 'code']) chmodSync(join(dir, f), 0o755)
+  if (process.platform !== 'win32') for (const f of ['claude', 'codex', 'pi', 'gemini', 'code']) chmodSync(join(dir, f), 0o755)
   const pathKey = Object.keys(process.env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH'
   return { [pathKey]: `${dir}${delimiter}${process.env[pathKey] ?? ''}`, FAKE_AGENT_LOG: agentLog, FAKE_EDITOR_LOG: editorLog }
 }

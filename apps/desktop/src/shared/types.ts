@@ -89,6 +89,9 @@ export interface AgentHarnessSupport {
   mcp: boolean
   skills: boolean
   instructions: boolean
+  /** "Only these servers": the agent can be made to ignore its other MCP configurations. */
+  strictMcp: boolean
+  /** How the settings reach the agent, or why they do not. */
   note?: string
 }
 

@@ -22,6 +22,7 @@ export const harnessSize = (h?: Harness): number =>
 export function HarnessDialog({
   root,
   agent,
+  agentId,
   harness,
   stale,
   onChange,
@@ -31,6 +32,8 @@ export function HarnessDialog({
   root: string
   /** The pane's agent, for the title. */
   agent: string
+  /** The agent's id ("claude", "codex"…): what it supports of these settings. */
+  agentId?: string
   harness: Harness
   /** The running agent started with older settings. */
   stale: boolean
@@ -60,6 +63,7 @@ export function HarnessDialog({
   }, [onClose])
 
   const save = async (next: Harness): Promise<void> => onChange(next)
+  const current = support.find((s) => s.agent === agentId)
   const enabledServers = harness.mcpServers.filter((s) => s.enabled).length
   const enabledSkills = harness.skills.filter((s) => s.enabled).length
 
@@ -77,7 +81,6 @@ export function HarnessDialog({
           <strong>{agent} settings</strong>
           <span className="muted">— this panel only</span>
           <span className="spacer" />
-          <AgentSupport support={support} />
           <button className="icon-button pane-action" title="Close (Esc)" aria-label="Close" onClick={onClose}>
             ✕
           </button>
@@ -95,6 +98,7 @@ export function HarnessDialog({
             </button>
           </div>
         </div>
+        <AgentSupport agent={agent} current={current} />
         {stale && (
           <div className="harness-stale" role="status">
             <span>The agent runs with the previous settings. Restart it to apply the changes (the conversation starts over).</span>
@@ -104,7 +108,7 @@ export function HarnessDialog({
           </div>
         )}
         <div className="harness-body">
-          {view === 'mcp' && <McpView root={root} harness={harness} save={save} />}
+          {view === 'mcp' && <McpView root={root} harness={harness} save={save} support={current} />}
           {view === 'skills' && <SkillsView root={root} harness={harness} save={save} />}
           {view === 'instructions' && <InstructionsView harness={harness} save={save} />}
         </div>
@@ -114,22 +118,51 @@ export function HarnessDialog({
   )
 }
 
-/** Which agents get these settings (the others are shown as such, not silently left out). */
-function AgentSupport({ support }: { support: AgentHarnessSupport[] }): React.JSX.Element {
-  const full = support.filter((s) => s.mcp && s.skills && s.instructions).map((s) => s.label)
-  const not = support.filter((s) => !s.mcp && !s.skills && !s.instructions).map((s) => s.label)
-  return (
-    <span className="harness-support" title={support.map((s) => `${s.label}: MCP ${s.mcp ? '✓' : '✗'} · skills ${s.skills ? '✓' : '✗'} · instructions ${s.instructions ? '✓' : '✗'}${s.note ? ` — ${s.note}` : ''}`).join('\n')}>
-      Applies to {full.join(', ') || '—'}
-      {not.length > 0 && <span className="muted"> · not yet {not.join(', ')}</span>}
+/**
+ * What this panel's agent gets of the settings (each part ✓ / ✗, and how or why), so nothing is
+ * silently left out.
+ */
+function AgentSupport({ agent, current }: { agent: string; current?: AgentHarnessSupport }): React.JSX.Element {
+  if (!current) {
+    return (
+      <div className="harness-support-line none" role="note">
+        These settings are not given to {agent}: vibe-coding-ide does not know how to pass them to this agent.
+      </div>
+    )
+  }
+  const part = (label: string, ok: boolean): React.JSX.Element => (
+    <span className={ok ? 'ok' : 'no'} title={`${label}: ${ok ? 'given to the agent' : 'not given to the agent'}`}>
+      {ok ? '✓' : '✗'} {label}
     </span>
+  )
+  const nothing = !current.mcp && !current.skills && !current.instructions
+  return (
+    <div className={`harness-support-line${nothing ? ' none' : ''}`} role="note">
+      <strong>{current.label}:</strong>
+      {part('MCP servers', current.mcp)}
+      {part('skills', current.skills)}
+      {part('instructions', current.instructions)}
+      {current.note && <span className="muted">— {current.note}</span>}
+    </div>
   )
 }
 
 // ---------------------------------------------------------------------------
 // MCP servers
 
-function McpView({ root, harness, save }: { root: string; harness: Harness; save: (h: Harness) => Promise<void> }): React.JSX.Element {
+function McpView({
+  root,
+  harness,
+  save,
+  support
+}: {
+  root: string
+  harness: Harness
+  save: (h: Harness) => Promise<void>
+  /** What the pane's agent supports (undefined: unknown agent). */
+  support?: AgentHarnessSupport
+}): React.JSX.Element {
+  const canStrict = !support || support.strictMcp
   const [editing, setEditing] = useState<{ index: number; server: McpServer }>()
   const [checks, setChecks] = useState<Record<string, McpCheckResult | 'checking'>>({})
   const [expanded, setExpanded] = useState<string>()
@@ -161,8 +194,21 @@ function McpView({ root, harness, save }: { root: string; harness: Harness; save
           </button>
         )}
         <span className="spacer" />
-        <label className="harness-check" title="The agent ignores other MCP configurations (yours, the repository's .mcp.json)">
-          <input type="checkbox" checked={!!harness.strictMcp} onChange={(e) => void save({ ...harness, strictMcp: e.target.checked || undefined })} /> Only these servers
+        <label
+          className="harness-check"
+          title={
+            canStrict
+              ? "The agent ignores other MCP configurations (yours, the repository's .mcp.json)"
+              : `${support!.label} cannot be made to ignore its other MCP configurations`
+          }
+        >
+          <input
+            type="checkbox"
+            checked={!!harness.strictMcp && canStrict}
+            disabled={!canStrict}
+            onChange={(e) => void save({ ...harness, strictMcp: e.target.checked || undefined })}
+          />{' '}
+          Only these servers
         </label>
       </div>
 

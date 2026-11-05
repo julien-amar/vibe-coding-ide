@@ -88,7 +88,9 @@ test('each AI agent panel has its own settings (⚙): MCP servers with a health 
   const first = agentPanes(page).first()
   let dialog = await openSettings(page, first)
   await expect(dialog).toContainText('this panel only')
-  await expect(dialog.locator('.harness-support')).toContainText('Applies to Claude Code')
+  // What this panel's agent gets: everything, for Claude Code.
+  await expect(dialog.locator('.harness-support-line')).toContainText('Claude Code:')
+  await expect(dialog.locator('.harness-support-line .ok')).toHaveText(['✓ MCP servers', '✓ skills', '✓ instructions'])
 
   // Add a stdio server, check it: started, its tools listed.
   await addServer(dialog, 'fake', `"${FAKE_MCP}" --verbose`, 'FAKE_TOKEN=secret')
@@ -222,6 +224,84 @@ test('AI agent settings are isolated between project tabs (and restored per tab)
   expect(Object.keys(JSON.parse(flagFile(restoredA, '--mcp-config')).mcpServers)).toEqual(['alpha-tools'])
   expect(flagFile(restoredB, '--append-system-prompt-file')).toBe('Beta only.\n')
   expect(restoredB).not.toContain('--mcp-config')
+})
+
+test('other agents get the settings in their own format (Codex CLI, pi) or are shown as not supported (Gemini CLI)', async () => {
+  const { page } = hub
+  const repo = createRepo(work)
+  mkdirSync(join(repo, 'agent-skills', 'haiku'), { recursive: true })
+  writeFileSync(join(repo, 'agent-skills', 'haiku', 'SKILL.md'), '---\nname: haiku\ndescription: Answers with a haiku\n---\nWrite a haiku.\n')
+  await openProject(page, repo)
+  await expect.poll(() => agentStarts(repo).length).toBe(1)
+  const pane = agentPanes(page).first()
+
+  /** Switch the pane's agent (as its header's agent menu does) and wait for the new start. */
+  const useAgent = async (profileId: string): Promise<string[]> => {
+    const before = agentStarts(repo).length
+    await page.evaluate((id) => {
+      const tabs = (window as unknown as { __vibeIdeTabs: { getState(): Record<string, unknown> } }).__vibeIdeTabs.getState() as {
+        tabs: { id: string; project?: { layout: unknown } }[]
+        activeId: string
+        restartPane(tabId: string, paneId: string, profileId?: string): Promise<void>
+      }
+      const tab = tabs.tabs.find((t) => t.id === tabs.activeId)!
+      const walk = (n: { kind: string; children?: unknown[]; type?: string; id?: string }): { type?: string; id?: string }[] =>
+        n.kind === 'split' ? (n.children as (typeof n)[]).flatMap(walk) : [n]
+      const agentPane = walk(tab.project!.layout as never).find((p) => p.type === 'agent')!
+      return tabs.restartPane(tab.id, agentPane.id!, id)
+    }, profileId)
+    await expect.poll(() => agentStarts(repo).length).toBe(before + 1)
+    return agentStarts(repo).at(-1)!
+  }
+
+  // The settings: a server, a skill, instructions with quotes and a line break.
+  let dialog = await openSettings(page, pane)
+  await addServer(dialog, 'demo-tools', `"${FAKE_MCP}" "an arg"`)
+  await dialog.getByRole('tab', { name: /Instructions/ }).click()
+  await dialog.getByLabel('Instructions').fill('Use pnpm.\nSay "hi" first.')
+  await dialog.getByRole('button', { name: 'Close' }).click()
+  await page.evaluate(() => {
+    const st = (window as unknown as { __vibeIdeTabs: { getState(): Record<string, unknown> } }).__vibeIdeTabs.getState() as {
+      tabs: { id: string; project?: { layout: unknown } }[]
+      activeId: string
+      setPaneHarness(tabId: string, paneId: string, h: unknown): void
+    }
+    const tab = st.tabs.find((t) => t.id === st.activeId)!
+    const walk = (n: { kind: string; children?: unknown[]; type?: string; id?: string; harness?: Record<string, unknown> }): (typeof n)[] =>
+      n.kind === 'split' ? (n.children as (typeof n)[]).flatMap(walk) : [n]
+    const p = walk(tab.project!.layout as never).find((x) => x.type === 'agent')!
+    // (Adding a skill folder goes through a native folder picker: set it directly.)
+    st.setPaneHarness(tab.id, p.id!, { ...p.harness, skills: [{ path: 'agent-skills/haiku', enabled: true }] })
+  })
+
+  // Codex CLI: -c overrides; the quoted argument and the instructions arrive intact (no cmd.exe on the way).
+  const codex = await useAgent('agent:codex')
+  dialog = await openSettings(page, pane)
+  await expect(dialog.locator('.harness-support-line')).toContainText('Codex CLI:')
+  await expect(dialog.locator('.harness-support-line .ok')).toHaveText(['✓ MCP servers', '✓ skills', '✓ instructions'])
+  await page.keyboard.press('Escape')
+  expect(codex).toContain(`mcp_servers.demo-tools.args=[${JSON.stringify(FAKE_MCP)}, "an arg"]`)
+  const instructions = codex.find((a) => a.startsWith('developer_instructions='))!
+  expect(instructions).toContain('Use pnpm.\\nSay \\"hi\\" first.')
+  expect(instructions).toMatch(/- haiku: Answers with a haiku \(file: [^)]*SKILL\.md\)/)
+
+  // pi: instructions and skills as flags; no MCP (shown as such, "Only these servers" disabled).
+  const pi = await useAgent('agent:pi')
+  expect(readFileSync(pi[pi.indexOf('--append-system-prompt') + 1], 'utf8')).toBe('Use pnpm.\nSay "hi" first.\n')
+  expect(pi[pi.indexOf('--skill') + 1]).toMatch(/agent-skills[\\/]haiku$/)
+  expect(pi.join(' ')).not.toContain('demo-tools')
+  dialog = await openSettings(page, pane)
+  await expect(dialog.locator('.harness-support-line .no')).toHaveText(['✗ MCP servers'])
+  await expect(dialog.locator('.harness-support-line')).toContainText('pi has no MCP support')
+  await expect(dialog.getByLabel('Only these servers')).toBeDisabled()
+  await page.keyboard.press('Escape')
+
+  // Gemini CLI: nothing passed, and the dialog says why.
+  const gemini = await useAgent('agent:gemini')
+  expect(gemini).toEqual([])
+  dialog = await openSettings(page, pane)
+  await expect(dialog.locator('.harness-support-line')).toHaveClass(/none/)
+  await expect(dialog.locator('.harness-support-line')).toContainText('only reads settings from ~/.gemini')
 })
 
 test('a server that fails to start shows its error and output; disabling servers and "only these servers"', async () => {

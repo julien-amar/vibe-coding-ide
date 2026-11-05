@@ -61,15 +61,45 @@ export function sanitizeHarness(input: unknown): Harness {
 /** The agent of an agent profile id ("agent:claude", "wslagent:Ubuntu:claude"). */
 export const agentOf = (profileId: string): string | undefined => /^(?:agent:|wslagent:[^:]+:)(.+)$/.exec(profileId)?.[1]
 
+/**
+ * What each agent gets of its pane's settings — checked against the agents' own CLIs
+ * (Claude Code 2.1, Codex CLI 0.166, opencode 1.19, pi 0.73, Gemini CLI 0.67).
+ */
 export const HARNESS_SUPPORT: AgentHarnessSupport[] = [
-  { agent: 'claude', label: 'Claude Code', mcp: true, skills: true, instructions: true },
-  ...[
-    ['codex', 'Codex CLI'],
-    ['gemini', 'Gemini CLI'],
-    ['opencode', 'opencode'],
-    ['pi', 'pi']
-  ].map(([agent, label]) => ({ agent, label, mcp: false, skills: false, instructions: false, note: 'Not yet: the harness is not applied to this agent.' }))
+  { agent: 'claude', label: 'Claude Code', mcp: true, skills: true, instructions: true, strictMcp: true },
+  {
+    agent: 'codex',
+    label: 'Codex CLI',
+    mcp: true,
+    skills: true,
+    instructions: true,
+    strictMcp: true,
+    note: 'Skills are listed in its instructions (name, description, SKILL.md location), as Codex lists its own.'
+  },
+  {
+    agent: 'opencode',
+    label: 'opencode',
+    mcp: true,
+    skills: true,
+    instructions: true,
+    strictMcp: false,
+    note: 'opencode always adds your own configured MCP servers.'
+  },
+  { agent: 'pi', label: 'pi', mcp: false, skills: true, instructions: true, strictMcp: false, note: 'pi has no MCP support.' },
+  {
+    agent: 'gemini',
+    label: 'Gemini CLI',
+    mcp: false,
+    skills: false,
+    instructions: false,
+    strictMcp: false,
+    note: 'Gemini CLI only reads settings from ~/.gemini or the repository’s .gemini folder, which vibe-coding-ide does not change.'
+  }
 ]
+
+/** What an agent supports (agents not in the table: nothing). */
+export const supportOf = (agent: string | undefined): AgentHarnessSupport | undefined => HARNESS_SUPPORT.find((s) => s.agent === agent)
+
 
 /** A stdio command as Claude Code should start it: Windows .cmd / .bat scripts (npx, uvx shims…) through cmd.exe. */
 function stdioCommand(command: string, args: string[]): { command: string; args: string[] } {
@@ -108,49 +138,180 @@ export function skillFolders(path: string): string[] {
 
 const resolveSkillPath = (root: string, p: string): string => (isAbsolute(p) ? p : resolve(root, p))
 
+/** Launch additions for an agent: arguments after its own, environment variables. */
+export interface CompiledHarness {
+  args: string[]
+  env: Record<string, string>
+}
+
+/** Enabled skill folders of a harness (relative paths start from the project). */
+const enabledSkillFolders = (harness: Harness, root: string): string[] =>
+  harness.skills.filter((s) => s.enabled).flatMap((s) => skillFolders(resolveSkillPath(root, s.path)))
+
+/** Instructions file (trimmed text), when there are instructions. */
+function instructionsFile(harness: Harness, outDir: string, extra = ''): string | undefined {
+  const text = [harness.instructions.trim(), extra.trim()].filter(Boolean).join('\n\n')
+  if (!text) return undefined
+  const file = join(outDir, 'instructions.md')
+  writeFileSync(file, text + '\n')
+  return file
+}
+
+// TOML values for Codex's -c overrides (JSON strings are valid TOML basic strings).
+const toml = (v: unknown): string => {
+  if (Array.isArray(v)) return `[${v.map(toml).join(', ')}]`
+  if (v && typeof v === 'object')
+    return `{ ${Object.entries(v as Record<string, unknown>)
+      .map(([k, x]) => `${tomlKey(k)} = ${toml(x)}`)
+      .join(', ')} }`
+  return JSON.stringify(v)
+}
+const tomlKey = (k: string): string => (/^[A-Za-z0-9_-]+$/.test(k) ? k : JSON.stringify(k))
+
+/** A server name Codex accepts in a dotted -c path (letters, digits, - and _). */
+const codexName = (name: string): string => name.replace(/[^A-Za-z0-9_-]/g, '_')
+
+/** Codex's MCP server tables (config.toml [mcp_servers.<name>]) for the enabled servers. */
+export function codexMcpServers(servers: McpServer[]): Record<string, Record<string, unknown>> {
+  const out: Record<string, Record<string, unknown>> = {}
+  for (const s of servers.filter((x) => x.enabled)) {
+    if (s.transport === 'stdio') {
+      if (!s.command) continue
+      const c = stdioCommand(s.command, s.args ?? [])
+      out[codexName(s.name)] = { command: c.command, args: c.args, ...(s.env ? { env: s.env } : {}) }
+    } else if (s.url) {
+      // Codex speaks Streamable HTTP (no legacy SSE): sse servers are given as http ones.
+      out[codexName(s.name)] = { url: s.url, ...(s.headers ? { http_headers: s.headers } : {}) }
+    }
+  }
+  return out
+}
+
+/** Skills as a list in instructions (for agents that cannot load skill folders): where to read each. */
+export function skillsCatalog(folders: string[]): string {
+  if (!folders.length) return ''
+  const lines = folders.map((f) => {
+    const meta = skillMeta(readText(join(f, 'SKILL.md')))
+    return `- ${meta.name ?? basename(f)}: ${meta.description ?? '(no description)'} (file: ${join(f, 'SKILL.md')})`
+  })
+  return [
+    '## Skills',
+    'These skills are available in this session. When a task matches one, read its SKILL.md first and follow it',
+    '(resolve relative paths against the folder of the SKILL.md).',
+    ...lines
+  ].join('\n')
+}
+
+const readText = (file: string): string => {
+  try {
+    return readFileSync(file, 'utf8')
+  } catch {
+    return ''
+  }
+}
+
 /**
- * Launch arguments giving `agent` the project's harness; generated files go to `outDir` (app data,
- * not the repository). Agents without a compiler get no arguments.
+ * Launch additions giving `agent` its pane's settings; generated files go to `outDir` (app data,
+ * not the repository, not the user's agent configuration). Agents without support get nothing.
  */
-export function compileHarness(agent: string | undefined, harness: Harness, root: string, outDir: string): string[] {
-  if (agent !== 'claude') return []
+export function compileHarness(agent: string | undefined, harness: Harness, root: string, outDir: string): CompiledHarness {
+  const none: CompiledHarness = { args: [], env: {} }
+  const support = supportOf(agent)
+  if (!support || harnessIsEmpty(harness)) return none
   rmSync(outDir, { recursive: true, force: true })
   mkdirSync(outDir, { recursive: true })
   const args: string[] = []
+  const env: Record<string, string> = {}
+  const skills = enabledSkillFolders(harness, root)
 
-  const mcp = claudeMcpConfig(harness.mcpServers)
-  if (Object.keys(mcp.mcpServers).length || harness.strictMcp) {
-    const file = join(outDir, 'mcp.json')
-    writeFileSync(file, JSON.stringify(mcp, null, 2))
-    args.push('--mcp-config', file)
-    if (harness.strictMcp) args.push('--strict-mcp-config')
-  }
-
-  if (harness.instructions.trim()) {
-    const file = join(outDir, 'instructions.md')
-    writeFileSync(file, harness.instructions.trim() + '\n')
-    args.push('--append-system-prompt-file', file)
-  }
-
-  // Skills: a plugin for this session (--plugin-dir) whose skills/ holds copies of the harness's skills.
-  const folders = harness.skills.filter((s) => s.enabled).flatMap((s) => skillFolders(resolveSkillPath(root, s.path)))
-  if (folders.length) {
-    const plugin = join(outDir, 'plugin')
-    mkdirSync(join(plugin, '.claude-plugin'), { recursive: true })
-    writeFileSync(
-      join(plugin, '.claude-plugin', 'plugin.json'),
-      JSON.stringify({ name: 'project-harness', version: '1.0.0', description: `Skills of the vibe-coding-ide harness of ${basename(root)}` }, null, 2)
-    )
-    const used = new Set<string>()
-    for (const f of folders) {
-      let name = basename(f)
-      for (let i = 2; used.has(name); i++) name = `${basename(f)}-${i}`
-      used.add(name)
-      cpSync(f, join(plugin, 'skills', name), { recursive: true })
+  switch (agent) {
+    case 'claude': {
+      const mcp = claudeMcpConfig(harness.mcpServers)
+      if (Object.keys(mcp.mcpServers).length || harness.strictMcp) {
+        const file = join(outDir, 'mcp.json')
+        writeFileSync(file, JSON.stringify(mcp, null, 2))
+        args.push('--mcp-config', file)
+        if (harness.strictMcp) args.push('--strict-mcp-config')
+      }
+      const instructions = instructionsFile(harness, outDir)
+      if (instructions) args.push('--append-system-prompt-file', instructions)
+      // Skills: a plugin for this session (--plugin-dir) whose skills/ holds copies of the skills.
+      if (skills.length) {
+        const plugin = join(outDir, 'plugin')
+        mkdirSync(join(plugin, '.claude-plugin'), { recursive: true })
+        writeFileSync(
+          join(plugin, '.claude-plugin', 'plugin.json'),
+          JSON.stringify({ name: 'project-harness', version: '1.0.0', description: `Skills of a vibe-coding-ide agent panel of ${basename(root)}` }, null, 2)
+        )
+        const used = new Set<string>()
+        for (const f of skills) {
+          let name = basename(f)
+          for (let i = 2; used.has(name); i++) name = `${basename(f)}-${i}`
+          used.add(name)
+          cpSync(f, join(plugin, 'skills', name), { recursive: true })
+        }
+        args.push('--plugin-dir', plugin)
+      }
+      break
     }
-    args.push('--plugin-dir', plugin)
+
+    case 'codex': {
+      // -c overrides on top of ~/.codex/config.toml: per server, or (only these servers) the whole table.
+      const servers = codexMcpServers(harness.mcpServers)
+      if (harness.strictMcp) args.push('-c', `mcp_servers=${toml(servers)}`)
+      else for (const [name, table] of Object.entries(servers)) for (const [k, v] of Object.entries(table)) args.push('-c', `mcp_servers.${name}.${k}=${toml(v)}`)
+      const text = [harness.instructions.trim(), skillsCatalog(skills)].filter(Boolean).join('\n\n')
+      if (text) args.push('-c', `developer_instructions=${toml(text)}`)
+      break
+    }
+
+    case 'opencode': {
+      // OPENCODE_CONFIG: an extra config file, merged with the user's and the project's.
+      const config: Record<string, unknown> = { $schema: 'https://opencode.ai/config.json' }
+      const mcp: Record<string, unknown> = {}
+      for (const s of harness.mcpServers.filter((x) => x.enabled)) {
+        if (s.transport === 'stdio' && s.command) {
+          const c = stdioCommand(s.command, s.args ?? [])
+          mcp[s.name] = { type: 'local', command: [c.command, ...c.args], ...(s.env ? { environment: s.env } : {}), enabled: true }
+        } else if (s.url) mcp[s.name] = { type: 'remote', url: s.url, ...(s.headers ? { headers: s.headers } : {}), enabled: true }
+      }
+      if (Object.keys(mcp).length) config.mcp = mcp
+      const instructions = instructionsFile(harness, outDir)
+      if (instructions) config.instructions = [instructions]
+      if (skills.length) config.skills = { paths: skills }
+      const file = join(outDir, 'opencode.json')
+      writeFileSync(file, JSON.stringify(config, null, 2))
+      env.OPENCODE_CONFIG = file
+      break
+    }
+
+    case 'pi': {
+      const instructions = instructionsFile(harness, outDir)
+      if (instructions) args.push('--append-system-prompt', instructions)
+      for (const f of skills) args.push('--skill', f)
+      break
+    }
   }
-  return args
+  return { args, env }
+}
+
+/**
+ * An npm command shim on Windows (codex.cmd…) as a direct launch: `node <script>` (or the .exe it
+ * runs). The shim runs through cmd.exe, which would mangle arguments with quotes or line breaks.
+ */
+export function directLaunch(command: string, args: string[]): { command: string; args: string[] } | undefined {
+  if (process.platform !== 'win32') return undefined
+  // launchSpec form: cmd.exe /d /c <shim.cmd> <args…>
+  const shim = /cmd(\.exe)?$/i.test(command) && args[0] === '/d' && args[1] === '/c' ? args[2] : /\.cmd$/i.test(command) ? command : undefined
+  if (!shim || !/\.cmd$/i.test(shim)) return undefined
+  const rest = shim === command ? args : args.slice(3)
+  const target = /"%dp0%\\([^"]+\.(?:js|cjs|mjs|exe))"\s+%\*/i.exec(readText(shim))?.[1]
+  if (!target) return undefined
+  const file = join(shim, '..', target)
+  if (!existsSync(file)) return undefined
+  if (/\.exe$/i.test(file)) return { command: file, args: rest }
+  const node = which('node')
+  return node ? { command: node, args: [file, ...rest] } : undefined
 }
 
 // ---------------------------------------------------------------------------

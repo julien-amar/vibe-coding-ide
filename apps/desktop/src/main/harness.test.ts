@@ -8,6 +8,8 @@ import {
   checkMcpServer,
   claudeMcpConfig,
   compileHarness,
+  directLaunch,
+  supportOf,
   harnessIsEmpty,
   listSkills,
   parseHttpReply,
@@ -81,7 +83,7 @@ describe('compiling a harness for Claude Code', () => {
     write(join(base, 'library', 'deploy', 'SKILL.md'), '---\nname: deploy\n---\n')
     write(join(base, 'library', 'release', 'SKILL.md'), '---\nname: release\n---\n')
     const out = join(base, 'out')
-    const args = compileHarness(
+    const { args, env } = compileHarness(
       'claude',
       sanitizeHarness({
         mcpServers: [
@@ -97,6 +99,7 @@ describe('compiling a harness for Claude Code', () => {
       out
     )
     const plugin = join(out, 'plugin')
+    expect(env).toEqual({})
     expect(args).toEqual([
       '--mcp-config',
       join(out, 'mcp.json'),
@@ -117,9 +120,91 @@ describe('compiling a harness for Claude Code', () => {
     for (const s of ['review/SKILL.md', 'review/checklist.md', 'deploy/SKILL.md', 'release/SKILL.md']) expect(existsSync(join(plugin, 'skills', s))).toBe(true)
   })
 
-  it('gives nothing to agents without a compiler, and no flags for an empty harness', () => {
-    expect(compileHarness('codex', sanitizeHarness({ instructions: 'x' }), base, join(base, 'o2'))).toEqual([])
-    expect(compileHarness('claude', sanitizeHarness({}), base, join(base, 'o3'))).toEqual([])
+  it('gives nothing to agents without support (Gemini CLI, unknown ones), and nothing for empty settings', () => {
+    const none = { args: [], env: {} }
+    expect(compileHarness('gemini', sanitizeHarness({ instructions: 'x' }), base, join(base, 'o1'))).toEqual(none)
+    expect(compileHarness('someagent', sanitizeHarness({ instructions: 'x' }), base, join(base, 'o2'))).toEqual(none)
+    expect(compileHarness('claude', sanitizeHarness({}), base, join(base, 'o3'))).toEqual(none)
+  })
+
+  // The same settings for every agent: two servers (stdio with a quoted argument, http), a skill, instructions.
+  const sample = (root: string) => {
+    write(join(root, 'skills', 'haiku', 'SKILL.md'), '---\nname: haiku\ndescription: Answers with a haiku\n---\nWrite a haiku.\n')
+    return sanitizeHarness({
+      mcpServers: [
+        { name: 'demo tools', command: 'node', args: ['x.js', 'a "quoted" arg'], env: { TOKEN: 'x' } },
+        { name: 'web', transport: 'http', url: 'https://example.com/mcp', headers: { Authorization: 'Bearer t' } }
+      ],
+      skills: [{ path: 'skills/haiku' }],
+      instructions: 'Use pnpm.\nLine "two".'
+    })
+  }
+
+  it('Codex CLI: -c overrides for servers (or the whole table) and developer_instructions with a skills list', () => {
+    const root = join(base, 'codexproj')
+    const h = sample(root)
+    const { args, env } = compileHarness('codex', h, root, join(base, 'codex-out'))
+    expect(env).toEqual({})
+    expect(args).toEqual([
+      '-c',
+      'mcp_servers.demo_tools.command="node"',
+      '-c',
+      'mcp_servers.demo_tools.args=["x.js", "a \\"quoted\\" arg"]',
+      '-c',
+      'mcp_servers.demo_tools.env={ TOKEN = "x" }',
+      '-c',
+      'mcp_servers.web.url="https://example.com/mcp"',
+      '-c',
+      'mcp_servers.web.http_headers={ Authorization = "Bearer t" }',
+      '-c',
+      expect.stringMatching(/^developer_instructions="Use pnpm\.\\nLine \\"two\\"\.\\n\\n## Skills\\n.*- haiku: Answers with a haiku \(file: .*SKILL\.md\)"$/)
+    ])
+    const strict = compileHarness('codex', { ...h, strictMcp: true }, root, join(base, 'codex-out2')).args
+    expect(strict[1]).toBe(
+      'mcp_servers={ demo_tools = { command = "node", args = ["x.js", "a \\"quoted\\" arg"], env = { TOKEN = "x" } }, web = { url = "https://example.com/mcp", http_headers = { Authorization = "Bearer t" } } }'
+    )
+  })
+
+  it('opencode: an extra config file (OPENCODE_CONFIG) with servers, instructions and skill paths', () => {
+    const root = join(base, 'ocproj')
+    const out = join(base, 'oc-out')
+    const { args, env } = compileHarness('opencode', sample(root), root, out)
+    expect(args).toEqual([])
+    expect(env).toEqual({ OPENCODE_CONFIG: join(out, 'opencode.json') })
+    expect(JSON.parse(readFileSync(env.OPENCODE_CONFIG, 'utf8'))).toEqual({
+      $schema: 'https://opencode.ai/config.json',
+      mcp: {
+        'demo tools': { type: 'local', command: ['node', 'x.js', 'a "quoted" arg'], environment: { TOKEN: 'x' }, enabled: true },
+        web: { type: 'remote', url: 'https://example.com/mcp', headers: { Authorization: 'Bearer t' }, enabled: true }
+      },
+      instructions: [join(out, 'instructions.md')],
+      skills: { paths: [join(root, 'skills', 'haiku')] }
+    })
+  })
+
+  it('pi: instructions file and skill folders as flags (pi has no MCP support)', () => {
+    const root = join(base, 'piproj')
+    const out = join(base, 'pi-out')
+    expect(compileHarness('pi', sample(root), root, out)).toEqual({
+      args: ['--append-system-prompt', join(out, 'instructions.md'), '--skill', join(root, 'skills', 'haiku')],
+      env: {}
+    })
+    expect(supportOf('pi')).toMatchObject({ mcp: false, skills: true, instructions: true })
+    expect(supportOf('gemini')).toMatchObject({ mcp: false, skills: false, instructions: false })
+  })
+
+  it('launches npm command shims (codex.cmd…) directly, so arguments do not go through cmd.exe', () => {
+    if (process.platform !== 'win32') return expect(directLaunch('codex', [])).toBeUndefined()
+    const dir = join(base, 'shims')
+    write(join(dir, 'node_modules', 'tool', 'bin', 'tool.js'), '')
+    write(join(dir, 'tool.cmd'), '@SETLOCAL\r\n"%_prog%"  "%dp0%\\node_modules\\tool\\bin\\tool.js" %*\r\n')
+    write(join(dir, 'native.cmd'), '"%dp0%\\node_modules\\tool\\bin\\tool.js"   %*\r\n')
+    write(join(dir, 'other.cmd'), '@echo hello\r\n')
+    const direct = directLaunch('C:\\Windows\\System32\\cmd.exe', ['/d', '/c', join(dir, 'tool.cmd'), '--x'])
+    expect(direct?.args).toEqual([join(dir, 'node_modules', 'tool', 'bin', 'tool.js'), '--x'])
+    expect(direct?.command).toMatch(/node(\.exe)?$/i)
+    expect(directLaunch('C:\\Windows\\System32\\cmd.exe', ['/d', '/c', join(dir, 'other.cmd')])).toBeUndefined()
+    expect(directLaunch('C:\\tools\\agent.exe', [])).toBeUndefined()
   })
 
   it('starts Windows .cmd servers (npx…) through cmd /c', () => {

@@ -15,7 +15,7 @@ import { checkUpdates, forgetUpdates, type UpdateTarget } from './package-update
 import { parseWslPath } from '@shared/wsl-paths'
 import { discoverTests, runTests, stopAllTests, stopTests } from './test-runner'
 import { openInEditor } from './editor'
-import { agentOf, checkMcpServer, compileHarness, HARNESS_SUPPORT, harnessIsEmpty, listSkills, readProjectMcpJson, readSkillFile, sanitizeHarness } from './harness'
+import { agentOf, checkMcpServer, compileHarness, directLaunch, HARNESS_SUPPORT, harnessIsEmpty, listSkills, readProjectMcpJson, readSkillFile, sanitizeHarness } from './harness'
 
 app.setName('vibe-coding-ide')
 // VIBE_CODING_IDE_USER_DATA: run with a separate profile (layout, recent projects), e.g. for automated tests.
@@ -297,8 +297,20 @@ function registerIpc(): void {
     if (profile.kind === 'agent' && !profile.wslDistro && harness && !harnessIsEmpty(harness)) {
       const root = req.harnessRoot && isDir(String(req.harnessRoot)) ? String(req.harnessRoot) : (cwd ?? homedir())
       const outDir = join(harnessRuns(), createHash('sha1').update(root + JSON.stringify(harness)).digest('hex').slice(0, 16))
-      const extra = compileHarness(agentOf(profile.id), harness, root, outDir)
-      if (extra.length) launch = { ...launch, args: [...launch.args, ...extra] }
+      const agent = agentOf(profile.id)
+      const outDirFor = join(outDir, agent ?? 'agent')
+      const extra = compileHarness(agent, harness, root, outDirFor)
+      if (extra.args.length || Object.keys(extra.env).length) {
+        // Arguments with quotes / line breaks (Codex's -c values) must not go through cmd.exe: npm
+        // command shims (codex.cmd…) are launched directly.
+        const direct = extra.args.length ? directLaunch(launch.command, launch.args) : undefined
+        launch = {
+          ...launch,
+          ...(direct ?? {}),
+          args: [...(direct?.args ?? launch.args), ...extra.args],
+          env: { ...(launch.env ?? {}), ...extra.env }
+        }
+      }
     }
     const sessionId = ptys.create(launch, req.cols, req.rows, e.sender, cwd)
     // A shell starting: check (once, in the background) whether its system has package updates —
