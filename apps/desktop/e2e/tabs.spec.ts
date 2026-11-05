@@ -54,9 +54,16 @@ test('tabs can be renamed, reordered and closed', async () => {
   await expect(page.locator('.tab').first().locator('.tab-title')).toHaveText('First tab')
 
   // Reorder by drag and drop onto the right half of the second tab (tab widths differ per OS).
-  const target = page.locator('.tab').nth(1)
-  const box = (await target.boundingBox())!
-  await page.locator('.tab').first().dragTo(target, { targetPosition: { x: box.width * 0.75, y: box.height / 2 } })
+  // HTML5 drag and drop needs several moves over the target to fire dragover reliably.
+  const from = (await page.locator('.tab').first().boundingBox())!
+  const to = (await page.locator('.tab').nth(1).boundingBox())!
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+  await page.mouse.down()
+  for (let i = 1; i <= 10; i++) {
+    await page.mouse.move(to.x + (to.width * 0.75 * i) / 10, to.y + to.height / 2)
+  }
+  await expect(page.locator('.tab').nth(1)).toHaveClass(/drop-after/)
+  await page.mouse.up()
   await expect(page.locator('.tab').nth(1).locator('.tab-title')).toHaveText('First tab')
 
   // Close with ×.
