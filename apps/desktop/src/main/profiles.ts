@@ -44,7 +44,7 @@ function whichAll(name: string): string[] {
   return out
 }
 
-function which(name: string): string | undefined {
+export function which(name: string): string | undefined {
   return whichAll(name)[0]
 }
 

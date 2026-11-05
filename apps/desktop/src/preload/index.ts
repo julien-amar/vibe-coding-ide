@@ -23,6 +23,33 @@ const api: DevHubApi = {
       return () => ipcRenderer.off('pty:exit', listener)
     }
   },
+  window: {
+    init: () => ipcRenderer.invoke('window:init'),
+    reportState: (state) => ipcRenderer.send('window:state', state),
+    detachTab: (tab, x, y) => ipcRenderer.invoke('window:detach', tab, x, y),
+    adoptTab: (tab, fromWindowId) => ipcRenderer.invoke('window:adopt', tab, fromWindowId),
+    onTabTransferred: (cb) => {
+      const listener = (_e: IpcRendererEvent, sessionId: string): void => cb(sessionId)
+      ipcRenderer.on('window:tabTransferred', listener)
+      return () => ipcRenderer.off('window:tabTransferred', listener)
+    },
+    close: () => ipcRenderer.send('window:close')
+  },
+  project: {
+    pickFolder: () => ipcRenderer.invoke('project:pickFolder'),
+    recent: () => ipcRenderer.invoke('project:recent'),
+    touch: (root) => ipcRenderer.send('project:touch', root)
+  },
+  git: {
+    log: (root) => ipcRenderer.invoke('git:log', root),
+    watch: (root) => ipcRenderer.send('git:watch', root),
+    unwatch: (root) => ipcRenderer.send('git:unwatch', root),
+    onChanged: (cb) => {
+      const listener = (_e: IpcRendererEvent, root: string): void => cb(root)
+      ipcRenderer.on('git:changed', listener)
+      return () => ipcRenderer.off('git:changed', listener)
+    }
+  },
   app: {
     openExternal: (url) => ipcRenderer.send('app:openExternal', url)
   }

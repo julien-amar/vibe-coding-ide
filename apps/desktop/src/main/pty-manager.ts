@@ -66,6 +66,29 @@ export class PtyManager {
     return s && s.subscribers.has(wc) ? s : undefined
   }
 
+  /** Move a session from one window to another (tab drag between windows). */
+  transfer(id: string, from: WebContents, to: WebContents): boolean {
+    const s = this.owned(id, from)
+    if (!s) return false
+    s.subscribers.delete(from)
+    this.subscribe(s, to)
+    return true
+  }
+
+  has(id: string): boolean {
+    return this.sessions.has(id)
+  }
+
+  /** Last `maxBytes` of output, cut at a line boundary (for saving scrollback). */
+  tail(id: string, maxBytes = 128 * 1024): string {
+    const s = this.sessions.get(id)
+    if (!s) return ''
+    const all = s.chunks.join('')
+    if (all.length <= maxBytes) return all
+    const cut = all.indexOf('\n', all.length - maxBytes)
+    return cut < 0 ? '' : all.slice(cut + 1)
+  }
+
   attach(id: string, wc: WebContents): string {
     const s = this.owned(id, wc)
     return s ? s.chunks.join('') : ''

@@ -1,26 +1,36 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Profile, ProfileKind } from '@shared/types'
+import type { Profile, RecentProject, TabKind } from '@shared/types'
+import { loadProfiles } from '../profiles'
 import { useTabs } from '../store'
 import { KindBadge } from './KindBadge'
 
-const GROUPS: Array<{ kind: ProfileKind; label: string }> = [
-  { kind: 'shell', label: 'Shells' },
-  { kind: 'wsl', label: 'WSL distributions' },
-  { kind: 'agent', label: 'AI agents' }
-]
+interface Entry {
+  key: string
+  group: string
+  label: string
+  detail?: string
+  badge: TabKind
+  run: () => void
+}
+
+const GROUP_ORDER = ['Projects', 'Shells', 'WSL distributions', 'AI agents']
+const PROFILE_GROUP: Record<Profile['kind'], string> = { shell: 'Shells', wsl: 'WSL distributions', agent: 'AI agents' }
 
 /** Tab types from the plan that are not built yet; shown so the launcher reflects the roadmap. */
-const COMING_SOON = ['Project', 'Web browser', 'Messaging', 'Containers', 'S/FTP client']
+const COMING_SOON = ['Web browser', 'Messaging', 'Containers', 'S/FTP client']
 
 export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Element {
   const [profiles, setProfiles] = useState<Profile[] | null>(null)
+  const [recent, setRecent] = useState<RecentProject[]>([])
   const [query, setQuery] = useState('')
   const [cursor, setCursor] = useState(0)
   const rootRef = useRef<HTMLDivElement>(null)
   const openProfile = useTabs((s) => s.openProfile)
+  const openProject = useTabs((s) => s.openProject)
 
   useEffect(() => {
-    void window.devhub.profiles.list().then(setProfiles)
+    void loadProfiles().then(setProfiles)
+    void window.devhub.project.recent().then(setRecent)
   }, [])
 
   useEffect(() => {
@@ -31,31 +41,60 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
     return () => window.removeEventListener('mousedown', onDown)
   }, [onClose])
 
-  const filtered = useMemo(() => {
+  const entries = useMemo<Entry[]>(() => {
+    const list: Entry[] = [
+      {
+        key: 'project:open',
+        group: 'Projects',
+        label: 'Open folder…',
+        detail: 'git log, terminal and AI agent side by side',
+        badge: 'project',
+        run: () => {
+          onClose()
+          void window.devhub.project.pickFolder().then((root) => {
+            if (root) void openProject(root)
+          })
+        }
+      },
+      ...recent.map((p) => ({
+        key: `project:${p.root}`,
+        group: 'Projects',
+        label: p.name,
+        detail: p.root,
+        badge: 'project' as const,
+        run: () => void openProject(p.root)
+      })),
+      ...(profiles ?? []).map((p) => ({
+        key: p.id,
+        group: PROFILE_GROUP[p.kind],
+        label: p.name,
+        detail: p.source,
+        badge: p.kind,
+        run: () => void openProfile(p)
+      }))
+    ]
     const q = query.trim().toLowerCase()
-    return (profiles ?? []).filter((p) => !q || p.name.toLowerCase().includes(q) || p.kind.includes(q))
-  }, [profiles, query])
-
-  // Flatten in display order so arrow keys follow the grouped layout.
-  const ordered = useMemo(() => GROUPS.flatMap((g) => filtered.filter((p) => p.kind === g.kind)), [filtered])
+    const filtered = q ? list.filter((e) => `${e.label} ${e.group} ${e.detail ?? ''}`.toLowerCase().includes(q)) : list
+    return GROUP_ORDER.flatMap((g) => filtered.filter((e) => e.group === g))
+  }, [profiles, recent, query, openProfile, openProject, onClose])
 
   useEffect(() => setCursor(0), [query])
 
   const refresh = (): void => {
     setProfiles(null)
-    void window.devhub.profiles.list(true).then(setProfiles)
+    void loadProfiles(true).then(setProfiles)
   }
 
   const onKeyDown = (e: React.KeyboardEvent): void => {
     if (e.key === 'Escape') onClose()
     else if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setCursor((c) => Math.min(c + 1, ordered.length - 1))
+      setCursor((c) => Math.min(c + 1, entries.length - 1))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       setCursor((c) => Math.max(c - 1, 0))
-    } else if (e.key === 'Enter' && ordered[cursor]) {
-      void openProfile(ordered[cursor])
+    } else if (e.key === 'Enter' && entries[cursor]) {
+      entries[cursor].run()
     }
   }
 
@@ -69,28 +108,28 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
       </div>
       <div className="launcher-list" role="listbox">
         {profiles === null && <div className="launcher-empty">Scanning…</div>}
-        {profiles !== null && ordered.length === 0 && <div className="launcher-empty">Nothing found</div>}
-        {GROUPS.map((g) => {
-          const items = ordered.filter((p) => p.kind === g.kind)
+        {profiles !== null && entries.length === 0 && <div className="launcher-empty">Nothing found</div>}
+        {GROUP_ORDER.map((g) => {
+          const items = entries.filter((e) => e.group === g)
           if (items.length === 0) return null
           return (
-            <div key={g.kind} className="launcher-group">
-              <div className="launcher-group-label">{g.label}</div>
-              {items.map((p) => {
-                const idx = ordered.indexOf(p)
+            <div key={g} className="launcher-group">
+              <div className="launcher-group-label">{g}</div>
+              {items.map((item) => {
+                const idx = entries.indexOf(item)
                 return (
                   <button
-                    key={p.id}
+                    key={item.key}
                     role="option"
                     aria-selected={idx === cursor}
                     className={`launcher-item${idx === cursor ? ' selected' : ''}`}
                     onMouseEnter={() => setCursor(idx)}
-                    onClick={() => void openProfile(p)}
-                    title={p.source}
+                    onClick={item.run}
+                    title={item.detail}
                   >
-                    <KindBadge kind={p.kind} />
-                    <span className="launcher-item-name">{p.name}</span>
-                    <span className="launcher-item-source">{p.source}</span>
+                    <KindBadge kind={item.badge} />
+                    <span className="launcher-item-name">{item.label}</span>
+                    <span className="launcher-item-source">{item.detail}</span>
                   </button>
                 )
               })}

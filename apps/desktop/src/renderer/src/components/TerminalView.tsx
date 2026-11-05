@@ -5,7 +5,6 @@ import { WebglAddon } from '@xterm/addon-webgl'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { onSessionData, onSessionExit } from '../pty-bus'
 import { handleAppShortcut } from '../shortcuts'
-import { useTabs, type Tab } from '../store'
 
 const darkTheme: ITheme = {
   background: '#0c0c0c',
@@ -45,11 +44,23 @@ async function paste(term: Terminal): Promise<void> {
   if (text) term.paste(text)
 }
 
-export function TerminalView({ tab, active }: { tab: Tab; active: boolean }): React.JSX.Element {
+export interface TerminalViewProps {
+  sessionId: string
+  /** Output saved from a previous app session, shown above the new shell. */
+  restoredScrollback?: string
+  /** The containing tab is shown (refit when it becomes visible). */
+  visible: boolean
+  /** Take keyboard focus when `visible` becomes true. */
+  autoFocus?: boolean
+  onTitle?: (title: string) => void
+}
+
+export function TerminalView({ sessionId, restoredScrollback, visible, autoFocus = true, onTitle }: TerminalViewProps): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
-  const { sessionId } = tab
+  const onTitleRef = useRef(onTitle)
+  onTitleRef.current = onTitle
 
   useEffect(() => {
     const host = hostRef.current!
@@ -73,6 +84,7 @@ export function TerminalView({ tab, active }: { tab: Tab; active: boolean }): Re
       /* fall back to the DOM renderer */
     }
     termRef.current = term
+    ;(host as unknown as { __xterm: Terminal }).__xterm = term // prototype debugging aid
     fitRef.current = fit
 
     term.attachCustomKeyEventHandler((e) => {
@@ -115,7 +127,7 @@ export function TerminalView({ tab, active }: { tab: Tab; active: boolean }): Re
 
     const dataSub = term.onData((d) => window.devhub.pty.write(sessionId, d))
     const resizeSub = term.onResize(({ cols, rows }) => window.devhub.pty.resize(sessionId, cols, rows))
-    const titleSub = term.onTitleChange((t) => useTabs.getState().setAutoTitle(tab.id, t))
+    const titleSub = term.onTitleChange((t) => onTitleRef.current?.(t))
 
     const doFit = (): void => {
       if (host.clientWidth > 0 && host.clientHeight > 0) {
@@ -129,6 +141,18 @@ export function TerminalView({ tab, active }: { tab: Tab; active: boolean }): Re
     const ro = new ResizeObserver(() => requestAnimationFrame(doFit))
     ro.observe(host)
     doFit()
+
+    // Output saved from the previous app session: show it, then push it into the
+    // scrollback so the new shell starts on a clean screen below it. Done after the
+    // first fit so term.rows is the real height.
+    if (restoredScrollback) {
+      term.write(restoredScrollback)
+      // Leave any alternate screen (1047, unlike 1049, keeps the cursor), show the
+      // cursor, reset colors, then print a marker.
+      term.write('\x1b[?1047l\x1b[?25h\x1b[0m\r\n\x1b[90m── restored from previous session ──\x1b[0m\r\n')
+      term.write('\r\n'.repeat(term.rows) + '\x1b[H')
+    }
+
 
     const onScheme = (): void => {
       term.options.theme = currentTheme()
@@ -150,16 +174,16 @@ export function TerminalView({ tab, active }: { tab: Tab; active: boolean }): Re
   }, [sessionId])
 
   useEffect(() => {
-    if (!active) return
+    if (!visible) return
     requestAnimationFrame(() => {
       try {
         fitRef.current?.fit()
       } catch {
         /* ignore */
       }
-      termRef.current?.focus()
+      if (autoFocus) termRef.current?.focus()
     })
-  }, [active])
+  }, [visible, autoFocus])
 
-  return <div ref={hostRef} className={`terminal-host${active ? ' active' : ''}`} />
+  return <div ref={hostRef} className="terminal-host" />
 }

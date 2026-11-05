@@ -1,0 +1,837 @@
+:root {
+  --titlebar-h: 40px;
+  --bg: #f3f3f3;
+  --surface: #ffffff;
+  --surface-2: #f9f9f9;
+  --text: #1a1a1a;
+  --text-muted: #5f5f5f;
+  --border: #e0e0e0;
+  --hover: rgba(0, 0, 0, 0.06);
+  --active-tab: #ffffff;
+  --accent: #005fb8;
+  --accent-text: #ffffff;
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  --terminal-bg: #ffffff;
+  --badge-shell: #3b6ea8;
+  --badge-wsl: #c2410c;
+  --badge-agent: #7c3aed;
+  --badge-project: #0f766e;
+  --pane-header: #ebebeb;
+  --selection: rgba(0, 95, 184, 0.12);
+  --danger: #c42b1c;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1f1f1f;
+    --surface: #2b2b2b;
+    --surface-2: #252525;
+    --text: #f3f3f3;
+    --text-muted: #a6a6a6;
+    --border: #3a3a3a;
+    --hover: rgba(255, 255, 255, 0.07);
+    --active-tab: #0c0c0c;
+    --accent: #60cdff;
+    --accent-text: #000000;
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --terminal-bg: #0c0c0c;
+    --badge-shell: #6ea8e6;
+    --badge-wsl: #fb923c;
+    --badge-agent: #a78bfa;
+    --badge-project: #2dd4bf;
+    --pane-header: #252525;
+    --selection: rgba(96, 205, 255, 0.14);
+    --danger: #ff99a4;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, 'Ubuntu', sans-serif;
+  font-size: 13px;
+  user-select: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* ---------- Title bar & tabs ---------- */
+
+.titlebar {
+  height: var(--titlebar-h);
+  display: flex;
+  align-items: flex-end;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+  /* Room for native window controls (Windows/Linux overlay on the right). */
+  padding-right: 140px;
+  padding-left: 6px;
+}
+
+body.platform-darwin .titlebar {
+  padding-left: 80px; /* traffic lights */
+  padding-right: 6px;
+}
+
+.titlebar-drag {
+  flex: 1;
+  align-self: stretch;
+}
+
+.tab-strip {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-app-region: no-drag;
+}
+
+.tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  min-width: 110px;
+  max-width: 220px;
+  padding: 0 6px 0 12px;
+  border-radius: 8px 8px 0 0;
+  color: var(--text-muted);
+  cursor: default;
+  flex-shrink: 0;
+}
+
+.tab:hover {
+  background: var(--hover);
+}
+
+.tab.active {
+  background: var(--active-tab);
+  color: var(--text);
+}
+
+.tab.exited .tab-title {
+  font-style: italic;
+  opacity: 0.7;
+}
+
+.tab.drop-before::before,
+.tab.drop-after::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+
+.tab.drop-before::before {
+  left: -1px;
+}
+
+.tab.drop-after::after {
+  right: -1px;
+}
+
+.tab-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tab-rename {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 2px 4px;
+  outline: none;
+  user-select: text;
+}
+
+.tab-close {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.tab:hover .tab-close,
+.tab.active .tab-close {
+  opacity: 0.8;
+}
+
+.tab-close:hover {
+  background: var(--hover);
+  opacity: 1;
+}
+
+.new-tab {
+  width: 34px;
+  height: 30px;
+  margin: 0 0 2px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.new-tab:hover,
+.new-tab.open {
+  background: var(--hover);
+}
+
+.kind-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 3px;
+  font-family: 'Cascadia Mono', Consolas, Menlo, monospace;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.kind-badge.shell {
+  background: var(--badge-shell);
+}
+
+.kind-badge.wsl {
+  background: var(--badge-wsl);
+}
+
+.kind-badge.agent {
+  background: var(--badge-agent);
+}
+
+.kind-badge.project {
+  background: var(--badge-project);
+}
+
+.kind-badge.soon {
+  background: var(--border);
+  color: var(--text-muted);
+}
+
+/* ---------- Content ---------- */
+
+.content {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: var(--terminal-bg);
+}
+
+/* Inactive tabs stay laid out (visibility, not display) so terminals keep their size. */
+.tab-panel {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+}
+
+.tab-panel.visible {
+  visibility: visible;
+}
+
+.terminal-host {
+  position: absolute;
+  inset: 0;
+  padding: 6px 4px 4px 10px;
+  background: var(--terminal-bg);
+}
+
+.terminal-host .xterm {
+  height: 100%;
+}
+
+.empty-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-muted);
+}
+
+.empty-state button {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-text);
+  cursor: pointer;
+}
+
+/* ---------- Launcher ---------- */
+
+.launcher {
+  position: absolute;
+  top: calc(var(--titlebar-h) + 4px);
+  left: 12px;
+  z-index: 10;
+  width: 420px;
+  max-width: calc(100vw - 24px);
+  max-height: min(520px, calc(100vh - var(--titlebar-h) - 24px));
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+body.platform-darwin .launcher {
+  left: 86px;
+}
+
+.launcher-search {
+  display: flex;
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.launcher-search input {
+  flex: 1;
+  padding: 6px 8px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  outline: none;
+  user-select: text;
+}
+
+.launcher-search input:focus {
+  border-color: var(--accent);
+}
+
+.icon-button {
+  width: 30px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  background: var(--hover);
+}
+
+.launcher-list {
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.launcher-group + .launcher-group {
+  margin-top: 4px;
+}
+
+.launcher-group-label {
+  padding: 6px 8px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.launcher-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.launcher-item.selected {
+  background: var(--hover);
+}
+
+.launcher-item.disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.launcher-item-name {
+  white-space: nowrap;
+}
+
+.launcher-item-source {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: right;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.launcher-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* ---------- Context menu ---------- */
+
+.context-menu {
+  position: fixed;
+  z-index: 20;
+  min-width: 170px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  -webkit-app-region: no-drag;
+}
+
+.context-menu button {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.context-menu button:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.context-menu button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.context-menu-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}
+
+/* ---------- Project view: splits & panes ---------- */
+
+.project-view {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  background: var(--bg);
+}
+
+.split {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.split-row {
+  flex-direction: row;
+}
+
+.split-column {
+  flex-direction: column;
+}
+
+.split-child {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.splitter {
+  flex: 0 0 4px;
+  background: var(--border);
+  transition: background 0.15s;
+}
+
+.split-row > .splitter {
+  cursor: col-resize;
+}
+
+.split-column > .splitter {
+  cursor: row-resize;
+}
+
+.splitter:hover {
+  background: var(--accent);
+}
+
+body.resizing-col,
+body.resizing-col * {
+  cursor: col-resize !important;
+}
+
+body.resizing-row,
+body.resizing-row * {
+  cursor: row-resize !important;
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pane-header,
+.pane-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 6px 0 10px;
+  flex-shrink: 0;
+  background: var(--pane-header);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.pane-toolbar {
+  background: transparent;
+}
+
+.pane-icon {
+  font-family: 'Cascadia Mono', Consolas, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.pane-icon.agent {
+  color: var(--badge-agent);
+}
+
+.pane-icon.git {
+  color: var(--badge-wsl);
+  font-size: 14px;
+}
+
+.pane-title {
+  font-weight: 600;
+}
+
+.pane-select {
+  font: inherit;
+  font-weight: 600;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 1px 2px;
+}
+
+.pane-select:hover {
+  border-color: var(--border);
+}
+
+.pane-select option {
+  background: var(--surface);
+}
+
+.pane-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  color: var(--text-muted);
+  direction: rtl;
+  text-align: left;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.pane-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.pane-message {
+  padding: 16px;
+  color: var(--text-muted);
+}
+
+.pane-message.error,
+.pane-message .error {
+  color: var(--danger);
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+.pane-exited {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+}
+
+.pane-exited button {
+  margin-left: auto;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--accent);
+  color: var(--accent-text);
+  cursor: pointer;
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.selectable {
+  user-select: text;
+}
+
+/* ---------- Git log ---------- */
+
+.git-pane {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.git-rows {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.git-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-right: 10px;
+  cursor: default;
+  white-space: nowrap;
+}
+
+.git-row:hover {
+  background: var(--hover);
+}
+
+.git-row.selected {
+  background: var(--selection);
+}
+
+.git-graph {
+  flex-shrink: 0;
+}
+
+.git-subject {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.git-author {
+  width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+}
+
+.git-date {
+  width: 96px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.git-hash {
+  font-family: 'Cascadia Mono', Consolas, Menlo, monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.ref-badge {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  border-radius: 9px;
+  font-size: 11px;
+  line-height: 17px;
+  border: 1px solid currentColor;
+  vertical-align: 1px;
+}
+
+.ref-badge.head {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ref-badge.branch {
+  color: #16a34a;
+}
+
+.ref-badge.remote {
+  color: var(--text-muted);
+}
+
+.ref-badge.tag {
+  color: #d97706;
+}
+
+.git-details {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.git-details-subject {
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .git-author {
+    display: none;
+  }
+}
+
+/* ---------- Collapsible panels & side rail ---------- */
+
+.project-main {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.side-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 0 0 34px;
+  padding: 6px 3px;
+  background: var(--pane-header);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.rail-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.rail-item:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.rail-item.exited .rail-label {
+  text-decoration: line-through;
+}
+
+.rail-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  max-height: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.collapse-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  color: var(--text-muted);
+}
+
+.collapse-button:hover {
+  color: var(--text);
+}

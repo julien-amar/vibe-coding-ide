@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { tabTitle, useTabs, type Tab } from '../store'
+import { tabTitle, toSnapshot, useTabs, type Tab } from '../store'
+import { onTabDragEnd, onTabDragStart } from '../tab-dnd'
 import { KindBadge } from './KindBadge'
-
-const DRAG_TYPE = 'application/x-devhub-tab'
 
 interface MenuState {
   tabId: string
@@ -16,8 +15,7 @@ function TabItem({
   editing,
   onStartEdit,
   onEndEdit,
-  onContextMenu,
-  dropSide
+  onContextMenu
 }: {
   tab: Tab
   active: boolean
@@ -25,9 +23,11 @@ function TabItem({
   onStartEdit: () => void
   onEndEdit: () => void
   onContextMenu: (e: React.MouseEvent) => void
-  dropSide?: 'before' | 'after'
 }): React.JSX.Element {
-  const { activate, close, rename } = useTabs()
+  const activate = useTabs((s) => s.activate)
+  const close = useTabs((s) => s.close)
+  const rename = useTabs((s) => s.rename)
+  const dropSide = useTabs((s) => (s.drop?.tabId === tab.id ? s.drop.side : undefined))
   const [draft, setDraft] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -60,10 +60,8 @@ function TabItem({
       }}
       onDoubleClick={onStartEdit}
       onContextMenu={onContextMenu}
-      onDragStart={(e) => {
-        e.dataTransfer.setData(DRAG_TYPE, tab.id)
-        e.dataTransfer.effectAllowed = 'move'
-      }}
+      onDragStart={(e) => onTabDragStart(e, tab)}
+      onDragEnd={(e) => onTabDragEnd(e, tab)}
       title={tab.customTitle ? `${tab.customTitle} — ${tab.autoTitle}` : tab.autoTitle}
     >
       <KindBadge kind={tab.kind} />
@@ -97,10 +95,14 @@ function TabItem({
 }
 
 export function TabStrip(): React.JSX.Element {
-  const { tabs, activeId, launcherOpen, setLauncherOpen, move, close, closeOthers } = useTabs()
+  const tabs = useTabs((s) => s.tabs)
+  const activeId = useTabs((s) => s.activeId)
+  const launcherOpen = useTabs((s) => s.launcherOpen)
+  const setLauncherOpen = useTabs((s) => s.setLauncherOpen)
+  const close = useTabs((s) => s.close)
+  const closeOthers = useTabs((s) => s.closeOthers)
   const [editingId, setEditingId] = useState<string>()
   const [menu, setMenu] = useState<MenuState>()
-  const [drop, setDrop] = useState<{ id: string; side: 'before' | 'after' }>()
 
   useEffect(() => {
     if (!menu) return
@@ -113,28 +115,15 @@ export function TabStrip(): React.JSX.Element {
     }
   }, [menu])
 
-  const onDragOver = (e: React.DragEvent): void => {
-    if (!e.dataTransfer.types.includes(DRAG_TYPE)) return
-    e.preventDefault()
-    const el = (e.target as HTMLElement).closest<HTMLElement>('.tab')
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    setDrop({ id: el.dataset.tabId!, side: e.clientX < rect.left + rect.width / 2 ? 'before' : 'after' })
-  }
-
-  const onDrop = (e: React.DragEvent): void => {
-    const dragged = e.dataTransfer.getData(DRAG_TYPE)
-    setDrop(undefined)
-    if (!dragged || !drop || dragged === drop.id) return
-    e.preventDefault()
-    const without = tabs.filter((t) => t.id !== dragged)
-    const targetIdx = without.findIndex((t) => t.id === drop.id)
-    move(dragged, drop.side === 'before' ? targetIdx : targetIdx + 1)
+  const menuTab = menu && tabs.find((t) => t.id === menu.tabId)
+  const act = (fn: () => void) => () => {
+    fn()
+    setMenu(undefined)
   }
 
   return (
     <div className="titlebar">
-      <div className="tab-strip" role="tablist" onDragOver={onDragOver} onDrop={onDrop} onDragLeave={() => setDrop(undefined)}>
+      <div className="tab-strip" role="tablist">
         {tabs.map((t) => (
           <TabItem
             key={t.id}
@@ -147,7 +136,6 @@ export function TabStrip(): React.JSX.Element {
               e.preventDefault()
               setMenu({ tabId: t.id, x: e.clientX, y: e.clientY })
             }}
-            dropSide={drop?.id === t.id ? drop.side : undefined}
           />
         ))}
         <button
@@ -159,31 +147,18 @@ export function TabStrip(): React.JSX.Element {
         </button>
       </div>
       <div className="titlebar-drag" />
-      {menu && (
+      {menu && menuTab && (
         <div className="context-menu" style={{ left: menu.x, top: menu.y }} onMouseDown={(e) => e.stopPropagation()}>
-          <button
-            onClick={() => {
-              setEditingId(menu.tabId)
-              setMenu(undefined)
-            }}
-          >
-            Rename tab
-          </button>
-          <button
-            onClick={() => {
-              close(menu.tabId)
-              setMenu(undefined)
-            }}
-          >
-            Close tab
-          </button>
+          <button onClick={act(() => setEditingId(menu.tabId))}>Rename tab</button>
           <button
             disabled={tabs.length < 2}
-            onClick={() => {
-              closeOthers(menu.tabId)
-              setMenu(undefined)
-            }}
+            onClick={act(() => void window.devhub.window.detachTab(toSnapshot(menuTab), window.screenX + 160, window.screenY + 60))}
           >
+            Move to new window
+          </button>
+          <div className="context-menu-separator" />
+          <button onClick={act(() => close(menu.tabId))}>Close tab</button>
+          <button disabled={tabs.length < 2} onClick={act(() => closeOthers(menu.tabId))}>
             Close other tabs
           </button>
         </div>

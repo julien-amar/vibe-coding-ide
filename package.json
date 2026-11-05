@@ -6,6 +6,8 @@
     "dev": "pnpm --filter @devhub/desktop dev",
     "build": "pnpm --filter @devhub/desktop build",
     "start": "pnpm --filter @devhub/desktop start",
-    "typecheck": "pnpm --filter @devhub/desktop typecheck"
+    "typecheck": "pnpm --filter @devhub/desktop typecheck",
+    "ensure-electron": "node -e \"require('fs').existsSync('node_modules/electron/dist')||require('child_process').execSync('node node_modules/electron/install.js',{stdio:'inherit'})\"",
+    "postinstall": "pnpm run ensure-electron"
   }
 }
