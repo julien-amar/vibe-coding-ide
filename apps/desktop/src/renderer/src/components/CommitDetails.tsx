@@ -21,7 +21,7 @@ export function CommitDetails({ root, commit, onClose }: { root: string; commit:
     setFiles(null)
     setSelected(undefined)
     setError(undefined)
-    void window.devhub.git.op(root, { op: 'commitFiles', hash: commit.hash, parent }).then((r) => {
+    void window.ide.git.op(root, { op: 'commitFiles', hash: commit.hash, parent }).then((r) => {
       if (!alive) return
       if (!r.ok) {
         setError(r.error)
@@ -42,7 +42,7 @@ export function CommitDetails({ root, commit, onClose }: { root: string; commit:
     if (!selected) return
     let alive = true
     setDiff({ text: '', loading: true })
-    void window.devhub.git
+    void window.ide.git
       .op(root, { op: 'commitDiff', hash: commit.hash, parent, path: selected.path, origPath: selected.origPath })
       .then((r) => alive && setDiff({ text: r.ok ? (r.text ?? '') : (r.error ?? ''), loading: false }))
     return () => {

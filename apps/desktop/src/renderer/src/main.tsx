@@ -5,5 +5,5 @@ import './git-panel.css'
 import './panes.css'
 import { App } from './App'
 
-document.body.classList.add(`platform-${window.devhub.platform}`)
+document.body.classList.add(`platform-${window.ide.platform}`)
 createRoot(document.getElementById('root')!).render(<App />)

@@ -1,4 +1,4 @@
-# DevHub (prototype)
+# vibe-coding-ide (prototype)
 
 A tabbed development environment — see [PLAN.md](PLAN.md) for the full design.
 
@@ -8,13 +8,13 @@ A tabbed development environment — see [PLAN.md](PLAN.md) for the full design.
 - Tab strip with rename (double-click / context menu), drag to reorder, close (×, middle-click, Ctrl+Shift+W); each tab shows the icon of its shell, distribution or agent.
 - `+` launcher (Ctrl+Shift+T): projects, shells found on PATH, Git Bash, WSL distributions, AI agent CLIs (claude, codex, gemini, opencode, pi).
 - Terminal tabs (xterm.js + node-pty), copy/paste (Ctrl+C with selection, Ctrl+V, right-click), clickable links, light/dark theme following the OS.
-- Drag a tab out of the window to open it in a new window, or onto another DevHub window to move it there (also: right-click → **Move to new window**). Processes keep running. A window closes when its last tab closes or moves away.
-- **Package updates:** when a shell starts, DevHub checks once whether its system has pending package updates — **Windows via winget** for PowerShell, cmd, Git Bash and other Windows shells; the **distribution** for WSL shells (apt, dnf, pacman, apk or zypper, using the cached package lists). If so, a status bar under the terminal offers **Update now**, which types the update command (`winget upgrade --all`, `sudo apt update && sudo apt upgrade -y`, …) into that terminal, where you follow the progress and answer prompts (sudo password, UAC); **×** dismisses it.
+- Drag a tab out of the window to open it in a new window, or onto another vibe-coding-ide window to move it there (also: right-click → **Move to new window**). Processes keep running. A window closes when its last tab closes or moves away.
+- **Package updates:** when a shell starts, vibe-coding-ide checks once whether its system has pending package updates — **Windows via winget** for PowerShell, cmd, Git Bash and other Windows shells; the **distribution** for WSL shells (apt, dnf, pacman, apk or zypper, using the cached package lists). If so, a status bar under the terminal offers **Update now**, which types the update command (`winget upgrade --all`, `sudo apt update && sudo apt upgrade -y`, …) into that terminal, where you follow the progress and answer prompts (sudo password, UAC); **×** dismisses it.
 - Icons: the real icon of the installed software where Windows provides one (executable icon, the distro's own `shortcut.ico`, Git for Windows' icon), otherwise a small coloured monogram unique to that entry.
 
 ### Layout restore
-- Window positions/sizes, tabs, custom names, the active tab, project layouts and collapsed panels are saved to `%APPDATA%/DevHub/layout.json` (`~/Library/Application Support/DevHub`, `~/.config/DevHub`) and restored on start.
-- Each shell restarts **in the folder it was in** (PowerShell, cmd, Git Bash and bash in WSL report their working directory to DevHub) and shows its previous output above a "restored from previous session" marker.
+- Window positions/sizes, tabs, custom names, the active tab, project layouts and collapsed panels are saved to `%APPDATA%/vibe-coding-ide/layout.json` (`~/Library/Application Support/vibe-coding-ide`, `~/.config/vibe-coding-ide`) and restored on start.
+- Each shell restarts **in the folder it was in** (PowerShell, cmd, Git Bash and bash in WSL report their working directory to vibe-coding-ide) and shows its previous output above a "restored from previous session" marker.
 
 ### Project tabs
 `+` → **Projects** → *Open folder…*, *Open folder in &lt;WSL distro&gt;…*, or a recent project.
@@ -44,7 +44,7 @@ pnpm start      # run the production build
 ```
 If Electron fails to start because its binary is missing, run `pnpm run ensure-electron`.
 
-Automated UI checks: set `DEVHUB_USER_DATA=<folder>` to run with a separate profile (layout, recent projects), and start the app with `--remote-debugging-port=<port>` (or `DEVHUB_DEBUG=1`) to expose `window.__devhubTabs` and `.terminal-host.__xterm` for scripted checks over the DevTools protocol.
+Automated UI checks: set `VIBE_CODING_IDE_USER_DATA=<folder>` to run with a separate profile (layout, recent projects), and start the app with `--remote-debugging-port=<port>` (or `VIBE_CODING_IDE_DEBUG=1`) to expose `window.__vibeIdeTabs` and `.terminal-host.__xterm` for scripted checks over the DevTools protocol.
 
 ## Tests
 ```sh
@@ -62,7 +62,7 @@ Unit tests live next to the code (`src/**/*.test.ts`), end-to-end tests in `apps
   git push origin v0.2.0
   ```
   Installers: Windows `.exe` (NSIS), macOS `.dmg` / `.zip` (Apple Silicon), Linux `.AppImage` / `.deb`. They are **unsigned** for now (Windows SmartScreen and macOS Gatekeeper will warn). You can also release from *Actions → Release → Run workflow* by entering the tag (e.g. `v0.2.0`): it is created on the selected branch's commit. Leave the tag empty to only build the installers as downloadable artifacts.
-- Local installer for the current OS: `pnpm --filter @devhub/desktop dist` (output in `apps/desktop/dist`).
+- Local installer for the current OS: `pnpm --filter @vibe-coding-ide/desktop dist` (output in `apps/desktop/dist`).
 
 ## Shortcuts
 | Keys | Action |

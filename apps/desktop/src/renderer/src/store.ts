@@ -91,7 +91,7 @@ let nextId = 1
 const newTabId = (): string => `tab-${nextId++}`
 
 async function profiles(): Promise<Profile[]> {
-  return window.devhub.profiles.list()
+  return window.ide.profiles.list()
 }
 
 /** Shell for a folder: the distro's own shell for folders inside WSL, else the first shell. */
@@ -110,7 +110,7 @@ const defaultAgent = (list: Profile[], root?: string): Profile | undefined => {
 async function profilesFor(root: string): Promise<Profile[]> {
   const wsl = parseWslPath(root)
   if (wsl) {
-    await window.devhub.profiles.wslAgents(wsl.distro)
+    await window.ide.profiles.wslAgents(wsl.distro)
     return loadProfiles(true)
   }
   return profiles()
@@ -118,7 +118,7 @@ async function profilesFor(root: string): Promise<Profile[]> {
 
 async function createSession(profileId: string, cwd?: string): Promise<{ sessionId: string; title: string } | undefined> {
   try {
-    return await window.devhub.pty.create({ profileId, cols: 80, rows: 24, cwd })
+    return await window.ide.pty.create({ profileId, cols: 80, rows: 24, cwd })
   } catch {
     return undefined
   }
@@ -179,7 +179,7 @@ export const useTabs = create<State>((set, get) => ({
   paneExit: {},
 
   async init() {
-    const init = await window.devhub.window.init()
+    const init = await window.ide.window.init()
     set({ windowId: init.windowId })
     const list = await profiles()
     const tabs: Tab[] = []
@@ -237,7 +237,7 @@ export const useTabs = create<State>((set, get) => ({
     const layout = await startPaneSessions(defaultProjectLayout(defaultShell(list, root), defaultAgent(list, root)), root)
     const name = projectName(root)
     const tab: Tab = { id: newTabId(), kind: 'project', autoTitle: name, project: { root, name, layout } }
-    window.devhub.project.touch(root)
+    window.ide.project.touch(root)
     set((st) => ({ tabs: [...st.tabs, tab], activeId: tab.id }))
   },
 
@@ -258,7 +258,7 @@ export const useTabs = create<State>((set, get) => ({
     const nextActive = activeId === tabs[idx].id ? (rest[idx] ?? rest[idx - 1])?.id : activeId
     set({ tabs: rest, activeId: nextActive })
     // The last tab left this window: the window has nothing to show anymore.
-    if (rest.length === 0) window.devhub.window.close()
+    if (rest.length === 0) window.ide.window.close()
   },
 
   close(id) {
@@ -267,13 +267,13 @@ export const useTabs = create<State>((set, get) => ({
     if (idx < 0) return
     const tab = tabs[idx]
     for (const sid of sessionIdsOf(toSnapshot(tab))) {
-      if (tab.exitCode === undefined && paneExit[sid] === undefined) window.devhub.pty.kill(sid)
+      if (tab.exitCode === undefined && paneExit[sid] === undefined) window.ide.pty.kill(sid)
     }
     const rest = tabs.filter((t) => t.id !== id)
     const nextActive = activeId === id ? (rest[idx] ?? rest[idx - 1])?.id : activeId
     set({ tabs: rest, activeId: nextActive })
     // Like Windows Terminal: closing the last tab closes the window.
-    if (rest.length === 0) window.devhub.window.close()
+    if (rest.length === 0) window.ide.window.close()
   },
 
   closeOthers(id) {
@@ -374,7 +374,7 @@ export const useTabs = create<State>((set, get) => ({
     if (!tab?.project || !pane) return
     const rest = removePane(tab.project.layout, paneId)
     if (!rest) return // a project keeps at least one panel
-    if (pane.sessionId && get().paneExit[pane.sessionId] === undefined) window.devhub.pty.kill(pane.sessionId)
+    if (pane.sessionId && get().paneExit[pane.sessionId] === undefined) window.ide.pty.kill(pane.sessionId)
     get().setLayout(tabId, rest)
   },
 
@@ -396,7 +396,7 @@ export const useTabs = create<State>((set, get) => ({
     if (!tab?.project || !pane) return
     const nextProfile = profileId ?? pane.profileId
     if (!nextProfile) return
-    if (pane.sessionId && get().paneExit[pane.sessionId] === undefined) window.devhub.pty.kill(pane.sessionId)
+    if (pane.sessionId && get().paneExit[pane.sessionId] === undefined) window.ide.pty.kill(pane.sessionId)
     const s = await createSession(nextProfile, tab.project.root)
     const cur = get().tabs.find((t) => t.id === tabId)
     if (!cur?.project) return
@@ -415,14 +415,14 @@ useTabs.subscribe((s, prev) => {
   queueMicrotask(() => {
     reportQueued = false
     const { tabs, activeId } = useTabs.getState()
-    window.devhub.window.reportState({
+    window.ide.window.reportState({
       tabs: tabs.map(toSnapshot),
       activeIndex: Math.max(0, tabs.findIndex((t) => t.id === activeId))
     })
   })
 })
 
-window.devhub.window.onTabTransferred((key) => useTabs.getState().removeTransferred(key))
+window.ide.window.onTabTransferred((key) => useTabs.getState().removeTransferred(key))
 
-// Debugging aid for automated UI checks over DevTools (only with remote debugging / DEVHUB_DEBUG=1).
-if (window.devhub.debug) (window as unknown as { __devhubTabs: typeof useTabs }).__devhubTabs = useTabs
+// Debugging aid for automated UI checks over DevTools (only with remote debugging / VIBE_CODING_IDE_DEBUG=1).
+if (window.ide.debug) (window as unknown as { __vibeIdeTabs: typeof useTabs }).__vibeIdeTabs = useTabs

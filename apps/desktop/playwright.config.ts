@@ -2,7 +2,7 @@ import { defineConfig } from '@playwright/test'
 
 /**
  * End-to-end tests: the built app (out/) is launched with Playwright's Electron
- * support, each test in its own throwaway profile (DEVHUB_USER_DATA).
+ * support, each test in its own throwaway profile (VIBE_CODING_IDE_USER_DATA).
  * Run `pnpm build` first.
  */
 export default defineConfig({

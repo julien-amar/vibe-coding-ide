@@ -12,7 +12,7 @@ import { SplitView } from './SplitView'
 import { TerminalView } from './TerminalView'
 
 const PANE_ICON: Record<PaneNode['type'], string> = { git: '⎇', terminal: '>_', agent: 'AI' }
-const PANE_MIME = 'application/x-devhub-pane'
+const PANE_MIME = 'application/x-vibe-coding-ide-pane'
 
 /** Project folder for display: WSL folders as "<distro>: /linux/path". */
 function displayPath(root: string): string {

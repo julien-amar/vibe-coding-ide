@@ -1,8 +1,8 @@
-import type { DevHubApi } from '@shared/types'
+import type { IdeApi } from '@shared/types'
 
 declare global {
   interface Window {
-    devhub: DevHubApi
+    ide: IdeApi
   }
 }
 

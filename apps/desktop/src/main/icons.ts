@@ -69,7 +69,7 @@ let genericExeIcon: Promise<string | null> | undefined
 function genericIcon(): Promise<string | null> {
   genericExeIcon ??= (async () => {
     try {
-      const dir = join(app.getPath('temp'), 'devhub-icons')
+      const dir = join(app.getPath('temp'), 'vibe-coding-ide-icons')
       mkdirSync(dir, { recursive: true })
       const probe = join(dir, 'no-icon.exe')
       if (!existsSync(probe)) writeFileSync(probe, '')

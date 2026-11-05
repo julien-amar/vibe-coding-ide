@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
-import { cleanup, launch, quit, tempDir, terminalText, typeInTerminal, type DevHub } from './app'
+import { cleanup, launch, quit, tempDir, terminalText, typeInTerminal, type TestApp } from './app'
 
-let hub: DevHub
+let hub: TestApp
 let profile: string
 
 test.beforeEach(async () => {
@@ -18,8 +18,8 @@ test('starts with a working shell tab', async () => {
   const { page } = hub
   await expect(page.locator('.tab')).toHaveCount(1)
   await expect(page.locator('.tab-panel.visible .terminal-host')).toBeVisible()
-  await typeInTerminal(page, 'echo devhub-e2e-ok')
-  await expect.poll(() => terminalText(page)).toMatch(/devhub-e2e-ok[\s\S]*devhub-e2e-ok/) // typed command + its output
+  await typeInTerminal(page, 'echo vibe-coding-ide-e2e-ok')
+  await expect.poll(() => terminalText(page)).toMatch(/vibe-coding-ide-e2e-ok[\s\S]*vibe-coding-ide-e2e-ok/) // typed command + its output
 })
 
 test('the + launcher lists projects and shells, and opens a new tab', async () => {

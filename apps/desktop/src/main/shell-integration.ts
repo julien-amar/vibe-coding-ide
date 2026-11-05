@@ -1,5 +1,5 @@
 /**
- * Shells launched by DevHub report their working directory after each prompt
+ * Shells launched by vibe-coding-ide report their working directory after each prompt
  * (see profiles.ts); this extracts the last reported directory from output.
  */
 

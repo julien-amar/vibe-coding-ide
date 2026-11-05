@@ -6,7 +6,7 @@ import { useTabs } from './store'
  */
 export function handleAppShortcut(e: KeyboardEvent): boolean {
   if (e.type !== 'keydown') return false
-  const mod = window.devhub.platform === 'darwin' ? e.metaKey : e.ctrlKey
+  const mod = window.ide.platform === 'darwin' ? e.metaKey : e.ctrlKey
   const store = useTabs.getState()
   const key = e.key.toLowerCase()
 

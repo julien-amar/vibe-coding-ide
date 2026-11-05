@@ -1,6 +1,6 @@
-# DevHub — Project Plan
+# vibe-coding-ide — Project Plan
 
-> **DevHub** (working name). An open-source, cross-platform application that hosts a complete development environment as isolated, tabbed workspaces — inspired by Windows Terminal's tab model, extended with project workspaces (git, editor, terminal, AI agents, tests, harness), containers, file transfer, browsing and messaging.
+> **vibe-coding-ide** (working name). An open-source, cross-platform application that hosts a complete development environment as isolated, tabbed workspaces — inspired by Windows Terminal's tab model, extended with project workspaces (git, editor, terminal, AI agents, tests, harness), containers, file transfer, browsing and messaging.
 
 ---
 
@@ -8,7 +8,7 @@
 
 | Topic | Decision |
 |---|---|
-| Name | **DevHub** (placeholder; appId `dev.devhub.app`, config dir `DevHub`) |
+| Name | **vibe-coding-ide** (placeholder; appId `io.github.julien-amar.vibe-coding-ide`, config dir `vibe-coding-ide`) |
 | License | **MIT**, public GitHub repository |
 | Platforms | **Windows, macOS and Linux from day one** |
 | Stack | Electron + TypeScript, **React** renderer |
@@ -166,10 +166,10 @@ All built-in tab/pane types are implemented on this API ("dogfooding"), which ke
 
 ### 4.1 Contract
 ```ts
-// devhub-extension manifest (package.json "devhub" field)
+// vibe-coding-ide-extension manifest (package.json "vibe-coding-ide" field)
 {
-  "name": "devhub-ext-example",
-  "engines": { "devhub": "^1.0.0" },        // semver API version
+  "name": "vibe-coding-ide-ext-example",
+  "engines": { "vibe-coding-ide": "^1.0.0" },        // semver API version
   "contributes": {
     "tabTypes": [{ "id": "example.kanban", "label": "Kanban", "icon": "board.svg" }],
     "paneTypes": [{ "id": "example.notes", "label": "Notes", "projectScoped": true }],
@@ -196,9 +196,9 @@ interface TabType {
 - An extension's sessions follow the same tab-isolation rules as built-in ones.
 
 ### 4.3 Versioning & distribution
-- `@devhub/extension-api` npm package (types + helpers), semver; deprecations kept for one major version.
-- Install from: local folder (dev mode with reload), `.devhubext` archive, npm package; marketplace later.
-- `create-devhub-extension` scaffolder; API docs generated from types.
+- `@vibe-coding-ide/extension-api` npm package (types + helpers), semver; deprecations kept for one major version.
+- Install from: local folder (dev mode with reload), `.vibe-coding-ideext` archive, npm package; marketplace later.
+- `create-vibe-coding-ide-extension` scaffolder; API docs generated from types.
 
 ---
 
@@ -237,12 +237,12 @@ interface ExecTarget {
 ### 5.3 SSH layer
 - Use the **system OpenSSH client** (`ssh`) as transport: it natively supports `~/.ssh/config` (Include, ProxyJump, Match), ssh-agent / Pageant / 1Password & Windows OpenSSH agent, **FIDO2 `sk-*` keys**, and **certificates** — features the pure-JS `ssh2` library lacks (notably FIDO2).
 - **One persistent connection per host** carrying the helper agent's multiplexed protocol over stdio (Windows OpenSSH has no `ControlMaster`, so multiplexing is done by the helper, VS Code Remote-style).
-- **Password / passphrase / FIDO touch prompts**: supplied via `SSH_ASKPASS` pointing to a DevHub askpass helper that shows a native dialog; passwords optionally saved in OS keychain.
-- Host key verification delegated to OpenSSH (`known_hosts`), with a DevHub prompt for unknown hosts.
+- **Password / passphrase / FIDO touch prompts**: supplied via `SSH_ASKPASS` pointing to a vibe-coding-ide askpass helper that shows a native dialog; passwords optionally saved in OS keychain.
+- Host key verification delegated to OpenSSH (`known_hosts`), with a vibe-coding-ide prompt for unknown hosts.
 - **SFTP tab**: run the SFTP protocol over `ssh -s <host> sftp` stdio (servers where a helper can't be installed, e.g. shared hosting). ⚠️ Spike needed: confirm an SFTP client library usable over an arbitrary stream; fallback `ssh2` library for key/password auth when FIDO2 isn't required.
 
-### 5.4 Helper agent (`devhub-agent`)
-- Small binary deployed to WSL / SSH hosts / containers on first connect (checksummed, versioned, under `~/.devhub/agent/<version>/`), started over stdio.
+### 5.4 Helper agent (`vibe-coding-ide-agent`)
+- Small binary deployed to WSL / SSH hosts / containers on first connect (checksummed, versioned, under `~/.vibe-coding-ide/agent/<version>/`), started over stdio.
 - Provides: multiplexed channels (exec, PTY, fs, watch, port tunnels), efficient file watching, process cleanup on disconnect, reconnect with session resume.
 - ⚠️ **Open decision — implementation language**: **Go** (recommended: static cross-compiled binaries for linux/amd64, arm64, darwin, windows; no runtime dependency) vs Node SEA (same language as app, larger binary).
 - Linux targets: glibc and musl (Alpine containers) builds.
@@ -304,8 +304,8 @@ Fully rearrangeable (splits / sub-tabs), persisted per project. "Open project" f
 - One server per target+user; one editor window per project/worktree (`?folder=<path>`).
 - Extensions from **Open VSX** (the Microsoft Marketplace is not licensed for third-party products).
 - Integration ("open at location"): from git (diff, file at commit), tests (failure location), agent output — via the server's CLI / URL scheme. ⚠️ Spike: confirm the reliable mechanism to open file:line in a running OpenVSCode Server instance.
-- Settings/extensions persisted per target in `~/.devhub/editor/`.
-- Pinned server version; upgrade managed by DevHub.
+- Settings/extensions persisted per target in `~/.vibe-coding-ide/editor/`.
+- Pinned server version; upgrade managed by vibe-coding-ide.
 
 ### 6.4 Terminal panel
 - PTY on the project's target in `root` (or active feature worktree) with project env.
@@ -480,7 +480,7 @@ Local MCP server scoped to one project, exposed to agents on the target (stdio v
 | `extensions/` | Installed extensions |
 | OS keychain | All secrets |
 
-Location: `%APPDATA%\DevHub` (Windows), `~/Library/Application Support/DevHub` (macOS), `$XDG_CONFIG_HOME/devhub` (Linux). JSON schemas published for editor validation.
+Location: `%APPDATA%\vibe-coding-ide` (Windows), `~/Library/Application Support/vibe-coding-ide` (macOS), `$XDG_CONFIG_HOME/vibe-coding-ide` (Linux). JSON schemas published for editor validation.
 
 ---
 
@@ -513,25 +513,25 @@ dev-environment/
 │           ├── renderer/        # React: tab strip, launcher, pane chrome, panels
 │           └── hosts/           # utility processes: pty, target, transfer, container, project, extension
 ├── packages/
-│   ├── extension-api/           # @devhub/extension-api (public, semver)
+│   ├── extension-api/           # @vibe-coding-ide/extension-api (public, semver)
 │   ├── shared/                  # types, schemas, IPC contracts
 │   ├── targets/                 # local / wsl / ssh / container ExecTarget implementations
 │   ├── git/                     # git CLI wrapper, log parser, lane algorithm
 │   ├── tests/                   # test adapters
 │   ├── agents/                  # agent registry + harness compilers
 │   ├── mcp-project/             # project MCP server
-│   └── create-devhub-extension/ # scaffolder
+│   └── create-vibe-coding-ide-extension/ # scaffolder
 ├── extensions/                  # built-in tab/pane types, built on the public API
 │   ├── shell/  project/  editor/  git/  tests/  ai/  harness/
 │   ├── browser/  messaging/  containers/  sftp/
-├── agent/                       # devhub-agent helper (Go, if chosen)
+├── agent/                       # vibe-coding-ide-agent helper (Go, if chosen)
 └── test/                        # e2e (Playwright for Electron)
 ```
 
 ### 11.2 Quality
 - TypeScript strict, ESLint, Prettier; Vitest unit tests; Playwright (`_electron`) e2e on all three OSes.
 - Integration tests for targets: WSL (Windows runner), SSH (containerized sshd), dev containers (Docker on Linux runner).
-- Conventional commits, Changesets for `@devhub/extension-api` versioning.
+- Conventional commits, Changesets for `@vibe-coding-ide/extension-api` versioning.
 
 ### 11.3 CI / release (GitHub Actions)
 - Matrix: `windows-latest`, `macos-latest` (arm64 + x64), `ubuntu-latest` — lint, typecheck, unit, e2e, build.
@@ -550,7 +550,7 @@ dev-environment/
 |---|---|---|
 | **0. Foundation** | pnpm workspace, electron-vite, React shell, i18n setup, lint/test, 3-OS CI, signing & auto-update pipeline, OSS docs (LICENSE, CONTRIBUTING, SECURITY) | Signed "hello window" auto-updates on all 3 OSes |
 | **1. Core + extension API** | Window/tab manager, rename/reorder, tear-out & re-attach, `+` launcher, layout tree (splits, sub-tabs), layout restore, command palette, **public extension API v0** (extension host, permissions, sandboxed UI), shell tab type built as an extension (PATH + WSL + `/etc/shells` discovery) | Daily-usable terminal on 3 OSes; tabs survive tear-out & restart; sample third-party extension works |
-| **2. Execution targets + project tab** | `ExecTarget` for **local, WSL, SSH, dev container**; `devhub-agent` helper; SSH layer (OpenSSH, askpass, FIDO2, certs, config); project open flow; terminal pane on target; agent registry with **Claude Code, pi, Codex, Gemini, opencode**; AI pane | Open a project on each of the 4 target kinds with terminal + favorite agent |
+| **2. Execution targets + project tab** | `ExecTarget` for **local, WSL, SSH, dev container**; `vibe-coding-ide-agent` helper; SSH layer (OpenSSH, askpass, FIDO2, certs, config); project open flow; terminal pane on target; agent registry with **Claude Code, pi, Codex, Gemini, opencode**; AI pane | Open a project on each of the 4 target kinds with terminal + favorite agent |
 | **3. Git** | Read-only log with graph → status, staging (file/hunk), commit/amend, branches, fetch/pull/push, stash, feature worktrees, PR via `gh`/`glab` | Full branch/feature/commit workflow on any target |
 | **4. Editor** | OpenVSCode Server lifecycle on targets, port forwarding, editor pane, Open VSX, open-at-location integration from git | Edit + LSP + debug on local, WSL, SSH and container projects |
 | **5. Tests** | Adapter framework + Vitest, Jest, pytest, .NET, Go, Rust, JVM; run/debug/watch; editor integration | Discover & run tests for all 7 ecosystems on any target |

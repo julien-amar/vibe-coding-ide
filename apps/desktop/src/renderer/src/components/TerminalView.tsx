@@ -75,7 +75,7 @@ export function TerminalView({ sessionId, restoredScrollback, visible, autoFocus
     })
     const fit = new FitAddon()
     term.loadAddon(fit)
-    term.loadAddon(new WebLinksAddon((_e, uri) => window.devhub.app.openExternal(uri)))
+    term.loadAddon(new WebLinksAddon((_e, uri) => window.ide.app.openExternal(uri)))
     term.open(host)
     try {
       const webgl = new WebglAddon()
@@ -85,7 +85,7 @@ export function TerminalView({ sessionId, restoredScrollback, visible, autoFocus
       /* fall back to the DOM renderer */
     }
     termRef.current = term
-    if (window.devhub.debug) (host as unknown as { __xterm: Terminal }).__xterm = term // debugging aid (DevTools checks)
+    if (window.ide.debug) (host as unknown as { __xterm: Terminal }).__xterm = term // debugging aid (DevTools checks)
     fitRef.current = fit
 
     term.attachCustomKeyEventHandler((e) => {
@@ -118,7 +118,7 @@ export function TerminalView({ sessionId, restoredScrollback, visible, autoFocus
     const offData = onSessionData(sessionId, (data) => {
       if (attached) term.write(data)
     })
-    void window.devhub.pty.attach(sessionId).then((buffer) => {
+    void window.ide.pty.attach(sessionId).then((buffer) => {
       if (buffer) term.write(buffer)
       attached = true
     })
@@ -126,8 +126,8 @@ export function TerminalView({ sessionId, restoredScrollback, visible, autoFocus
       if (id === sessionId) term.write(`\r\n\x1b[90m[process exited with code ${code}]\x1b[0m\r\n`)
     })
 
-    const dataSub = term.onData((d) => window.devhub.pty.write(sessionId, d))
-    const resizeSub = term.onResize(({ cols, rows }) => window.devhub.pty.resize(sessionId, cols, rows))
+    const dataSub = term.onData((d) => window.ide.pty.write(sessionId, d))
+    const resizeSub = term.onResize(({ cols, rows }) => window.ide.pty.resize(sessionId, cols, rows))
     const titleSub = term.onTitleChange((t) => onTitleRef.current?.(t))
 
     const doFit = (): void => {
@@ -210,8 +210,8 @@ function UpdateBar({ sessionId, onAccept }: { sessionId: string; onAccept: () =>
     let alive = true
     setInfo(null)
     // Already known (e.g. the tab moved to another window), or arriving once the check finishes.
-    void window.devhub.pty.updates(sessionId).then((i) => alive && i && setInfo(i))
-    const off = window.devhub.pty.onUpdates((id, i) => {
+    void window.ide.pty.updates(sessionId).then((i) => alive && i && setInfo(i))
+    const off = window.ide.pty.onUpdates((id, i) => {
       if (id === sessionId) setInfo(i)
     })
     return () => {
@@ -223,7 +223,7 @@ function UpdateBar({ sessionId, onAccept }: { sessionId: string; onAccept: () =>
   if (!info) return null
 
   const close = (accepted: boolean): void => {
-    window.devhub.pty.dismissUpdates(sessionId, accepted)
+    window.ide.pty.dismissUpdates(sessionId, accepted)
     setInfo(null)
   }
 
@@ -240,7 +240,7 @@ function UpdateBar({ sessionId, onAccept }: { sessionId: string; onAccept: () =>
         className="link-button"
         title={`Runs in this terminal: ${info.command}`}
         onClick={() => {
-          window.devhub.pty.write(sessionId, `${info.command}\r`)
+          window.ide.pty.write(sessionId, `${info.command}\r`)
           close(true)
           onAccept()
         }}

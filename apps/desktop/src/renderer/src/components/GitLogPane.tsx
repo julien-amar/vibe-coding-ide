@@ -74,7 +74,7 @@ export function GitLogPane({ root, visible, tick }: { root: string; visible: boo
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(() => {
-    void window.devhub.git.log(root).then(setLog)
+    void window.ide.git.log(root).then(setLog)
   }, [root])
 
   useEffect(() => {

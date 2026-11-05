@@ -19,7 +19,7 @@ const write = (file: string, content: string): void => {
 }
 
 beforeAll(() => {
-  base = realpathSync(mkdtempSync(join(tmpdir(), 'devhub-git-')))
+  base = realpathSync(mkdtempSync(join(tmpdir(), 'vibe-coding-ide-git-')))
   repo = join(base, 'repo')
   mkdirSync(repo)
   run('init', '-q', '-b', 'main')

@@ -1,9 +1,9 @@
 # Installers for Windows, macOS and Linux (electron-builder).
-# Local: `pnpm --filter @devhub/desktop dist` builds for the current OS into apps/desktop/dist.
+# Local: `pnpm --filter @vibe-coding-ide/desktop dist` builds for the current OS into apps/desktop/dist.
 # CI: .github/workflows/release.yml builds all three and publishes a GitHub Release.
-appId: dev.devhub.app
-productName: DevHub
-copyright: Copyright © 2026 DevHub contributors
+appId: io.github.julien-amar.vibe-coding-ide
+productName: vibe-coding-ide
+copyright: Copyright © 2026 vibe-coding-ide contributors
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 
 directories:
@@ -41,9 +41,9 @@ mac:
   identity: null
 
 linux:
-  # Defaults to the package name (@devhub/desktop), which is not a valid file name.
-  executableName: devhub
-  # The window's app id / WM_CLASS matches the generated devhub.desktop entry (desktopName in package.json).
+  # Defaults to the package name (@vibe-coding-ide/desktop), which is not a valid file name.
+  executableName: vibe-coding-ide
+  # The window's app id / WM_CLASS matches the generated vibe-coding-ide.desktop entry (desktopName in package.json).
   syncDesktopName: true
   category: Development
   maintainer: julien-amar <julien-amar@users.noreply.github.com>

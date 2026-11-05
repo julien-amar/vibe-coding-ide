@@ -66,14 +66,14 @@ function launchSpec(exe: string, args: string[] = []): { command: string; args: 
 /**
  * Shell integration: each shell reports its working directory after every prompt
  * with a standard terminal sequence (OSC 9;9 "path" like Windows Terminal, or
- * OSC 7 file://host/path). DevHub records it so restored shells reopen there.
+ * OSC 7 file://host/path). vibe-coding-ide records it so restored shells reopen there.
  */
 const POWERSHELL_INTEGRATION = [
-  '$global:__devhubPrompt = $function:prompt',
+  '$global:__vibeIdePrompt = $function:prompt',
   'function global:prompt {',
   '  $loc = $executionContext.SessionState.Path.CurrentLocation',
   "  if ($loc.Provider.Name -eq 'FileSystem') { [Console]::Write(\"$([char]27)]9;9;`\"$($loc.ProviderPath)`\"$([char]27)\\\") }",
-  '  & $global:__devhubPrompt',
+  '  & $global:__vibeIdePrompt',
   '}'
 ].join("\n")
 

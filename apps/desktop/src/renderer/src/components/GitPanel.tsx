@@ -25,19 +25,19 @@ export function GitPanel({ root, visible, openProject }: { root: string; visible
 
   // Repository changes (commit, checkout, fetch, staging…) from any source refresh every view.
   useEffect(() => {
-    window.devhub.git.watch(root)
-    const off = window.devhub.git.onChanged((r) => {
+    window.ide.git.watch(root)
+    const off = window.ide.git.onChanged((r) => {
       if (r === root) refresh()
     })
     return () => {
       off()
-      window.devhub.git.unwatch(root)
+      window.ide.git.unwatch(root)
     }
   }, [root, refresh])
 
   useEffect(() => {
     let alive = true
-    void window.devhub.git.op(root, { op: 'status' }).then((r) => alive && setStatus(r.ok && r.status ? r.status : null))
+    void window.ide.git.op(root, { op: 'status' }).then((r) => alive && setStatus(r.ok && r.status ? r.status : null))
     return () => {
       alive = false
     }
@@ -53,7 +53,7 @@ export function GitPanel({ root, visible, openProject }: { root: string; visible
   const run: Run = useCallback(
     async (label, req, success) => {
       setBusy(label)
-      const r = await window.devhub.git.op(root, req)
+      const r = await window.ide.git.op(root, req)
       setBusy(null)
       if (!r.ok) notify(r.error ?? `${label} failed`, 'error')
       else if (success) notify(success, 'success')
@@ -180,7 +180,7 @@ function ChangesView({ root, status, run, refreshKey }: { root: string; status: 
     if (!selected) return
     let alive = true
     setDiff((d) => ({ ...d, loading: d.text === '' }))
-    void window.devhub.git.op(root, { op: 'diff', path: selected.path, staged: selected.staged, untracked: selected.untracked }).then((r) => {
+    void window.ide.git.op(root, { op: 'diff', path: selected.path, staged: selected.staged, untracked: selected.untracked }).then((r) => {
       if (alive) setDiff({ text: r.ok ? (r.text ?? '') : (r.error ?? ''), loading: false })
     })
     return () => {
@@ -334,7 +334,7 @@ function BranchesView({
 
   useEffect(() => {
     let alive = true
-    void window.devhub.git.op(root, { op: 'branches' }).then((r) => {
+    void window.ide.git.op(root, { op: 'branches' }).then((r) => {
       if (!alive || !r.ok) return
       setBranches(r.branches ?? [])
       setWorktrees(r.worktrees ?? [])
@@ -399,7 +399,7 @@ function BranchesView({
       return
     }
     if (!(await confirmDialog('Delete branch?', `Delete the local branch ${b.name}?`, 'Delete', true))) return
-    const r = await window.devhub.git.op(root, { op: 'deleteBranch', branch: b.name })
+    const r = await window.ide.git.op(root, { op: 'deleteBranch', branch: b.name })
     if (r.ok) {
       notify(`Deleted ${b.name}`, 'success')
       await run('Refreshing', { op: 'status' })
@@ -420,7 +420,7 @@ function BranchesView({
       useTabs.getState().close(openTab.id)
       await new Promise((r) => setTimeout(r, 1500)) // let the processes exit and release the folder
     }
-    const r = await window.devhub.git.op(root, { op: 'removeWorktree', path: w.path })
+    const r = await window.ide.git.op(root, { op: 'removeWorktree', path: w.path })
     if (!r.ok && /permission denied|being used|resource busy/i.test(r.error ?? '')) {
       notify(`${w.path} is in use by another program (a terminal, editor or explorer window). Close it and try again.`, 'error')
       return

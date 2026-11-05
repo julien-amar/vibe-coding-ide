@@ -4,7 +4,7 @@ import type { Profile } from '@shared/types'
 let cached: Promise<Profile[]> | undefined
 
 export function loadProfiles(refresh = false): Promise<Profile[]> {
-  if (!cached || refresh) cached = window.devhub.profiles.list(refresh)
+  if (!cached || refresh) cached = window.ide.profiles.list(refresh)
   return cached
 }
 

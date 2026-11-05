@@ -1,9 +1,9 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import type { DevHubApi, PackageUpdateInfo } from '@shared/types'
+import type { IdeApi, PackageUpdateInfo } from '@shared/types'
 
-const api: DevHubApi = {
+const api: IdeApi = {
   platform: process.platform,
-  debug: process.argv.includes('--devhub-debug'),
+  debug: process.argv.includes('--vibe-coding-ide-debug'),
   profiles: {
     list: (refresh) => ipcRenderer.invoke('profiles:list', refresh),
     icon: (id) => ipcRenderer.invoke('profiles:icon', id),
@@ -66,4 +66,4 @@ const api: DevHubApi = {
   }
 }
 
-contextBridge.exposeInMainWorld('devhub', api)
+contextBridge.exposeInMainWorld('ide', api)

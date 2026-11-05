@@ -6,7 +6,7 @@ import { _electron as electron, expect, type ElectronApplication, type Page } fr
 
 const MAIN = resolve(__dirname, '..', 'out', 'main', 'index.js')
 
-export interface DevHub {
+export interface TestApp {
   app: ElectronApplication
   page: Page
   userData: string
@@ -14,7 +14,7 @@ export interface DevHub {
 
 /** A throwaway folder (removed by `cleanup`). */
 export function tempDir(prefix: string): string {
-  return realpathSync(mkdtempSync(join(tmpdir(), `devhub-e2e-${prefix}-`)))
+  return realpathSync(mkdtempSync(join(tmpdir(), `vibe-coding-ide-e2e-${prefix}-`)))
 }
 
 export function cleanup(dir: string): void {
@@ -26,15 +26,15 @@ export function cleanup(dir: string): void {
 }
 
 /**
- * Launch the built app with its own profile. DEVHUB_DEBUG exposes the tab store
- * (window.__devhubTabs) for the few actions a test cannot do with the mouse,
+ * Launch the built app with its own profile. VIBE_CODING_IDE_DEBUG exposes the tab store
+ * (window.__vibeIdeTabs) for the few actions a test cannot do with the mouse,
  * like picking a folder in the native dialog.
  */
-export async function launch(userData: string): Promise<DevHub> {
+export async function launch(userData: string): Promise<TestApp> {
   const app = await electron.launch({
     // CI Linux runners do not allow Chromium's sandbox (unprivileged user namespaces).
     args: [MAIN, ...(process.platform === 'linux' ? ['--no-sandbox'] : [])],
-    env: { ...process.env, DEVHUB_USER_DATA: userData, DEVHUB_DEBUG: '1', ELECTRON_ENABLE_LOGGING: '0' } as Record<string, string>
+    env: { ...process.env, VIBE_CODING_IDE_USER_DATA: userData, VIBE_CODING_IDE_DEBUG: '1', ELECTRON_ENABLE_LOGGING: '0' } as Record<string, string>
   })
   const page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
@@ -44,10 +44,10 @@ export async function launch(userData: string): Promise<DevHub> {
 }
 
 /** Close the window like a user (saves the layout) and wait for the app to exit. */
-export async function quit(hub: DevHub): Promise<void> {
+export async function quit(hub: TestApp): Promise<void> {
   const exited = hub.app.waitForEvent('close')
   const windowClosed = hub.page.waitForEvent('close')
-  await hub.page.evaluate(() => window.devhub.window.close()).catch(() => undefined)
+  await hub.page.evaluate(() => window.ide.window.close()).catch(() => undefined)
   await windowClosed
   // macOS apps keep running without windows; quit like Cmd+Q (the layout was saved on window close).
   if (process.platform === 'darwin') await hub.app.close()
@@ -104,6 +104,6 @@ export function createRepo(base: string): string {
 
 /** Open a folder as a project (the native folder picker cannot be driven by a test). */
 export async function openProject(page: Page, root: string): Promise<void> {
-  await page.evaluate((r) => (window as unknown as { __devhubTabs: { getState(): { openProject(root: string): Promise<void> } } }).__devhubTabs.getState().openProject(r), root)
+  await page.evaluate((r) => (window as unknown as { __vibeIdeTabs: { getState(): { openProject(root: string): Promise<void> } } }).__vibeIdeTabs.getState().openProject(r), root)
   await expect(page.locator('.tab-panel.visible .git-panel')).toBeVisible()
 }

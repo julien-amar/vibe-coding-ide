@@ -12,9 +12,9 @@ import { PtyManager } from './pty-manager'
 import { checkUpdates, forgetUpdates, type UpdateTarget } from './package-updates'
 import { parseWslPath } from '@shared/wsl-paths'
 
-app.setName('DevHub')
-// DEVHUB_USER_DATA: run with a separate profile (layout, recent projects), e.g. for automated tests.
-app.setPath('userData', process.env.DEVHUB_USER_DATA || join(app.getPath('appData'), 'DevHub'))
+app.setName('vibe-coding-ide')
+// VIBE_CODING_IDE_USER_DATA: run with a separate profile (layout, recent projects), e.g. for automated tests.
+app.setPath('userData', process.env.VIBE_CODING_IDE_USER_DATA || join(app.getPath('appData'), 'vibe-coding-ide'))
 
 const ptys = new PtyManager()
 /** Pending package updates per session (and what was checked), until the user accepts or dismisses the bar. */
@@ -22,7 +22,7 @@ const sessionUpdates = new Map<string, { info: PackageUpdateInfo; target: Update
 const gitWatcher = new GitWatcher()
 const TITLEBAR_HEIGHT = 40
 /** Expose debugging hooks to the UI (automated checks over DevTools). */
-const DEBUG = app.commandLine.hasSwitch('remote-debugging-port') || process.env.DEVHUB_DEBUG === '1'
+const DEBUG = app.commandLine.hasSwitch('remote-debugging-port') || process.env.VIBE_CODING_IDE_DEBUG === '1'
 
 interface WindowEntry {
   win: BrowserWindow
@@ -108,7 +108,7 @@ function createWindow(opts: CreateOptions = {}): BrowserWindow {
     minWidth: 480,
     minHeight: 300,
     show: false,
-    title: 'DevHub',
+    title: 'vibe-coding-ide',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1f1f1f' : '#f3f3f3',
     titleBarStyle: 'hidden',
     ...(isMac
@@ -119,7 +119,7 @@ function createWindow(opts: CreateOptions = {}): BrowserWindow {
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
-      additionalArguments: DEBUG ? ['--devhub-debug'] : []
+      additionalArguments: DEBUG ? ['--vibe-coding-ide-debug'] : []
     }
   })
 

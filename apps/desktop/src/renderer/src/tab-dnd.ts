@@ -4,10 +4,10 @@ import { toSnapshot, useTabs, type Tab } from './store'
 /**
  * Tab drag and drop.
  * - Within a window: reorder.
- * - Onto another DevHub window: that window adopts the tab (session moves, process keeps running).
- * - Released outside every DevHub window: the tab opens in a new window at the cursor.
+ * - Onto another vibe-coding-ide window: that window adopts the tab (session moves, process keeps running).
+ * - Released outside every vibe-coding-ide window: the tab opens in a new window at the cursor.
  */
-export const TAB_MIME = 'application/x-devhub-tab'
+export const TAB_MIME = 'application/x-vibe-coding-ide-tab'
 
 export function onTabDragStart(e: React.DragEvent, tab: Tab): void {
   const { windowId } = useTabs.getState()
@@ -18,7 +18,7 @@ export function onTabDragStart(e: React.DragEvent, tab: Tab): void {
 
 export function onTabDragEnd(e: React.DragEvent, tab: Tab): void {
   useTabs.getState().setDrop(undefined)
-  // dropEffect is 'move' when some DevHub window accepted the drop.
+  // dropEffect is 'move' when some vibe-coding-ide window accepted the drop.
   if (e.dataTransfer.dropEffect !== 'none') return
   const outside =
     e.screenX < window.screenX ||
@@ -27,7 +27,7 @@ export function onTabDragEnd(e: React.DragEvent, tab: Tab): void {
     e.screenY > window.screenY + window.outerHeight
   // A lone tab can't be torn out of its own window (it would just move the window).
   if (!outside || useTabs.getState().tabs.length < 2) return
-  void window.devhub.window.detachTab(toSnapshot(tab), e.screenX, e.screenY)
+  void window.ide.window.detachTab(toSnapshot(tab), e.screenX, e.screenY)
 }
 
 export function onWindowDragOver(e: React.DragEvent): void {
@@ -79,7 +79,7 @@ export function onWindowDrop(e: React.DragEvent): void {
   }
 
   const index = indexFor(store.tabs)
-  void window.devhub.window.adoptTab(payload.tab, payload.windowId).then((ok) => {
+  void window.ide.window.adoptTab(payload.tab, payload.windowId).then((ok) => {
     if (ok) useTabs.getState().insertExisting(payload.tab, index)
   })
 }

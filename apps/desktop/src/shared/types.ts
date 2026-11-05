@@ -234,10 +234,10 @@ export interface TabDragPayload {
   tab: TabSnapshot
 }
 
-/** API exposed by the preload script on `window.devhub`. */
-export interface DevHubApi {
+/** API exposed by the preload script on `window.ide`. */
+export interface IdeApi {
   platform: NodeJS.Platform
-  /** Debugging hooks for automated UI checks are exposed (remote debugging or DEVHUB_DEBUG=1). */
+  /** Debugging hooks for automated UI checks are exposed (remote debugging or VIBE_CODING_IDE_DEBUG=1). */
   debug: boolean
   profiles: {
     list(refresh?: boolean): Promise<Profile[]>

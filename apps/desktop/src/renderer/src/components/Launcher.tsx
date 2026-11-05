@@ -33,7 +33,7 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
 
   useEffect(() => {
     void loadProfiles().then(setProfiles)
-    void window.devhub.project.recent().then(setRecent)
+    void window.ide.project.recent().then(setRecent)
   }, [])
 
   useEffect(() => {
@@ -54,7 +54,7 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
         badge: 'project',
         run: () => {
           onClose()
-          void window.devhub.project.pickFolder().then((root) => {
+          void window.ide.project.pickFolder().then((root) => {
             if (root) void openProject(root)
           })
         }
@@ -71,7 +71,7 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
           profile: p,
           run: () => {
             onClose()
-            void window.devhub.project.pickFolder(`\\\\wsl.localhost\\${p.wslDistro}\\home`).then((root) => {
+            void window.ide.project.pickFolder(`\\\\wsl.localhost\\${p.wslDistro}\\home`).then((root) => {
               if (root) void openProject(root)
             })
           }

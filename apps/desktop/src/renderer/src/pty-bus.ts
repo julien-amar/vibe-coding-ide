@@ -5,10 +5,10 @@ type ExitHandler = (sessionId: string, code: number) => void
 const dataHandlers = new Map<string, Set<DataHandler>>()
 const exitHandlers = new Set<ExitHandler>()
 
-window.devhub.pty.onData((id, data) => {
+window.ide.pty.onData((id, data) => {
   dataHandlers.get(id)?.forEach((h) => h(data))
 })
-window.devhub.pty.onExit((id, code) => {
+window.ide.pty.onExit((id, code) => {
   exitHandlers.forEach((h) => h(id, code))
 })
 

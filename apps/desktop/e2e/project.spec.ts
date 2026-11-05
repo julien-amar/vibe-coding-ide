@@ -1,9 +1,9 @@
 import { appendFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { cleanup, createRepo, launch, openProject, tempDir, type DevHub } from './app'
+import { cleanup, createRepo, launch, openProject, tempDir, type TestApp } from './app'
 
-let hub: DevHub
+let hub: TestApp
 let profile: string
 let work: string
 let repo: string

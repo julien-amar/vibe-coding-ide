@@ -156,7 +156,7 @@ export function TabStrip(): React.JSX.Element {
           <button onClick={act(() => setEditingId(menu.tabId))}>Rename tab</button>
           <button
             disabled={tabs.length < 2}
-            onClick={act(() => void window.devhub.window.detachTab(toSnapshot(menuTab), window.screenX + 160, window.screenY + 60))}
+            onClick={act(() => void window.ide.window.detachTab(toSnapshot(menuTab), window.screenX + 160, window.screenY + 60))}
           >
             Move to new window
           </button>

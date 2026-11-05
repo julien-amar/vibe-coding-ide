@@ -29,7 +29,7 @@ export class PtyManager {
 
   create(profile: Profile, cols: number, rows: number, owner: WebContents, cwd?: string): string {
     const id = randomUUID()
-    const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor', TERM_PROGRAM: 'DevHub', ...profile.env } as Record<string, string>
+    const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor', TERM_PROGRAM: 'vibe-coding-ide', ...profile.env } as Record<string, string>
     const proc = pty.spawn(profile.command, profile.args, {
       name: 'xterm-256color',
       cols: Math.max(cols, 2),

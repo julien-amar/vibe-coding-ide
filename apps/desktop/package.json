@@ -1,11 +1,11 @@
 {
-  "name": "@devhub/desktop",
+  "name": "@vibe-coding-ide/desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "DevHub - a tabbed development environment",
+  "description": "vibe-coding-ide - a tabbed development environment",
   "license": "MIT",
   "main": "out/main/index.js",
-  "desktopName": "devhub.desktop",
+  "desktopName": "vibe-coding-ide.desktop",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",

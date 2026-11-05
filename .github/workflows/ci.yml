@@ -39,7 +39,7 @@ jobs:
 
       - name: Configure git (the tests create repositories)
         run: |
-          git config --global user.name "DevHub CI"
+          git config --global user.name "vibe-coding-ide CI"
           git config --global user.email "ci@example.com"
           git config --global init.defaultBranch main
 
