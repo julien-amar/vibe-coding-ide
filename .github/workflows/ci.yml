@@ -46,9 +46,35 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Toolchains of the Tests panel's fixture projects (Rust and Maven come with the runners;
+      # each framework's tests are skipped when its tool is missing).
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          cache: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: current
+
+      - name: Show the toolchains
+        shell: bash
+        run: |
+          for c in "go version" "cargo --version" "dotnet --version" "mvn -v" "gradle -v"; do $c 2>&1 | head -1 || echo "$c: not available"; done
 
       # The Tests panel's pytest fixture runs with its own virtualenv, like a real Python project
       # (the pytest tests are skipped when it is missing).

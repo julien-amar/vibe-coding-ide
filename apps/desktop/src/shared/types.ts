@@ -44,18 +44,25 @@ export type TabKind = ProfileKind | 'project'
 export type PaneType = 'terminal' | 'agent' | 'git' | 'tests'
 
 /** Test frameworks the Tests panel can discover and run. */
-export type TestFramework = 'vitest' | 'jest' | 'playwright' | 'pytest'
+export type TestFramework = 'vitest' | 'jest' | 'playwright' | 'pytest' | 'go' | 'cargo' | 'dotnet' | 'maven' | 'gradle'
 
 /** A test (one per Playwright project when a config defines several). */
 export interface TestCase {
   /** Stable id: framework-specific, unique within its TestProject. */
   id: string
-  /** File relative to the test project's folder, with forward slashes. */
+  /**
+   * First level of the tree, relative to the test project's folder with forward slashes: the
+   * test file — or, where tests are not grouped by file, the Go package folder or the
+   * .NET / JVM class.
+   */
   file: string
-  /** Enclosing describe() titles, outermost first. */
+  /** Enclosing describe() titles / modules / nested classes, outermost first. */
   suite: string[]
   name: string
+  /** Line of the test in `source` (or `file`). */
   line?: number
+  /** Source file of the test when `file` is not one (Go package, .NET / JVM class). */
+  source?: string
   /** Playwright project name (several projects run the same spec). */
   projectName?: string
 }

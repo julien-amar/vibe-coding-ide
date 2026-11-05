@@ -1,0 +1,2 @@
+// Fixture for the Tests panel (Java tests with Gradle and JUnit 5).
+rootProject.name = 'sample-tests-gradle'

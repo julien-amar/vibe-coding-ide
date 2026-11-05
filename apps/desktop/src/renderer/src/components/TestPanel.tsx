@@ -184,7 +184,7 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
                 }}
                 onDoubleClick={() => {
                   // A test opens in the editor at its line; a group folds / unfolds.
-                  if (node.test) void openFile(root, project, node.test.file, node.test.line)
+                  if (node.test) void openFile(root, project, node.test.source ?? node.test.file, node.test.line)
                   else setExpanded((e) => ({ ...e, [node.key]: !isOpen }))
                 }}
               >
@@ -361,10 +361,10 @@ function TestDetails({
             title="Open in your editor"
             onClick={(e) => {
               e.preventDefault()
-              void openFile(root, project, test.file, test.line)
+              void openFile(root, project, test.source ?? test.file, test.line)
             }}
           >
-            {test.file}
+            {test.source ?? test.file}
             {test.line ? `:${test.line}` : ''}
           </a>
           {r && 'duration' in r && r.duration !== undefined ? ` · ${formatDuration(r.duration)}` : ''}

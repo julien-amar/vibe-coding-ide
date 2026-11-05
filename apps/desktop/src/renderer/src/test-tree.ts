@@ -14,7 +14,17 @@ export interface TestTreeNode {
   test?: TestCase
 }
 
-export const FRAMEWORK_LABEL: Record<TestProject['framework'], string> = { vitest: 'Vitest', jest: 'Jest', playwright: 'Playwright', pytest: 'pytest' }
+export const FRAMEWORK_LABEL: Record<TestProject['framework'], string> = {
+  vitest: 'Vitest',
+  jest: 'Jest',
+  playwright: 'Playwright',
+  pytest: 'pytest',
+  go: 'Go',
+  cargo: 'Rust',
+  dotnet: '.NET',
+  maven: 'Maven',
+  gradle: 'Gradle'
+}
 
 /** Tree of a test project: files, then nested suites, then tests (in listing order). */
 export function buildTestTree(project: TestProject): TestTreeNode {

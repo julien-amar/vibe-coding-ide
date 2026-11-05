@@ -31,6 +31,28 @@ export function runCommand(project: TestProject, test?: TestCase, file?: string)
     case 'pytest':
       cmd = ['python -m pytest', f && quote(test ? [f, ...test.suite, test.name].join('::') : f)].filter(Boolean).join(' ')
       break
+    case 'go': {
+      // file = package folder; -run: one anchored pattern per level (test / subtest).
+      const pkg = f ? (f === '.' ? '.' : `./${f}`) : './...'
+      const run = test ? ` -run ${quote([...test.suite, test.name].map((t) => `^${regex(t)}$`).join('/'))}` : ''
+      cmd = `go test ${quote(pkg)}${run}`
+      break
+    }
+    case 'cargo':
+      cmd = test ? `cargo test -- ${quote([...test.suite, test.name].join('::'))} --exact` : 'cargo test'
+      break
+    case 'dotnet': {
+      // file = class; a data-driven test's cases run together (filter on the method).
+      const method = test?.name.replace(/\(.*\)$/s, '')
+      cmd = f && f !== '(tests)' ? `dotnet test --filter ${quote(test ? `FullyQualifiedName=${f}.${method}` : `FullyQualifiedName~${f}.`)}` : 'dotnet test'
+      break
+    }
+    case 'maven':
+      cmd = f ? `mvn test ${quote(`-Dtest=${test ? `${f}#${test.name}` : f}`)}` : 'mvn test'
+      break
+    case 'gradle':
+      cmd = f ? `gradle test --tests ${quote(test ? `${f}.${test.name}` : f)}` : 'gradle test'
+      break
   }
   return project.relDir ? `cd ${quote(project.relDir)} && ${cmd}` : cmd
 }
@@ -45,7 +67,8 @@ export interface Failure {
 /** Prompt asking the agent to fix failing tests of one test project. */
 export function fixPrompt(project: TestProject, failures: Failure[]): string {
   const fw = FRAMEWORK_LABEL[project.framework]
-  const where = (t: TestCase): string => `${projectPath(project, t.file)}${t.line ? `:${t.line}` : ''}`
+  // The test's source file (a Go package, .NET / JVM class is not one).
+  const where = (t: TestCase): string => `${projectPath(project, t.source ?? t.file)}${t.line ? `:${t.line}` : ''}`
   const title = (t: TestCase): string => [...t.suite, t.name].join(' › ') + (t.projectName ? ` [${t.projectName}]` : '')
   if (failures.length === 1) {
     const { test, message } = failures[0]

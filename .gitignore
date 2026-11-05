@@ -10,3 +10,10 @@ playwright-report/
 .venv/
 __pycache__/
 .pytest_cache/
+# Build output of the Tests panel's fixture projects (Rust, .NET, Java)
+apps/desktop/e2e/fixtures/**/target/
+apps/desktop/e2e/fixtures/**/bin/
+apps/desktop/e2e/fixtures/**/obj/
+apps/desktop/e2e/fixtures/**/build/
+apps/desktop/e2e/fixtures/**/.gradle/
+apps/desktop/e2e/fixtures/**/Cargo.lock
