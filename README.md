@@ -61,7 +61,7 @@ Unit tests live next to the code (`src/**/*.test.ts`), end-to-end tests in `apps
   git tag v0.2.0
   git push origin v0.2.0
   ```
-  Installers: Windows `.exe` (NSIS), macOS `.dmg` / `.zip` (Apple Silicon), Linux `.AppImage` / `.deb`. They are **unsigned** for now (Windows SmartScreen and macOS Gatekeeper will warn). *Actions → Release → Run workflow* builds them as downloadable artifacts without publishing.
+  Installers: Windows `.exe` (NSIS), macOS `.dmg` / `.zip` (Apple Silicon), Linux `.AppImage` / `.deb`. They are **unsigned** for now (Windows SmartScreen and macOS Gatekeeper will warn). You can also release from *Actions → Release → Run workflow* by entering the tag (e.g. `v0.2.0`): it is created on the selected branch's commit. Leave the tag empty to only build the installers as downloadable artifacts.
 - Local installer for the current OS: `pnpm --filter @devhub/desktop dist` (output in `apps/desktop/dist`).
 
 ## Shortcuts
