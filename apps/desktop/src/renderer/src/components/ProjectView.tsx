@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { hasVisiblePane, panesOf, updateAt, type DropSide, type PaneNode } from '@shared/layout'
 import type { LayoutNode, PaneType, Profile } from '@shared/types'
 import { parseWslPath } from '@shared/wsl-paths'
@@ -206,33 +207,59 @@ function GitPane({ tab, pane, visible }: { tab: Tab; pane: PaneNode; visible: bo
   )
 }
 
-/** "+" menu of the side rail: add a panel to the project. */
+/**
+ * "+" menu of the side rail: add a panel to the project. The menu is rendered
+ * in a portal with fixed positioning: inside the rail it would be clipped by
+ * the rail's scroll container (overflow) and hidden behind the panels.
+ */
 function AddPanelButton({ tab }: { tab: Tab }): React.JSX.Element {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const [menuPos, setMenuPos] = useState<{ left: number; top: number }>()
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
   const addPane = useTabs((s) => s.addPane)
+  const open = menuPos !== undefined
 
   useEffect(() => {
     if (!open) return
     const onDown = (e: MouseEvent): void => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false)
+      const target = e.target as Node
+      if (!menuRef.current?.contains(target) && !buttonRef.current?.contains(target)) setMenuPos(undefined)
     }
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setMenuPos(undefined)
+    }
+    const close = (): void => setMenuPos(undefined)
     window.addEventListener('mousedown', onDown)
-    return () => window.removeEventListener('mousedown', onDown)
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('resize', close)
+    window.addEventListener('blur', close)
+    return () => {
+      window.removeEventListener('mousedown', onDown)
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('resize', close)
+      window.removeEventListener('blur', close)
+    }
   }, [open])
 
+  const toggle = (): void => {
+    if (open) return setMenuPos(undefined)
+    const r = buttonRef.current!.getBoundingClientRect()
+    setMenuPos({ left: r.right + 6, top: r.top })
+  }
+
   const add = (type: PaneType): void => {
-    setOpen(false)
+    setMenuPos(undefined)
     void addPane(tab.id, type)
   }
 
   return (
-    <div className="rail-add" ref={ref}>
-      <button className="rail-item add" title="Add a panel" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
+    <div className="rail-add">
+      <button ref={buttonRef} className="rail-item add" title="Add a panel" aria-haspopup="menu" aria-expanded={open} onClick={toggle}>
         <span className="rail-plus">+</span>
       </button>
-      {open && (
-        <div className="context-menu rail-menu" role="menu">
+      {menuPos &&
+        createPortal(
+        <div ref={menuRef} className="context-menu rail-menu" role="menu" style={{ left: menuPos.left, top: menuPos.top }}>
           <button onClick={() => add('terminal')}>
             <span className="pane-icon">{PANE_ICON.terminal}</span> Terminal
           </button>
@@ -242,8 +269,9 @@ function AddPanelButton({ tab }: { tab: Tab }): React.JSX.Element {
           <button onClick={() => add('git')}>
             <span className="pane-icon git">{PANE_ICON.git}</span> Git
           </button>
-        </div>
-      )}
+        </div>,
+          document.body
+        )}
     </div>
   )
 }
