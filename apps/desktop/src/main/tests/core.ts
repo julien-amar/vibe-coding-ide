@@ -5,6 +5,7 @@ import { dirname, extname, join, relative } from 'node:path'
 import type { TestCase, TestFramework, TestResult, TestRunRequest, TestRunResult } from '@shared/types'
 import { parseWslPath } from '@shared/wsl-paths'
 import { launchSpec, which } from '../profiles'
+import { wslenvWith, wslExe, wslLogin } from '../wsl'
 
 /**
  * Shared pieces of the Tests panel backend: the adapter interface every
@@ -168,11 +169,10 @@ export interface Command {
 export function programCommand(dir: string, program: string, args: string[], env: Record<string, string> = {}): Command {
   const wsl = isWslDir(dir) ? parseWslPath(dir) : undefined
   if (wsl) {
-    const wslExe = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe')
     return {
-      file: wslExe,
-      args: ['-d', wsl.distro, '--cd', wsl.path, '--exec', 'bash', '-lic', 'exec "$@"', 'run', program, ...args],
-      env: { ...env, WSLENV: [process.env.WSLENV, ...Object.keys(env)].filter(Boolean).join(':') }
+      file: wslExe(),
+      args: wslLogin(wsl.distro, program, args, { cd: wsl.path, interactive: true }),
+      env: { ...env, WSLENV: wslenvWith(...Object.keys(env)) }
     }
   }
   // Windows .cmd / .bat scripts (mvn, gradlew.bat…) run through cmd.exe.

@@ -1,36 +1,21 @@
-import { createHash } from 'node:crypto'
-import { appendFileSync, existsSync, rmSync, statSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { appendFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, type Rectangle, type WebContents } from 'electron'
 import { mapPanes, sessionIdsOf } from '@shared/layout'
-import type { Profile, TestRunRequest, GitOpRequest,LayoutNode, PtyCreateRequest, PtyCreateResult, TabSnapshot, WindowInit, WindowTabsState, PackageUpdateInfo } from '@shared/types'
-import { gitLog, gitOp, GitWatcher } from './git'
-import { loadLayout, saveLayout, visibleBounds, type SavedWindow } from './layout-store'
-import { profileIcon } from './icons'
-import { findProfile, listProfiles, wslAgents, wslHome } from './profiles'
-import { recentProjects, touchProject } from './projects'
-import { checkForUpdates, installUpdate, startUpdates, updateStatus } from './updater'
-import { PtyManager } from './pty-manager'
-import { checkUpdates, forgetUpdates, type UpdateTarget } from './package-updates'
-import { parseWslPath } from '@shared/wsl-paths'
-import { discoverTests, runTests, stopAllTests, stopTests } from './test-runner'
+import type { GitOpRequest, PackageUpdateInfo, PtyCreateRequest, PtyCreateResult, TabSnapshot, TestRunRequest, WindowInit, WindowTabsState } from '@shared/types'
 import { openInEditor } from './editor'
-import {
-  agentMajorVersion,
-  agentOf,
-  checkMcpServer,
-  compileHarness,
-  directLaunch,
-  HARNESS_SUPPORT,
-  harnessIsEmpty,
-  listSkills,
-  readProjectMcpJson,
-  readSkillFile,
-  sanitizeHarness,
-  type CompiledHarness,
-  type HarnessTarget
-} from './harness'
+import { gitLog, gitOp, GitWatcher } from './git'
+import { checkMcpServer, HARNESS_SUPPORT, listSkills, readProjectMcpJson, readSkillFile, sanitizeHarness } from './harness'
+import { profileIcon } from './icons'
+import { isDir, startIn, withAgentSettings } from './launch'
+import { sanitizeTab } from './layout-sanitize'
+import { loadLayout, saveLayout, visibleBounds, type SavedWindow } from './layout-store'
+import { checkUpdates, forgetUpdates, type UpdateTarget } from './package-updates'
+import { findProfile, listProfiles, wslAgents } from './profiles'
+import { recentProjects, touchProject } from './projects'
+import { PtyManager } from './pty-manager'
+import { discoverTests, runTests, stopAllTests, stopTests } from './test-runner'
+import { checkForUpdates, installUpdate, startUpdates, updateStatus } from './updater'
 
 app.setName('vibe-coding-ide')
 // VIBE_CODING_IDE_USER_DATA: run with a separate profile (layout, recent projects), e.g. for automated tests.
@@ -204,50 +189,6 @@ function restoreOrCreate(): void {
   }
 }
 
-// ---------- Validation of renderer input ----------
-
-const PANE_TYPES = new Set(['terminal', 'agent', 'git', 'tests'])
-const TAB_KINDS = new Set(['shell', 'wsl', 'agent', 'project'])
-
-/** Validate a layout tree coming from a renderer (drops anything malformed). */
-function sanitizeLayout(n: LayoutNode | undefined, depth = 0): LayoutNode | undefined {
-  if (!n || typeof n !== 'object' || depth > 8) return undefined
-  if (n.kind === 'split' && Array.isArray(n.children)) {
-    const children = n.children.map((c) => sanitizeLayout(c, depth + 1)).filter((c): c is LayoutNode => !!c)
-    if (children.length === 0) return undefined
-    const sizes =
-      Array.isArray(n.sizes) && n.sizes.length === children.length && n.sizes.every((v) => Number(v) > 0)
-        ? n.sizes.map(Number)
-        : children.map(() => 1 / children.length)
-    return { kind: 'split', dir: n.dir === 'column' ? 'column' : 'row', sizes, children }
-  }
-  if (n.kind === 'pane' && PANE_TYPES.has(n.type)) {
-    return {
-      kind: 'pane',
-      id: String(n.id),
-      type: n.type,
-      profileId: n.profileId ? String(n.profileId) : undefined,
-      sessionId: n.sessionId ? String(n.sessionId) : undefined,
-      collapsed: n.collapsed === true ? true : undefined,
-      // AI agent panes keep their own settings.
-      harness: n.type === 'agent' && n.harness && !harnessIsEmpty(sanitizeHarness(n.harness)) ? sanitizeHarness(n.harness) : undefined
-    }
-  }
-  return undefined
-}
-
-function sanitizeTab(t: TabSnapshot): TabSnapshot {
-  const layout = t.project && typeof t.project.root === 'string' ? sanitizeLayout(t.project.layout) : undefined
-  return {
-    kind: TAB_KINDS.has(t.kind) ? t.kind : 'shell',
-    profileId: t.profileId ? String(t.profileId) : undefined,
-    autoTitle: String(t.autoTitle ?? ''),
-    customTitle: t.customTitle ? String(t.customTitle) : undefined,
-    sessionId: t.sessionId ? String(t.sessionId) : undefined,
-    project: t.project && layout ? { root: String(t.project.root), name: String(t.project.name ?? ''), layout } : undefined
-  }
-}
-
 /** Stable identity of a moved tab, sent back to the source window so it can drop it. */
 function tabKey(tab: TabSnapshot): string {
   return sessionIdsOf(tab)[0] ?? `project:${tab.project?.root ?? ''}`
@@ -273,14 +214,6 @@ function transferAll(ids: string[], from: WebContents, to: WebContents): boolean
   return true
 }
 
-const isDir = (p: string): boolean => {
-  try {
-    return existsSync(p) && statSync(p).isDirectory()
-  } catch {
-    return false
-  }
-}
-
 // ---------- IPC ----------
 
 function registerIpc(): void {
@@ -291,58 +224,13 @@ function registerIpc(): void {
     return profile ? profileIcon(profile) : null
   })
 
-  /**
-   * An agent profile with its settings added. Host agents: arguments appended (npm command shims
-   * launched directly: cmd.exe would mangle quotes and line breaks). WSL agents (… --exec bash -lic
-   * 'exec <agent>'): the arguments go through "$@", one Linux argument each; environment variables
-   * cross into the distribution through WSLENV.
-   */
-  const withHarness = (launch: Profile, extra: CompiledHarness): Profile => {
-    const env = { ...(launch.env ?? {}), ...extra.env }
-    if (launch.wslDistro) {
-      const last = launch.args.length - 1
-      const agentCmd = /^exec (\S+)$/.exec(launch.args[last] ?? '')?.[1]
-      if (!agentCmd) return launch
-      const names = Object.keys(extra.env)
-      return {
-        ...launch,
-        args: [...launch.args.slice(0, last), `exec ${agentCmd} "$@"`, agentCmd, ...extra.args],
-        env: names.length ? { ...env, WSLENV: [process.env.WSLENV, launch.env?.WSLENV, ...names].filter(Boolean).join(':') } : env
-      }
-    }
-    const direct = extra.args.length ? directLaunch(launch.command, launch.args) : undefined
-    return { ...launch, ...(direct ?? {}), args: [...(direct?.args ?? launch.args), ...extra.args], env }
-  }
-
   ipcMain.handle('pty:create', async (e, req: PtyCreateRequest): Promise<PtyCreateResult> => {
     const profile = await findProfile(req.profileId)
     if (!profile) throw new Error(`Unknown profile: ${req.profileId}`)
-    let launch = profile
-    let cwd: string | undefined
-    if (profile.wslDistro) {
-      // WSL processes start in a Linux directory: a Linux path, or a \\wsl.localhost\<distro>\… path of the same distro.
-      const wsl = req.cwd ? parseWslPath(req.cwd) : undefined
-      const linuxDir = req.cwd?.startsWith('/') ? req.cwd : wsl && wsl.distro.toLowerCase() === profile.wslDistro.toLowerCase() ? wsl.path : undefined
-      if (linuxDir) {
-        const i = profile.args.indexOf('--cd')
-        launch = { ...profile, args: i >= 0 ? profile.args.map((a, j) => (j === i + 1 ? linuxDir : a)) : ['--cd', linuxDir, ...profile.args] }
-      }
-    } else {
-      cwd = req.cwd && isDir(req.cwd) ? req.cwd : undefined
-    }
+    const start = startIn(profile, req.cwd)
+    const cwd = start.cwd
     // An AI agent pane's own settings (generated files in app data, passed with flags).
-    const harness = req.harness ? sanitizeHarness(req.harness) : undefined
-    if (profile.kind === 'agent' && harness && !harnessIsEmpty(harness)) {
-      const root = req.harnessRoot && isDir(String(req.harnessRoot)) ? String(req.harnessRoot) : (cwd ?? homedir())
-      const outDir = join(harnessRuns(), createHash('sha1').update(root + JSON.stringify(harness)).digest('hex').slice(0, 16))
-      const agent = agentOf(profile.id)
-      const outDirFor = join(outDir, `${agent ?? 'agent'}${profile.wslDistro ? `-${profile.wslDistro}` : ''}`)
-      const target: HarnessTarget = profile.wslDistro ? { kind: 'wsl', distro: profile.wslDistro, home: await wslHome(profile.wslDistro) } : { kind: 'host' }
-      // opencode 2 needs a private server for the panel's settings (opencode 1 does not know the flag).
-      const opencodeMajor = agent === 'opencode' ? await agentMajorVersion(launch) : undefined
-      const extra = compileHarness(agent, harness, root, outDirFor, target, { opencodeMajor })
-      if (extra.args.length || Object.keys(extra.env).length) launch = withHarness(launch, extra)
-    }
+    const launch = await withAgentSettings(start.launch, req, cwd, harnessRuns())
     const sessionId = ptys.create(launch, req.cols, req.rows, e.sender, cwd)
     // A shell starting: check (once, in the background) whether its system has package updates —
     // the WSL distribution for WSL shells, Windows (winget) for PowerShell / cmd / Git Bash…

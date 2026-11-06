@@ -11,7 +11,8 @@ import { ProfileSelect } from './ProfileSelect'
 import { SplitView } from './SplitView'
 import { TerminalView } from './TerminalView'
 import { TestPanel } from './TestPanel'
-import { emptyHarness, HarnessDialog, harnessSize } from './HarnessDialog'
+import { emptyHarness, harnessSize } from '@shared/harness'
+import { HarnessDialog } from './HarnessDialog'
 
 const PANE_ICON: Record<PaneNode['type'], string> = { git: '⎇', terminal: '>_', agent: 'AI', tests: '✓' }
 const PANE_MIME = 'application/x-vibe-coding-ide-pane'

@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { hunkLines, partialPatch, partialUnsupported } from '@shared/git-patch'
 import { gitOp } from './git'
-import { firstUrl, newPullRequestUrl, parseRemote } from './git-hosting'
+import { firstUrl, newPullRequestUrl, parseRemote } from './git/hosting'
 
 let base: string
 let repo: string

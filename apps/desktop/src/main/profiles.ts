@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process'
 import { existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { basename, delimiter, dirname, extname, join } from 'node:path'
 import type { Profile } from '@shared/types'
+import { decodeWslOutput, wslenvWith, wslExe, wslExec } from './wsl'
 
 const isWin = process.platform === 'win32'
 
@@ -182,21 +183,9 @@ function unixShells(): Profile[] {
   return profiles
 }
 
-/** WSLENV with an extra entry, keeping what the user already shares with WSL. */
-export function wslenvWith(entry: string): string {
-  const cur = process.env.WSLENV
-  return cur ? `${cur}:${entry}` : entry
-}
-
-/** Decode `wsl.exe` output, which is UTF-16LE unless WSL_UTF8=1 is honored. */
-function decodeWslOutput(buf: Buffer): string {
-  const looksUtf16 = buf.length >= 2 && (buf[1] === 0 || (buf[0] === 0xff && buf[1] === 0xfe))
-  return (looksUtf16 ? buf.toString('utf16le') : buf.toString('utf8')).replace(/^\uFEFF/, '').replace(/\0/g, '')
-}
-
 function wslDistros(): Promise<Profile[]> {
   if (!isWin) return Promise.resolve([])
-  const wsl = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe')
+  const wsl = wslExe()
   if (!isFile(wsl)) return Promise.resolve([])
   return new Promise((resolve) => {
     execFile(wsl, ['-l', '-q'], { encoding: 'buffer', timeout: 5000, windowsHide: true }, (err, stdout) => {
@@ -249,9 +238,8 @@ const wslHomeCache = new Map<string, Promise<string | undefined>>()
 export function wslHome(distro: string): Promise<string | undefined> {
   const known = wslHomeCache.get(distro)
   if (known) return known
-  const wsl = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe')
   const p = new Promise<string | undefined>((resolve) => {
-    execFile(wsl, ['-d', distro, '--exec', 'sh', '-c', 'printf %s "$HOME"'], { encoding: 'buffer', timeout: 20000, windowsHide: true }, (_err, stdout) => {
+    execFile(wslExe(), wslExec(distro, ['sh', '-c', 'printf %s "$HOME"']), { encoding: 'buffer', timeout: 20000, windowsHide: true }, (_err, stdout) => {
       const home = decodeWslOutput((stdout as Buffer) ?? Buffer.alloc(0)).trim()
       resolve(home.startsWith('/') ? `\\\\wsl.localhost\\${distro}${home.replace(/\//g, '\\')}` : undefined)
     })
@@ -278,10 +266,10 @@ const AGENT_LABELS: Record<string, string> = { claude: 'Claude Code', codex: 'Co
 export function wslAgents(distro: string): Promise<Profile[]> {
   const known = wslAgentCache.get(distro)
   if (known) return Promise.resolve(known)
-  const wsl = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe')
+  const wsl = wslExe()
   const script = `for c in ${Object.keys(AGENT_LABELS).join(' ')}; do p=$(command -v "$c" 2>/dev/null) && echo "$c=$p"; done`
   return new Promise((resolve) => {
-    execFile(wsl, ['-d', distro, '--exec', 'bash', '-lic', script], { encoding: 'buffer', timeout: 20000, windowsHide: true }, (_err, stdout) => {
+    execFile(wsl, wslExec(distro, ['bash', '-lic', script]), { encoding: 'buffer', timeout: 20000, windowsHide: true }, (_err, stdout) => {
       const found: Profile[] = []
       for (const line of decodeWslOutput((stdout as Buffer) ?? Buffer.alloc(0)).split(/\r?\n/)) {
         const m = /^(\w+)=(\/.+)$/.exec(line.trim())

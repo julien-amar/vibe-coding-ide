@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
-import { join } from 'node:path'
 import type { PackageUpdateInfo } from '@shared/types'
 import { which } from './profiles'
+import { wslExe, wslExec } from './wsl'
 
 /**
  * Pending package updates of the system a shell runs on, checked once when the
@@ -44,10 +44,9 @@ const UPDATE_COMMANDS: Record<string, string> = {
 }
 
 function checkWsl(distro: string): Promise<PackageUpdateInfo | null> {
-  const wsl = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe')
   return new Promise((resolve) => {
-    // --exec: run sh directly so the script reaches it unmodified (no shell re-parsing by wsl.exe).
-    execFile(wsl, ['-d', distro, '--exec', 'sh', '-c', WSL_CHECK_SCRIPT], { timeout: 30000, windowsHide: true }, (err, stdout) => {
+    // sh run directly, so the script reaches it unmodified (no shell re-parsing by wsl.exe).
+    execFile(wslExe(), wslExec(distro, ['sh', '-c', WSL_CHECK_SCRIPT]), { timeout: 30000, windowsHide: true }, (err, stdout) => {
       if (err && !stdout) return resolve(null)
       const m = /^(\w+) (\d+)/m.exec(String(stdout))
       const manager = m?.[1]

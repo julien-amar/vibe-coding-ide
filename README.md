@@ -76,6 +76,21 @@ If Electron fails to start because its binary is missing, run `pnpm run ensure-e
 
 Automated UI checks: set `VIBE_CODING_IDE_USER_DATA=<folder>` to run with a separate profile (layout, recent projects), and start the app with `--remote-debugging-port=<port>` (or `VIBE_CODING_IDE_DEBUG=1`) to expose `window.__vibeIdeTabs` and `.terminal-host.__xterm` for scripted checks over the DevTools protocol.
 
+## Code layout
+Everything lives in `apps/desktop/src`:
+
+| Folder | What |
+|---|---|
+| `main/index.ts` | Electron entry: windows, layout saving, IPC handlers (thin: they call the modules below) |
+| `main/launch.ts`, `main/layout-sanitize.ts` | How a panel's process starts (folder, an agent's settings); validation of tabs and layouts from the renderer |
+| `main/git/` | Git panel backend: `run` (git / gh / glab, also inside WSL), `repo` (log, status, branches), `ops` (every action), `pull-requests`, `hosting`, `watcher` |
+| `main/harness/` | AI agent panel settings: `model`, `support` (what each agent gets), `compile` (into each agent's flags and files), `skills`, `mcp` (health check), `launch` (npm shims, versions), `target` (host or WSL paths) |
+| `main/tests/` | Tests panel adapters (Vitest/Jest/Playwright, pytest, Go, Rust, .NET, Maven/Gradle) on `core.ts`; reporters injected at run time in `main/test-helpers/` |
+| `main/wsl.ts`, `main/profiles.ts` | Running programs in WSL distributions; shells, distributions and agents found on the machine |
+| `main/updater.ts`, `main/package-updates.ts` | The app's own updates; package updates of the systems shells run on |
+| `shared/` | Types and pure helpers used by both sides (layout tree, WSL paths, partial staging patches, agent settings) |
+| `renderer/src/` | React UI: `store.ts` (tabs, layouts), `components/` (one file per panel or view: `GitPanel` + `GitChanges` / `GitBranches` / `GitPullRequest`, `HarnessDialog` + `HarnessMcp` / `HarnessSkills` / `HarnessInstructions`, `TestPanel`…) |
+
 ## Tests
 ```sh
 pnpm test        # unit tests (Vitest): layout tree, git / winget / shell parsers, git operations on a real repo
