@@ -42,7 +42,10 @@ export function parseJavaTests(text: string): JavaTest[] {
       line = line.slice(end + 2)
       inBlockComment = false
     }
-    line = line.replace(/\/\*.*?\*\//g, ' ').replace(/"(?:[^"\\]|\\.)*"/g, '""').replace(/\/\/.*$/, '')
+    line = line
+      .replace(/\/\*.*?\*\//g, ' ')
+      .replace(/"(?:[^"\\]|\\.)*"/g, '""')
+      .replace(/\/\/.*$/, '')
     const open = line.indexOf('/*')
     if (open >= 0) {
       inBlockComment = true
@@ -165,7 +168,10 @@ export function surefirePatterns(pom: string): { includes: string[]; excludes: s
 // eslint-disable-next-line no-irregular-whitespace -- a zero-width space keeps "**/" from ending the comment
 /** Ant-style pattern (`**​/*Test.java`, `Test*`, `com/x/**`) as a regex on a path under src/test/java. */
 function antRegex(pattern: string): RegExp {
-  const p = pattern.replace(/\\/g, '/').replace(/^\//, '').replace(/\.(java|class)$/, '')
+  const p = pattern
+    .replace(/\\/g, '/')
+    .replace(/^\//, '')
+    .replace(/\.(java|class)$/, '')
   let re = ''
   for (let i = 0; i < p.length; i++) {
     if (p.startsWith('**/', i)) {
@@ -223,7 +229,14 @@ function adapter(framework: JvmFramework): Adapter {
     ownsSubfolders: true,
 
     async list(dir) {
-      const tests: TestCase[] = javaTests(dir, framework).map((t) => ({ id: testId(t.cls, [t.method]), file: t.cls, suite: [], name: t.method, source: t.source, line: t.line }))
+      const tests: TestCase[] = javaTests(dir, framework).map((t) => ({
+        id: testId(t.cls, [t.method]),
+        file: t.cls,
+        suite: [],
+        name: t.method,
+        source: t.source,
+        line: t.line
+      }))
       return { tests }
     },
 

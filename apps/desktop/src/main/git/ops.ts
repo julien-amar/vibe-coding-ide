@@ -46,9 +46,20 @@ export async function gitOp(root: string, req: GitOpRequest): Promise<GitOpResul
         if (diff !== req.diffText) throw new Error('The file changed meanwhile: check its changes again.')
         const why = partialUnsupported(diff)
         if (why) throw new Error(`The lines of a ${why} cannot be ${action === 'discard' ? 'discarded' : `${action}d`} separately.`)
-        const patch = partialPatch(diff, (req.lines ?? []).filter((n) => Number.isInteger(n)), action !== 'stage')
+        const patch = partialPatch(
+          diff,
+          (req.lines ?? []).filter((n) => Number.isInteger(n)),
+          action !== 'stage'
+        )
         if (!patch) throw new Error('No changed line selected.')
-        const args = ['apply', ...(action === 'discard' ? [] : ['--cached']), ...(action === 'stage' ? [] : ['--reverse']), '--recount', '--whitespace=nowarn', '-']
+        const args = [
+          'apply',
+          ...(action === 'discard' ? [] : ['--cached']),
+          ...(action === 'stage' ? [] : ['--reverse']),
+          '--recount',
+          '--whitespace=nowarn',
+          '-'
+        ]
         await git(root, args, { input: patch })
         return { ok: true }
       }
@@ -172,7 +183,10 @@ export async function gitOp(root: string, req: GitOpRequest): Promise<GitOpResul
           // process still has open. If the worktree is gone from git, that is a success with a note.
           const stillThere = (await gitWorktrees(root)).some((w) => w.path === wt.path)
           if (stillThere) throw err
-          return { ok: true, text: `The worktree was removed, but the folder ${wt.path} is still in use and could not be deleted. Delete it once nothing uses it.` }
+          return {
+            ok: true,
+            text: `The worktree was removed, but the folder ${wt.path} is still in use and could not be deleted. Delete it once nothing uses it.`
+          }
         }
         return { ok: true }
       }

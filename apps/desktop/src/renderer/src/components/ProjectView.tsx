@@ -58,7 +58,19 @@ function sideAt(e: React.DragEvent, el: HTMLElement): DropSide {
  * Common frame of a project panel: a header (drag handle to move the panel,
  * split / collapse / close buttons) and a body that accepts dropped panels.
  */
-function PaneFrame({ tab, pane, title, actions, children }: { tab: Tab; pane: PaneNode; title: React.ReactNode; actions?: React.ReactNode; children: React.ReactNode }): React.JSX.Element {
+function PaneFrame({
+  tab,
+  pane,
+  title,
+  actions,
+  children
+}: {
+  tab: Tab
+  pane: PaneNode
+  title: React.ReactNode
+  actions?: React.ReactNode
+  children: React.ReactNode
+}): React.JSX.Element {
   const addPane = useTabs((s) => s.addPane)
   const closePane = useTabs((s) => s.closePane)
   const movePaneTo = useTabs((s) => s.movePane)
@@ -98,10 +110,19 @@ function PaneFrame({ tab, pane, title, actions, children }: { tab: Tab; pane: Pa
             </button>
           </>
         )}
-        <button className="icon-button pane-action collapse-button" title="Collapse to the side bar (the process keeps running)" onClick={() => setPaneCollapsed(tab.id, pane.id, true)}>
+        <button
+          className="icon-button pane-action collapse-button"
+          title="Collapse to the side bar (the process keeps running)"
+          onClick={() => setPaneCollapsed(tab.id, pane.id, true)}
+        >
           <Icon d={ICONS.collapse} />
         </button>
-        <button className="icon-button pane-action" title={onlyPane ? 'A project keeps at least one panel' : 'Close panel (stops its process)'} disabled={onlyPane} onClick={() => closePane(tab.id, pane.id)}>
+        <button
+          className="icon-button pane-action"
+          title={onlyPane ? 'A project keeps at least one panel' : 'Close panel (stops its process)'}
+          disabled={onlyPane}
+          onClick={() => closePane(tab.id, pane.id)}
+        >
           <Icon d={ICONS.close} />
         </button>
       </div>
@@ -199,9 +220,7 @@ function TerminalPane({ tab, pane, visible, autoFocus }: { tab: Tab; pane: PaneN
       {pane.sessionId ? (
         <TerminalView key={pane.sessionId} sessionId={pane.sessionId} restoredScrollback={pane.scrollback} visible={visible} autoFocus={autoFocus} />
       ) : (
-        <div className="pane-message">
-          {isAgent ? <p>No AI agent CLI found on PATH (claude, codex, gemini, opencode, pi).</p> : <p>No shell available.</p>}
-        </div>
+        <div className="pane-message">{isAgent ? <p>No AI agent CLI found on PATH (claude, codex, gemini, opencode, pi).</p> : <p>No shell available.</p>}</div>
       )}
       {settingsOpen && (
         <HarnessDialog
@@ -318,20 +337,20 @@ function AddPanelButton({ tab }: { tab: Tab }): React.JSX.Element {
       </button>
       {menuPos &&
         createPortal(
-        <div ref={menuRef} className="context-menu rail-menu" role="menu" style={{ left: menuPos.left, top: menuPos.top }}>
-          <button onClick={() => add('terminal')}>
-            <span className="pane-icon">{PANE_ICON.terminal}</span> Terminal
-          </button>
-          <button onClick={() => add('agent')}>
-            <span className="pane-icon agent">{PANE_ICON.agent}</span> AI agent
-          </button>
-          <button onClick={() => add('git')}>
-            <span className="pane-icon git">{PANE_ICON.git}</span> Git
-          </button>
-          <button onClick={() => add('tests')}>
-            <span className="pane-icon tests">{PANE_ICON.tests}</span> Tests
-          </button>
-        </div>,
+          <div ref={menuRef} className="context-menu rail-menu" role="menu" style={{ left: menuPos.left, top: menuPos.top }}>
+            <button onClick={() => add('terminal')}>
+              <span className="pane-icon">{PANE_ICON.terminal}</span> Terminal
+            </button>
+            <button onClick={() => add('agent')}>
+              <span className="pane-icon agent">{PANE_ICON.agent}</span> AI agent
+            </button>
+            <button onClick={() => add('git')}>
+              <span className="pane-icon git">{PANE_ICON.git}</span> Git
+            </button>
+            <button onClick={() => add('tests')}>
+              <span className="pane-icon tests">{PANE_ICON.tests}</span> Tests
+            </button>
+          </div>,
           document.body
         )}
     </div>
@@ -390,7 +409,12 @@ export function ProjectView({ tab, visible }: { tab: Tab; visible: boolean }): R
         <SplitView
           node={node}
           visible={visibleChildren}
-          onResize={(sizes) => setLayout(tab.id, updateAt(layout, path, (n) => (n.kind === 'split' ? { ...n, sizes } : n)))}
+          onResize={(sizes) =>
+            setLayout(
+              tab.id,
+              updateAt(layout, path, (n) => (n.kind === 'split' ? { ...n, sizes } : n))
+            )
+          }
           renderChild={(i) => render(node.children[i], [...path, i])}
         />
       )

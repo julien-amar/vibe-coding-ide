@@ -112,9 +112,13 @@ describe('partial patches', () => {
   ].join('\n')
 
   it('keeps the selected lines; unselected removals become context (forward), additions (reverse)', () => {
-    expect(partialPatch(diff, [7], false)).toBe(['diff --git a/f b/f', 'index 1..2 100644', '--- a/f', '+++ b/f', '@@ -1,3 +1,4 @@', ' a', ' b', '+B', ' c', ''].join('\n'))
+    expect(partialPatch(diff, [7], false)).toBe(
+      ['diff --git a/f b/f', 'index 1..2 100644', '--- a/f', '+++ b/f', '@@ -1,3 +1,4 @@', ' a', ' b', '+B', ' c', ''].join('\n')
+    )
     // Reverse: the current content has B, which stays (context) while b is restored.
-    expect(partialPatch(diff, [6], true)).toBe(['diff --git a/f b/f', 'index 1..2 100644', '--- a/f', '+++ b/f', '@@ -1,4 +1,3 @@', ' a', '-b', ' B', ' c', ''].join('\n'))
+    expect(partialPatch(diff, [6], true)).toBe(
+      ['diff --git a/f b/f', 'index 1..2 100644', '--- a/f', '+++ b/f', '@@ -1,4 +1,3 @@', ' a', '-b', ' B', ' c', ''].join('\n')
+    )
     // Only the second hunk; the "no newline" marker follows its line.
     expect(partialPatch(diff, [11], false)).toBe(
       ['diff --git a/f b/f', 'index 1..2 100644', '--- a/f', '+++ b/f', '@@ -10,2 +10,1 @@ fn', ' x', '-y', '\\ No newline at end of file', ''].join('\n')

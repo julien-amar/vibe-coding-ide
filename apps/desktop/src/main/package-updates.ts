@@ -18,15 +18,15 @@ const targetKey = (t: UpdateTarget): string => (t.kind === 'wsl' ? `wsl:${t.dist
 /** Prints "<manager> <count>". */
 const WSL_CHECK_SCRIPT = [
   'if command -v apt-get >/dev/null 2>&1; then',
-  "  echo \"apt $(apt list --upgradable 2>/dev/null | grep -c 'upgradable from')\"",
+  '  echo "apt $(apt list --upgradable 2>/dev/null | grep -c \'upgradable from\')"',
   'elif command -v dnf >/dev/null 2>&1; then',
-  "  echo \"dnf $(dnf -q -C check-update 2>/dev/null | grep -c '^[[:alnum:]]')\"",
+  '  echo "dnf $(dnf -q -C check-update 2>/dev/null | grep -c \'^[[:alnum:]]\')"',
   'elif command -v pacman >/dev/null 2>&1; then',
   '  echo "pacman $(pacman -Qu 2>/dev/null | wc -l)"',
   'elif command -v apk >/dev/null 2>&1; then',
-  "  echo \"apk $(apk version -l '<' 2>/dev/null | tail -n +2 | wc -l)\"",
+  '  echo "apk $(apk version -l \'<\' 2>/dev/null | tail -n +2 | wc -l)"',
   'elif command -v zypper >/dev/null 2>&1; then',
-  "  echo \"zypper $(zypper -q --non-interactive --no-refresh list-updates 2>/dev/null | grep -c '^v ')\"",
+  '  echo "zypper $(zypper -q --non-interactive --no-refresh list-updates 2>/dev/null | grep -c \'^v \')"',
   'else',
   '  echo "none 0"',
   'fi'

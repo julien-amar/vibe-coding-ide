@@ -5,20 +5,7 @@ import VITEST_LIST from '../test-helpers/vitest-list.mjs?raw'
 import VITEST_REPORTER from '../test-helpers/vitest-reporter.mjs?raw'
 import JEST_REPORTER from '../test-helpers/jest-reporter.cjs?raw'
 import PLAYWRIGHT_REPORTER from '../test-helpers/playwright-reporter.cjs?raw'
-import {
-  childPath,
-  escapeRegex,
-  LiveOutput,
-  nodeCommand,
-  readJson,
-  relFile,
-  runQuiet,
-  tail,
-  testId,
-  type Adapter,
-  type LiveLine,
-  type WorkDir
-} from './core'
+import { childPath, escapeRegex, LiveOutput, nodeCommand, readJson, relFile, runQuiet, tail, testId, type Adapter, type LiveLine, type WorkDir } from './core'
 
 /**
  * Vitest, Jest and Playwright: run from the project's node_modules with Node.js.

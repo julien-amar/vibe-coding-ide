@@ -134,7 +134,11 @@ export async function gitWorktrees(root: string): Promise<GitWorktree[]> {
     if (line.startsWith('worktree ')) {
       cur = { path: toProjectPath(root, line.slice(9).trim()), main: list.length === 0 }
       list.push(cur)
-    } else if (cur && line.startsWith('branch ')) cur.branch = line.slice(7).replace(/^refs\/heads\//, '').trim()
+    } else if (cur && line.startsWith('branch '))
+      cur.branch = line
+        .slice(7)
+        .replace(/^refs\/heads\//, '')
+        .trim()
     else if (cur && line.startsWith('HEAD ')) cur.head = line.slice(5).trim()
     else if (cur && line === 'detached') cur.detached = true
     else if (cur && line.startsWith('locked')) cur.locked = true
@@ -230,4 +234,5 @@ export function worktreeDir(root: string, feature: string): string {
 export const DIFF_FLAGS = ['--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/']
 
 /** A file's unstaged (worktree vs index) or staged (index vs HEAD) diff. */
-export const fileDiff = (root: string, path: string, staged: boolean): Promise<string> => git(root, ['diff', ...DIFF_FLAGS, ...(staged ? ['--cached'] : []), '--', path])
+export const fileDiff = (root: string, path: string, staged: boolean): Promise<string> =>
+  git(root, ['diff', ...DIFF_FLAGS, ...(staged ? ['--cached'] : []), '--', path])

@@ -95,6 +95,7 @@ Everything lives in `apps/desktop/src`:
 ```sh
 pnpm typecheck   # TypeScript 7 (tsc)
 pnpm lint        # Oxlint (apps/desktop/.oxlintrc.json): correctness rules, React hooks; no warnings allowed
+pnpm format      # Prettier (apps/desktop/.prettierrc.json); CI runs pnpm format:check
 pnpm test        # unit tests (Vitest): layout tree, git / winget / shell parsers, git operations on a real repo
 pnpm build
 pnpm test:e2e    # end-to-end tests (Playwright): launches the built app with throwaway profiles and repos

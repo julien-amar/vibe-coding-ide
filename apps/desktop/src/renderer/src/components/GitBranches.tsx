@@ -49,19 +49,28 @@ export function BranchesView({
       title: 'New branch',
       fields: [
         { name: 'name', label: 'Branch name', placeholder: 'fix/login-redirect' },
-        { name: 'start', label: 'Start from', options: [current ?? 'HEAD', ...local.filter((b) => !b.current).map((b) => b.name), ...remote.map((b) => b.name)] },
+        {
+          name: 'start',
+          label: 'Start from',
+          options: [current ?? 'HEAD', ...local.filter((b) => !b.current).map((b) => b.name), ...remote.map((b) => b.name)]
+        },
         { name: 'checkout', label: 'Switch to the new branch', kind: 'checkbox', value: 'true' }
       ],
       confirmLabel: 'Create'
     })
     if (!r || !String(r.name).trim()) return
-    await run('Creating branch', { op: 'createBranch', branch: String(r.name).trim(), start: String(r.start), checkout: Boolean(r.checkout) }, `Created ${String(r.name).trim()}`)
+    await run(
+      'Creating branch',
+      { op: 'createBranch', branch: String(r.name).trim(), start: String(r.start), checkout: Boolean(r.checkout) },
+      `Created ${String(r.name).trim()}`
+    )
   }
 
   const newFeature = async (): Promise<void> => {
     const r = await openDialog({
       title: 'New feature',
-      message: 'Creates the branch feature/<name> in its own folder (git worktree) next to this repository and opens it as a new project, with its own terminal and AI agent — so you can work on it in parallel.',
+      message:
+        'Creates the branch feature/<name> in its own folder (git worktree) next to this repository and opens it as a new project, with its own terminal and AI agent — so you can work on it in parallel.',
       fields: [
         { name: 'name', label: 'Feature name', placeholder: 'login-page' },
         { name: 'base', label: 'Based on', options: [current ?? 'HEAD', ...local.filter((b) => !b.current).map((b) => b.name)] }
@@ -96,7 +105,14 @@ export function BranchesView({
       notify(`Deleted ${b.name}`, 'success')
       await run('Refreshing', { op: 'status' })
     } else if (/not fully merged/i.test(r.error ?? '')) {
-      if (await confirmDialog('Branch not merged', `${b.name} has commits that are not merged anywhere. Delete it anyway? Those commits will be lost.`, 'Delete anyway', true)) {
+      if (
+        await confirmDialog(
+          'Branch not merged',
+          `${b.name} has commits that are not merged anywhere. Delete it anyway? Those commits will be lost.`,
+          'Delete anyway',
+          true
+        )
+      ) {
         await run('Deleting', { op: 'deleteBranch', branch: b.name, force: true }, `Deleted ${b.name}`)
       }
     } else notify(r.error ?? 'Delete failed', 'error')
@@ -170,7 +186,11 @@ export function BranchesView({
                 </button>
               )}
               {!b.current && current && (
-                <button className="tool-button" title={`Merge ${b.name} into ${current}`} onClick={() => void run('Merging', { op: 'merge', branch: b.name }, `Merged ${b.name} into ${current}`)}>
+                <button
+                  className="tool-button"
+                  title={`Merge ${b.name} into ${current}`}
+                  onClick={() => void run('Merging', { op: 'merge', branch: b.name }, `Merged ${b.name} into ${current}`)}
+                >
                   Merge
                 </button>
               )}
@@ -227,7 +247,11 @@ export function BranchesView({
             <span className="branch-subject">{b.subject}</span>
             <span className="git-date">{relativeTime(b.date)}</span>
             <span className="file-actions">
-              <button className="tool-button" title="Check out as a local tracking branch" onClick={() => void run('Switching', { op: 'switch', branch: b.name, remote: true }, `Switched to ${b.name.replace(/^[^/]+\//, '')}`)}>
+              <button
+                className="tool-button"
+                title="Check out as a local tracking branch"
+                onClick={() => void run('Switching', { op: 'switch', branch: b.name, remote: true }, `Switched to ${b.name.replace(/^[^/]+\//, '')}`)}
+              >
                 Switch
               </button>
               <button className="icon-button" title="Delete on the remote" onClick={() => void remove(b)}>

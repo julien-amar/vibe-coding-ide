@@ -87,7 +87,11 @@ describe('test runner parsers', () => {
                   line: 7,
                   tests: [
                     { projectName: 'chromium', status: 'flaky', results: [{ duration: 1, errors: [{ message: 'first try' }] }, { duration: 2 }] },
-                    { projectName: 'firefox', status: 'unexpected', results: [{ duration: 4, errors: [{ message: 'm', stack: 'Error: boom\n  at a.spec.ts:8' }] }] }
+                    {
+                      projectName: 'firefox',
+                      status: 'unexpected',
+                      results: [{ duration: 4, errors: [{ message: 'm', stack: 'Error: boom\n  at a.spec.ts:8' }] }]
+                    }
                   ]
                 }
               ]
@@ -152,7 +156,9 @@ describe('test runner parsers', () => {
         }
       ]
     })
-    expect(listed.tests).toEqual([{ id: 'jest/a.test.js::strings > nested > trims', file: 'jest/a.test.js', suite: ['strings', 'nested'], name: 'trims', line: 12 }])
+    expect(listed.tests).toEqual([
+      { id: 'jest/a.test.js::strings > nested > trims', file: 'jest/a.test.js', suite: ['strings', 'nested'], name: 'trims', line: 12 }
+    ])
     expect(pytestCase('py/check_a.py::TestGroup::test_x[1]', 9)).toEqual({
       id: 'py/check_a.py::TestGroup > test_x[1]',
       file: 'py/check_a.py',
@@ -169,7 +175,10 @@ describe('live results', () => {
   it('separates marked result lines from the output, across chunk boundaries', () => {
     const text: string[] = []
     const lines: unknown[] = []
-    const live = new LiveOutput((t) => text.push(t), (l) => lines.push(l))
+    const live = new LiveOutput(
+      (t) => text.push(t),
+      (l) => lines.push(l)
+    )
     live.push('RUN v5\n ✓ adds')
     live.push(` 2ms\n${RESULT_MARK}{"file":"/p/a.test.ts","name":"math > ad`)
     live.push(`ds","status":"passed","duration":2}\ntail without newline`)
@@ -181,7 +190,10 @@ describe('live results', () => {
 
   it('keeps output printed on the same line before a marker, and bad JSON as text', () => {
     const text: string[] = []
-    const live = new LiveOutput((t) => text.push(t), () => undefined)
+    const live = new LiveOutput(
+      (t) => text.push(t),
+      () => undefined
+    )
     live.push(`dots...${RESULT_MARK}{"file":"x","status":"passed"}\n${RESULT_MARK}{oops\n`)
     expect(text.join('')).toBe(`dots...${RESULT_MARK}{oops\n`)
   })
@@ -219,7 +231,9 @@ describe('test framework detection', () => {
     w('tools/pytest.ini', '[pytest]\n')
     w('node_modules/dep/vitest.config.ts')
     w('.venv/lib/site/pytest.ini')
-    const found = detectTestProjects(base).map((p) => `${p.framework}:${p.relDir}`).sort()
+    const found = detectTestProjects(base)
+      .map((p) => `${p.framework}:${p.relDir}`)
+      .sort()
     expect(found).toEqual([
       'jest:packages/cfg',
       'jest:packages/old',
@@ -346,36 +360,40 @@ describe('discovering and running real tests (fixture project)', () => {
 
   // pytest runs with the fixture's virtualenv (created by CI; locally: python -m venv .venv && pip install pytest).
   const hasVenv = existsSync(join(FIXTURE, '.venv'))
-  it.skipIf(!hasVenv)('lists and runs pytest tests (classes, parametrized tests, live results)', async () => {
-    const py = (await discoverTests(FIXTURE)).find((p) => p.framework === 'pytest')!
-    expect(py.error).toBeUndefined()
-    expect(py.tests.map((t) => t.id)).toEqual([
-      'py/check_math.py::test_adds',
-      'py/check_math.py::test_fails_on_purpose',
-      'py/check_math.py::TestGroup > test_inside_class',
-      'py/check_math.py::test_param[1]',
-      'py/check_math.py::test_param[2]',
-      'py/check_math.py::test_skipped'
-    ])
-    expect(py.tests.find((t) => t.name === 'test_adds')?.line).toBe(4)
+  it.skipIf(!hasVenv)(
+    'lists and runs pytest tests (classes, parametrized tests, live results)',
+    async () => {
+      const py = (await discoverTests(FIXTURE)).find((p) => p.framework === 'pytest')!
+      expect(py.error).toBeUndefined()
+      expect(py.tests.map((t) => t.id)).toEqual([
+        'py/check_math.py::test_adds',
+        'py/check_math.py::test_fails_on_purpose',
+        'py/check_math.py::TestGroup > test_inside_class',
+        'py/check_math.py::test_param[1]',
+        'py/check_math.py::test_param[2]',
+        'py/check_math.py::test_skipped'
+      ])
+      expect(py.tests.find((t) => t.name === 'test_adds')?.line).toBe(4)
 
-    progress.length = 0
-    const all = await runTests(FIXTURE, { projectId: 'pytest:' }, sender)
-    expect(all.ok).toBe(true)
-    const status = Object.fromEntries(all.results.map((r) => [r.id, r.status]))
-    expect(status).toEqual({
-      'py/check_math.py::test_adds': 'passed',
-      'py/check_math.py::test_fails_on_purpose': 'failed',
-      'py/check_math.py::TestGroup > test_inside_class': 'passed',
-      'py/check_math.py::test_param[1]': 'passed',
-      'py/check_math.py::test_param[2]': 'passed',
-      'py/check_math.py::test_skipped': 'skipped'
-    })
-    expect(all.results.find((r) => r.status === 'failed')?.message).toMatch(/assert \(2 \* 2\) == 5|assert 4 == 5/)
-    expect(progress).toHaveLength(6)
-    expect(output.join('')).not.toContain(RESULT_MARK)
+      progress.length = 0
+      const all = await runTests(FIXTURE, { projectId: 'pytest:' }, sender)
+      expect(all.ok).toBe(true)
+      const status = Object.fromEntries(all.results.map((r) => [r.id, r.status]))
+      expect(status).toEqual({
+        'py/check_math.py::test_adds': 'passed',
+        'py/check_math.py::test_fails_on_purpose': 'failed',
+        'py/check_math.py::TestGroup > test_inside_class': 'passed',
+        'py/check_math.py::test_param[1]': 'passed',
+        'py/check_math.py::test_param[2]': 'passed',
+        'py/check_math.py::test_skipped': 'skipped'
+      })
+      expect(all.results.find((r) => r.status === 'failed')?.message).toMatch(/assert \(2 \* 2\) == 5|assert 4 == 5/)
+      expect(progress).toHaveLength(6)
+      expect(output.join('')).not.toContain(RESULT_MARK)
 
-    const cls = await runTests(FIXTURE, { projectId: 'pytest:', file: 'py/check_math.py', titlePath: ['TestGroup'] }, sender)
-    expect(cls.results.map((r) => r.id)).toEqual(['py/check_math.py::TestGroup > test_inside_class'])
-  }, 120_000)
+      const cls = await runTests(FIXTURE, { projectId: 'pytest:', file: 'py/check_math.py', titlePath: ['TestGroup'] }, sender)
+      expect(cls.results.map((r) => r.id)).toEqual(['py/check_math.py::TestGroup > test_inside_class'])
+    },
+    120_000
+  )
 })

@@ -73,7 +73,12 @@ describe('git panel operations on a real repository', () => {
     const parent = run('rev-parse', 'HEAD~1').trim()
     const files = await gitOp(repo, { op: 'commitFiles', hash: head, parent })
     expect(files.text).toBe('Add app')
-    expect(files.files).toEqual(expect.arrayContaining([{ status: 'M', path: 'README.md' }, { status: 'A', path: 'src/app.ts' }]))
+    expect(files.files).toEqual(
+      expect.arrayContaining([
+        { status: 'M', path: 'README.md' },
+        { status: 'A', path: 'src/app.ts' }
+      ])
+    )
     const fileDiff = await gitOp(repo, { op: 'commitDiff', hash: head, parent, path: 'src/app.ts' })
     expect(fileDiff.text).toContain('+export const x = 1')
 
@@ -102,7 +107,12 @@ describe('git panel operations on a real repository', () => {
     expect((await gitOp(repo, { op: 'renameBranch', branch: 'fix/typo', newName: 'fix/renamed' })).ok).toBe(true)
 
     const branches = await gitOp(repo, { op: 'branches' })
-    expect(branches.branches?.filter((b) => !b.remote).map((b) => b.name).sort()).toEqual(['feature/a', 'fix/renamed', 'main'])
+    expect(
+      branches.branches
+        ?.filter((b) => !b.remote)
+        .map((b) => b.name)
+        .sort()
+    ).toEqual(['feature/a', 'fix/renamed', 'main'])
     expect(branches.branches?.find((b) => b.current)?.name).toBe('main')
 
     expect((await gitOp(repo, { op: 'deleteBranch', branch: 'fix/renamed' })).ok).toBe(true)

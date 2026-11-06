@@ -192,7 +192,9 @@ test('AI agent settings are isolated between project tabs (and restored per tab)
   await dialog.getByRole('button', { name: 'Restart agent' }).click()
   await expect.poll(() => agentStarts(repoB).length).toBe(2)
   // A dialog left open does not follow to another tab: showing tab A closes it.
-  await page.evaluate(() => (window as unknown as { __vibeIdeTabs: { getState(): { activateRelative(d: number): void } } }).__vibeIdeTabs.getState().activateRelative(-1))
+  await page.evaluate(() =>
+    (window as unknown as { __vibeIdeTabs: { getState(): { activateRelative(d: number): void } } }).__vibeIdeTabs.getState().activateRelative(-1)
+  )
   await expect(dialog).toBeHidden()
   await tab('beta-repo').click()
   const startB = agentStarts(repoB)[1]

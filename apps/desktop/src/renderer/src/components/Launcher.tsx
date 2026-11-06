@@ -84,15 +84,17 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
         badge: 'project' as const,
         run: () => void openProject(p.root)
       })),
-      ...(profiles ?? []).filter((p) => !(p.kind === 'agent' && p.wslDistro)).map((p) => ({
-        key: p.id,
-        group: PROFILE_GROUP[p.kind],
-        label: p.name,
-        detail: p.source,
-        badge: p.kind,
-        profile: p,
-        run: () => void openProfile(p)
-      }))
+      ...(profiles ?? [])
+        .filter((p) => !(p.kind === 'agent' && p.wslDistro))
+        .map((p) => ({
+          key: p.id,
+          group: PROFILE_GROUP[p.kind],
+          label: p.name,
+          detail: p.source,
+          badge: p.kind,
+          profile: p,
+          run: () => void openProfile(p)
+        }))
     ]
     const q = query.trim().toLowerCase()
     const filtered = q ? list.filter((e) => `${e.label} ${e.group} ${e.detail ?? ''}`.toLowerCase().includes(q)) : list

@@ -28,7 +28,8 @@ import {
 const PROJECT = /\.(cs|fs|vb)proj$/
 const TEST_PROJECT = /Microsoft\.NET\.Test\.Sdk|<IsTestProject>\s*true|\b(xunit|NUnit|MSTest)\b/i
 
-const dotnetTool = (dir: string): string => tool(dir, 'dotnet', ['C:\\Program Files\\dotnet\\dotnet.exe', '/usr/local/share/dotnet/dotnet', '/usr/share/dotnet/dotnet'])
+const dotnetTool = (dir: string): string =>
+  tool(dir, 'dotnet', ['C:\\Program Files\\dotnet\\dotnet.exe', '/usr/local/share/dotnet/dotnet', '/usr/share/dotnet/dotnet'])
 
 /** The test project file in a folder. */
 function projectFile(dir: string): string | undefined {
@@ -105,7 +106,13 @@ export function parseTrx(xml: string): TestResult[] {
       id: dotnetCase(name).id,
       status: outcome === 'Passed' ? 'passed' : outcome === 'Failed' || outcome === 'Error' || outcome === 'Timeout' ? 'failed' : 'skipped',
       duration: a.duration ? parseTimeSpan(a.duration) : undefined,
-      message: outcome === 'Passed' ? undefined : [message, stack].filter(Boolean).map((s) => xmlText(s!).trim()).join('\n') || undefined
+      message:
+        outcome === 'Passed'
+          ? undefined
+          : [message, stack]
+              .filter(Boolean)
+              .map((s) => xmlText(s!).trim())
+              .join('\n') || undefined
     })
   }
   return results
@@ -167,7 +174,18 @@ export const dotnetAdapter: Adapter = {
     const proj = projectFile(dir)
     if (!proj) return { ok: false, error: 'Test project not found.', results: [], fileErrors: [] }
     const filter = dotnetFilter(req)
-    const args = ['test', proj, '--nologo', '--results-directory', childPath(dir, ctx.work.dir), '--logger', 'trx;LogFilePrefix=results', '--logger', 'console;verbosity=normal', ...filter]
+    const args = [
+      'test',
+      proj,
+      '--nologo',
+      '--results-directory',
+      childPath(dir, ctx.work.dir),
+      '--logger',
+      'trx;LogFilePrefix=results',
+      '--logger',
+      'console;verbosity=normal',
+      ...filter
+    ]
     ctx.send(`$ dotnet test ${[proj, ...filter].join(' ')}\n`)
     const reader = new LineReader((line) => {
       const r = parseDotnetLine(line)
@@ -181,7 +199,8 @@ export const dotnetAdapter: Adapter = {
     })
     reader.flush()
     const reports = findFiles(ctx.work.dir, ['.trx'])
-    if (reports.length === 0) return { ok: false, error: code === 0 ? undefined : 'The tests did not build or run: see the output.', results: [], fileErrors: [] }
+    if (reports.length === 0)
+      return { ok: false, error: code === 0 ? undefined : 'The tests did not build or run: see the output.', results: [], fileErrors: [] }
     const results = reports.flatMap((f) => parseTrx(readText(join(ctx.work.dir, f))))
     return { ok: true, results, fileErrors: [] }
   }

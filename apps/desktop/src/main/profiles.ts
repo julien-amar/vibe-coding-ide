@@ -39,9 +39,7 @@ function isFile(p: string): boolean {
 
 /** Find all matches of an executable name on PATH (like `where` / `which -a`). */
 function whichAll(name: string): string[] {
-  const exts = isWin
-    ? (process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').map((e) => e.toLowerCase())
-    : ['']
+  const exts = isWin ? (process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').map((e) => e.toLowerCase()) : ['']
   const out: string[] = []
   for (const dir of pathDirs()) {
     for (const ext of exts) {
@@ -73,10 +71,10 @@ const POWERSHELL_INTEGRATION = [
   '$global:__vibeIdePrompt = $function:prompt',
   'function global:prompt {',
   '  $loc = $executionContext.SessionState.Path.CurrentLocation',
-  "  if ($loc.Provider.Name -eq 'FileSystem') { [Console]::Write(\"$([char]27)]9;9;`\"$($loc.ProviderPath)`\"$([char]27)\\\") }",
+  '  if ($loc.Provider.Name -eq \'FileSystem\') { [Console]::Write("$([char]27)]9;9;`"$($loc.ProviderPath)`"$([char]27)\\") }',
   '  & $global:__vibeIdePrompt',
   '}'
-].join("\n")
+].join('\n')
 
 const powershellArgs = (): string[] => ['-NoLogo', '-NoExit', '-EncodedCommand', Buffer.from(POWERSHELL_INTEGRATION, 'utf16le').toString('base64')]
 

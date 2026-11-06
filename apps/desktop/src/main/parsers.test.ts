@@ -60,7 +60,13 @@ describe('countWingetUpgrades', () => {
   })
 
   it('does not count the second table of packages that need explicit targeting', () => {
-    const extra = ['', 'The following packages have an upgrade available, but require explicit targeting for upgrade:', 'Name Id Version Available', '----------------------------', 'Pinned  x.y  1 2'].join('\r\n')
+    const extra = [
+      '',
+      'The following packages have an upgrade available, but require explicit targeting for upgrade:',
+      'Name Id Version Available',
+      '----------------------------',
+      'Pinned  x.y  1 2'
+    ].join('\r\n')
     expect(countWingetUpgrades(table(['A a 1 2 winget'], extra))).toBe(1)
   })
 

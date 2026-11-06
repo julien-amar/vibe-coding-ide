@@ -95,7 +95,12 @@ export function GitPanel({ root, visible, openProject }: { root: string; visible
             <button className="tool-button" disabled={!!busy} title="Fetch all remotes" onClick={() => void run('Fetching', { op: 'fetch' }, 'Fetched')}>
               Fetch
             </button>
-            <button className="tool-button" disabled={!!busy || !status.upstream} title="Pull from upstream" onClick={() => void run('Pulling', { op: 'pull' }, 'Pulled')}>
+            <button
+              className="tool-button"
+              disabled={!!busy || !status.upstream}
+              title="Pull from upstream"
+              onClick={() => void run('Pulling', { op: 'pull' }, 'Pulled')}
+            >
               Pull
             </button>
             <button

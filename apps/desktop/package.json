@@ -12,6 +12,8 @@
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "oxlint -c .oxlintrc.json --max-warnings 0 src e2e scripts",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"e2e/*.ts\" \"scripts/*.cjs\" \"*.{ts,mts}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"e2e/*.ts\" \"scripts/*.cjs\" \"*.{ts,mts}\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",

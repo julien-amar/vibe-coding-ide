@@ -1,17 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { LayoutNode } from './types'
-import {
-  appendPane,
-  hasVisiblePane,
-  insertPane,
-  mapPanes,
-  movePane,
-  panesOf,
-  removePane,
-  sessionIdsOf,
-  updateAt,
-  type PaneNode
-} from './layout'
+import { appendPane, hasVisiblePane, insertPane, mapPanes, movePane, panesOf, removePane, sessionIdsOf, updateAt, type PaneNode } from './layout'
 
 const pane = (id: string, extra: Partial<PaneNode> = {}): PaneNode => ({ kind: 'pane', id, type: 'terminal', ...extra })
 
@@ -23,7 +12,10 @@ const projectLayout = (): LayoutNode => ({
   kind: 'split',
   dir: 'row',
   sizes: [0.6, 0.4],
-  children: [{ kind: 'split', dir: 'column', sizes: [0.55, 0.45], children: [pane('git', { type: 'git' }), pane('terminal')] }, pane('agent', { type: 'agent' })]
+  children: [
+    { kind: 'split', dir: 'column', sizes: [0.55, 0.45], children: [pane('git', { type: 'git' }), pane('terminal')] },
+    pane('agent', { type: 'agent' })
+  ]
 })
 
 describe('panesOf / mapPanes', () => {

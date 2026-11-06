@@ -121,7 +121,12 @@ async function profilesFor(root: string): Promise<Profile[]> {
   return profiles()
 }
 
-async function createSession(profileId: string, cwd?: string, harnessRoot?: string, harness?: Harness): Promise<{ sessionId: string; title: string } | undefined> {
+async function createSession(
+  profileId: string,
+  cwd?: string,
+  harnessRoot?: string,
+  harness?: Harness
+): Promise<{ sessionId: string; title: string } | undefined> {
   try {
     // harness: an AI agent pane's own settings (relative skill paths start from harnessRoot, the project).
     return await window.ide.pty.create({ profileId, cols: 80, rows: 24, cwd, harnessRoot, harness })
@@ -158,7 +163,12 @@ function defaultProjectLayout(shell?: Profile, agent?: Profile): LayoutNode {
 }
 
 function projectName(root: string): string {
-  return root.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || root
+  return (
+    root
+      .replace(/[\\/]+$/, '')
+      .split(/[\\/]/)
+      .pop() || root
+  )
 }
 
 async function openDefaultShell(): Promise<void> {
@@ -357,7 +367,10 @@ export const useTabs = create<State>((set, get) => ({
   setPaneCollapsed(tabId, paneId, collapsed) {
     const tab = get().tabs.find((t) => t.id === tabId)
     if (!tab?.project) return
-    get().setLayout(tabId, mapPanes(tab.project.layout, (p) => (p.id === paneId ? { ...p, collapsed: collapsed || undefined } : p)))
+    get().setLayout(
+      tabId,
+      mapPanes(tab.project.layout, (p) => (p.id === paneId ? { ...p, collapsed: collapsed || undefined } : p))
+    )
   },
 
   async addPane(tabId, type, opts = {}) {
@@ -374,8 +387,7 @@ export const useTabs = create<State>((set, get) => ({
     }
     const cur = get().tabs.find((t) => t.id === tabId)
     if (!cur?.project) return
-    const layout =
-      opts.target && opts.side ? insertPane(cur.project.layout, opts.target, pane, opts.side) : appendPane(cur.project.layout, pane)
+    const layout = opts.target && opts.side ? insertPane(cur.project.layout, opts.target, pane, opts.side) : appendPane(cur.project.layout, pane)
     get().setLayout(tabId, layout)
   },
 
@@ -399,7 +411,10 @@ export const useTabs = create<State>((set, get) => ({
     const tab = get().tabs.find((t) => t.id === tabId)
     const pane = tab?.project && panesOf(tab.project.layout).find((p) => p.id === paneId)
     if (!tab?.project || !pane) return
-    get().setLayout(tabId, mapPanes(tab.project.layout, (p) => (p.id === paneId ? { ...p, harness: harnessIsEmpty(harness) ? undefined : harness } : p)))
+    get().setLayout(
+      tabId,
+      mapPanes(tab.project.layout, (p) => (p.id === paneId ? { ...p, harness: harnessIsEmpty(harness) ? undefined : harness } : p))
+    )
     // Its running agent started with the previous settings.
     if (pane.sessionId && get().paneExit[pane.sessionId] === undefined) set((st) => ({ harnessStale: { ...st.harnessStale, [pane.sessionId!]: true } }))
   },
@@ -437,7 +452,10 @@ useTabs.subscribe((s, prev) => {
     const { tabs, activeId } = useTabs.getState()
     window.ide.window.reportState({
       tabs: tabs.map(toSnapshot),
-      activeIndex: Math.max(0, tabs.findIndex((t) => t.id === activeId))
+      activeIndex: Math.max(
+        0,
+        tabs.findIndex((t) => t.id === activeId)
+      )
     })
   })
 })

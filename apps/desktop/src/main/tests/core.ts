@@ -71,9 +71,32 @@ export const present = (p: string): boolean => {
 
 /** Folders never searched for tests or sources. */
 export const SKIP_DIRS = new Set([
-  'node_modules', '.git', 'dist', 'out', 'build', 'coverage', 'target', 'bin', 'obj', 'vendor', '.next', '.nuxt', '.turbo',
-  '.cache', '.gradle', '.venv', 'venv', 'env', '__pycache__', '.tox', '.pytest_cache', 'site-packages', 'test-results',
-  'playwright-report', 'fixtures', '__fixtures__'
+  'node_modules',
+  '.git',
+  'dist',
+  'out',
+  'build',
+  'coverage',
+  'target',
+  'bin',
+  'obj',
+  'vendor',
+  '.next',
+  '.nuxt',
+  '.turbo',
+  '.cache',
+  '.gradle',
+  '.venv',
+  'venv',
+  'env',
+  '__pycache__',
+  '.tox',
+  '.pytest_cache',
+  'site-packages',
+  'test-results',
+  'playwright-report',
+  'fixtures',
+  '__fixtures__'
 ])
 
 /** Files under `dir` with one of `exts` (skipping SKIP_DIRS), relative paths with forward slashes. */
@@ -118,8 +141,7 @@ export function relFile(dir: string, file: string): string {
 }
 
 /** Test id: `<file>::<suite > … > name>[::<Playwright project>]` (same for listings, reports and live results). */
-export const testId = (file: string, titles: string[], projectName?: string): string =>
-  `${file}::${titles.join(' > ')}${projectName ? `::${projectName}` : ''}`
+export const testId = (file: string, titles: string[], projectName?: string): string => `${file}::${titles.join(' > ')}${projectName ? `::${projectName}` : ''}`
 
 export const escapeRegex = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 

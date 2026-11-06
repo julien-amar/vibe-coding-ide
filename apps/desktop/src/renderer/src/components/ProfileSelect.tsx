@@ -25,7 +25,12 @@ export function ProfileSelect({
 
   useEffect(() => {
     if (!open) return
-    setCursor(Math.max(0, choices.findIndex((p) => p.id === value)))
+    setCursor(
+      Math.max(
+        0,
+        choices.findIndex((p) => p.id === value)
+      )
+    )
     const onDown = (e: MouseEvent): void => {
       if (!rootRef.current?.contains(e.target as Node)) setOpen(false)
     }

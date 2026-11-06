@@ -42,7 +42,10 @@ export async function withAgentSettings(launch: Profile, req: PtyCreateRequest, 
   const agent = agentOf(launch.id)
   const outDir = join(
     runsDir,
-    createHash('sha1').update(root + JSON.stringify(harness)).digest('hex').slice(0, 16),
+    createHash('sha1')
+      .update(root + JSON.stringify(harness))
+      .digest('hex')
+      .slice(0, 16),
     `${agent ?? 'agent'}${launch.wslDistro ? `-${launch.wslDistro}` : ''}`
   )
   const target: HarnessTarget = launch.wslDistro ? { kind: 'wsl', distro: launch.wslDistro, home: await wslHome(launch.wslDistro) } : { kind: 'host' }

@@ -125,7 +125,12 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
             ■ Stop
           </button>
         )}
-        <button className="tool-button" disabled={st.discovering || st.running} title="Find tests again (after adding or renaming tests)" onClick={() => void discover(root)}>
+        <button
+          className="tool-button"
+          disabled={st.discovering || st.running}
+          title="Find tests again (after adding or renaming tests)"
+          onClick={() => void discover(root)}
+        >
           ⟳
         </button>
         <span className="spacer" />
@@ -205,7 +210,11 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
                 <span className="test-label">{node.label}</span>
                 {node.kind !== 'test' && <span className="test-count">{node.testIds.length}</span>}
                 {result && 'duration' in result && <span className="test-duration">{formatDuration(result.duration)}</span>}
-                {result?.flaky && <span className="test-flaky" title="Passed after a retry">flaky</span>}
+                {result?.flaky && (
+                  <span className="test-flaky" title="Passed after a retry">
+                    flaky
+                  </span>
+                )}
                 <button
                   className="test-run"
                   title={`Run ${node.kind === 'project' ? 'all tests' : node.kind === 'test' ? 'this test' : `this ${node.kind}`}`}
@@ -234,7 +243,11 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
               Output
             </button>
           </div>
-          {st.lastError && <span className="tests-run-error" title={st.lastError}>{st.lastError}</span>}
+          {st.lastError && (
+            <span className="tests-run-error" title={st.lastError}>
+              {st.lastError}
+            </span>
+          )}
           <span className="spacer" />
           {bottomOpen && view === 'output' && (
             <button className="tool-button" disabled={!st.output} onClick={() => clearOutput(root)}>

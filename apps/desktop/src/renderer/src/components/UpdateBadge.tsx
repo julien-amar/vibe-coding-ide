@@ -20,7 +20,11 @@ export function UpdateBadge(): React.JSX.Element | null {
 
   if (s.state === 'ready') {
     return (
-      <button className="update-badge ready" title={`Version ${s.version} is downloaded: restart to use it (your tabs are restored)`} onClick={() => window.ide.update.install()}>
+      <button
+        className="update-badge ready"
+        title={`Version ${s.version} is downloaded: restart to use it (your tabs are restored)`}
+        onClick={() => window.ide.update.install()}
+      >
         ↻ Restart to update
       </button>
     )

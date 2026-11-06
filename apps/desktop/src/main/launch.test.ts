@@ -66,7 +66,15 @@ describe('tabs from a renderer or the layout file', () => {
       dir: 'row',
       sizes: [0.5, 0.5],
       children: [
-        { kind: 'pane', id: 'a', type: 'agent', profileId: undefined, sessionId: undefined, collapsed: undefined, harness: { mcpServers: [], skills: [], instructions: 'Use pnpm.', strictMcp: undefined, strictSkills: undefined } },
+        {
+          kind: 'pane',
+          id: 'a',
+          type: 'agent',
+          profileId: undefined,
+          sessionId: undefined,
+          collapsed: undefined,
+          harness: { mcpServers: [], skills: [], instructions: 'Use pnpm.', strictMcp: undefined, strictSkills: undefined }
+        },
         { kind: 'pane', id: 'c', type: 'terminal', profileId: undefined, sessionId: undefined, collapsed: undefined, harness: undefined }
       ]
     })

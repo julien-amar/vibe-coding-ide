@@ -63,14 +63,7 @@ export function HarnessDialog({
 
   return createPortal(
     <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div
-        ref={dialogRef}
-        className="dialog harness-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label={`${agent} settings`}
-        tabIndex={-1}
-      >
+      <div ref={dialogRef} className="dialog harness-dialog" role="dialog" aria-modal="true" aria-label={`${agent} settings`} tabIndex={-1}>
         <div className="harness-dialog-head">
           <strong>{agent} settings</strong>
           <span className="muted">— this panel only</span>
@@ -87,7 +80,12 @@ export function HarnessDialog({
             <button role="tab" aria-selected={view === 'skills'} className={view === 'skills' ? 'active' : ''} onClick={() => setView('skills')}>
               Skills <span className="count">{enabledSkills}</span>
             </button>
-            <button role="tab" aria-selected={view === 'instructions'} className={view === 'instructions' ? 'active' : ''} onClick={() => setView('instructions')}>
+            <button
+              role="tab"
+              aria-selected={view === 'instructions'}
+              className={view === 'instructions' ? 'active' : ''}
+              onClick={() => setView('instructions')}
+            >
               Instructions {harness.instructions.trim() ? <span className="harness-dot" aria-label="set" /> : null}
             </button>
           </div>

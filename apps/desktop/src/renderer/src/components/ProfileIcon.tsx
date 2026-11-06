@@ -52,7 +52,7 @@ const KNOWN: Array<[RegExp, Monogram]> = [
   [/suse/i, { text: 'S', color: '#73ba25' }],
   [/oracle/i, { text: 'O', color: '#c74634' }],
   [/alma/i, { text: 'Al', color: '#ac5ba8' }],
-  [/rocky/i, { text: 'R', color: '#10b981' }],
+  [/rocky/i, { text: 'R', color: '#10b981' }]
 ]
 
 function monogramFor(profile: Profile): Monogram {

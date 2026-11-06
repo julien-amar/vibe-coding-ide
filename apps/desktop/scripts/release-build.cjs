@@ -25,7 +25,17 @@ function signingPlan(env, platform) {
   let signed = 'no'
   let macSigned = false
   if (platform === 'win32') {
-    if (has('AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET', 'AZURE_SIGNING_ENDPOINT', 'AZURE_SIGNING_ACCOUNT', 'AZURE_SIGNING_PROFILE', 'AZURE_SIGNING_PUBLISHER')) {
+    if (
+      has(
+        'AZURE_TENANT_ID',
+        'AZURE_CLIENT_ID',
+        'AZURE_CLIENT_SECRET',
+        'AZURE_SIGNING_ENDPOINT',
+        'AZURE_SIGNING_ACCOUNT',
+        'AZURE_SIGNING_PROFILE',
+        'AZURE_SIGNING_PUBLISHER'
+      )
+    ) {
       args.push(
         `-c.win.azureSignOptions.endpoint=${env.AZURE_SIGNING_ENDPOINT}`,
         `-c.win.azureSignOptions.codeSigningAccountName=${env.AZURE_SIGNING_ACCOUNT}`,

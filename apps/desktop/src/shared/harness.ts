@@ -5,8 +5,7 @@ import type { Harness } from './types'
 export const emptyHarness = (): Harness => ({ mcpServers: [], skills: [], instructions: '' })
 
 /** Nothing to give the agent (no server, skill, instructions or "only these" option). */
-export const harnessIsEmpty = (h: Harness): boolean =>
-  !h.mcpServers.length && !h.skills.length && !h.instructions.trim() && !h.strictMcp && !h.strictSkills
+export const harnessIsEmpty = (h: Harness): boolean => !h.mcpServers.length && !h.skills.length && !h.instructions.trim() && !h.strictMcp && !h.strictSkills
 
 /** Number of things set (shown on the agent panel's settings button). */
 export const harnessSize = (h?: Harness): number =>

@@ -152,5 +152,5 @@ export function splitLocations(text: string): (string | TextLocation)[] {
   return parts
 }
 
-export const formatDuration =(ms?: number): string =>
+export const formatDuration = (ms?: number): string =>
   ms === undefined ? '' : ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(ms < 10_000 ? 2 : 1)} s`

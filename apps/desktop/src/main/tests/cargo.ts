@@ -1,6 +1,21 @@
 import { dirname, join } from 'node:path'
 import type { TestCase, TestResult } from '@shared/types'
-import { escapeRegex, findFiles, hostPath, LineReader, lineOf, programCommand, readText, relFile, runQuiet, tail, testId, tool, type Adapter, type RunContext } from './core'
+import {
+  escapeRegex,
+  findFiles,
+  hostPath,
+  LineReader,
+  lineOf,
+  programCommand,
+  readText,
+  relFile,
+  runQuiet,
+  tail,
+  testId,
+  tool,
+  type Adapter,
+  type RunContext
+} from './core'
 
 /**
  * Rust: `cargo test --no-run --message-format=json` builds the test executables
@@ -125,7 +140,13 @@ export const cargoAdapter: Adapter = {
     ctx.send(`$ cargo test${req.file ? ` (${req.file})` : ''}${req.titlePath?.length ? ` ${req.titlePath.join('::')}` : ''}\n`)
     const b = await build(dir, ctx)
     if (ctx.cancelled()) return { ok: false, results: [], fileErrors: [] }
-    if (b.code !== 0) return { ok: false, error: 'The tests did not build: see the output.', results: [], fileErrors: b.diagnostics.map((message) => ({ file: req.file ?? '', message })) }
+    if (b.code !== 0)
+      return {
+        ok: false,
+        error: 'The tests did not build: see the output.',
+        results: [],
+        fileErrors: b.diagnostics.map((message) => ({ file: req.file ?? '', message }))
+      }
     const targets = b.artifacts.filter((a) => !req.file || relFile(dir, a.src) === req.file)
     const results: TestResult[] = []
     for (const a of targets) {

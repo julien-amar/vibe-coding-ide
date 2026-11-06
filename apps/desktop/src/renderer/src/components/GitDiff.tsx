@@ -115,14 +115,22 @@ export function DiffView({ text, loading, actions }: { text: string; loading: bo
             Clear
           </button>
           <span className="spacer" />
-          {buttons([...selected].sort((a, b) => a - b), 'the selected lines')}
+          {buttons(
+            [...selected].sort((a, b) => a - b),
+            'the selected lines'
+          )}
         </div>
       )}
       <pre className={`diff selectable${partial ? ' partial' : ''}`}>
         {lines.map((l, i) => {
           const cls = l.startsWith('@@')
             ? 'hunk'
-            : l.startsWith('+++') || l.startsWith('---') || l.startsWith('diff ') || l.startsWith('index ') || l.startsWith('new file') || l.startsWith('deleted file')
+            : l.startsWith('+++') ||
+                l.startsWith('---') ||
+                l.startsWith('diff ') ||
+                l.startsWith('index ') ||
+                l.startsWith('new file') ||
+                l.startsWith('deleted file')
               ? 'meta'
               : l.startsWith('+')
                 ? 'add'

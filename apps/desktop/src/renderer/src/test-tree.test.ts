@@ -60,7 +60,10 @@ describe('Tests panel tree', () => {
     ])
     expect(loc('/home/me/app/test/x.spec.ts:12:3')).toEqual([{ file: '/home/me/app/test/x.spec.ts', line: 12, column: 3 }])
     expect(loc('py/check_math.py:9: AssertionError')).toEqual([{ file: 'py/check_math.py', line: 9, column: undefined }, ': AssertionError'])
-    expect(loc('at file:///C:/app/node_modules/vitest/dist/x.js:1:2')).toEqual(['at ', { file: 'file:///C:/app/node_modules/vitest/dist/x.js', line: 1, column: 2 }])
+    expect(loc('at file:///C:/app/node_modules/vitest/dist/x.js:1:2')).toEqual([
+      'at ',
+      { file: 'file:///C:/app/node_modules/vitest/dist/x.js', line: 1, column: 2 }
+    ])
     // file:// URLs are shown as plain paths (the link still opens the file).
     const shown = (t: string): string[] => splitLocations(t).flatMap((p) => (typeof p === 'string' ? [] : [p.text]))
     expect(shown('at file:///C:/app/node_modules/x.js:1:2')).toEqual(['C:/app/node_modules/x.js:1:2'])

@@ -66,12 +66,7 @@ export function SplitView({
       {shown.map((i, k) => (
         <Fragment key={i}>
           {k > 0 && (
-            <div
-              className="splitter"
-              role="separator"
-              aria-orientation={horizontal ? 'vertical' : 'horizontal'}
-              onPointerDown={startDrag(shown[k - 1], i)}
-            />
+            <div className="splitter" role="separator" aria-orientation={horizontal ? 'vertical' : 'horizontal'} onPointerDown={startDrag(shown[k - 1], i)} />
           )}
           <div className="split-child" style={{ flexGrow: node.sizes[i], flexBasis: 0 }}>
             {renderChild(i)}

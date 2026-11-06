@@ -77,7 +77,16 @@ export function run(cmd: { file: string; args: string[]; cwd?: string }, label: 
       windowsHide: true,
       // Never block on a terminal credential prompt; credential managers (GUI) still work.
       // gh / glab: no prompts, no pager, no colours.
-      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C.UTF-8', GH_PROMPT_DISABLED: '1', NO_COLOR: '1', PAGER: 'cat', ...(opts.env ?? {}) }
+      env: {
+        ...process.env,
+        GIT_TERMINAL_PROMPT: '0',
+        GIT_OPTIONAL_LOCKS: '0',
+        LC_ALL: 'C.UTF-8',
+        GH_PROMPT_DISABLED: '1',
+        NO_COLOR: '1',
+        PAGER: 'cat',
+        ...(opts.env ?? {})
+      }
     })
     const out: Buffer[] = []
     const err: Buffer[] = []

@@ -1,0 +1,5 @@
+out/
+dist/
+test-results/
+# Sample projects for the Tests panel (each in its own language's style)
+e2e/fixtures/

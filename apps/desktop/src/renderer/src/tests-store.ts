@@ -60,9 +60,7 @@ export const useTestsStore = create<TestsStore>((set, get) => {
     const listed = s.projects?.find((p) => p.id === projectId)?.tests.some((t) => t.id === result.id)
     if (s.results[key]?.status !== 'running' && listed) return
     patch(root, (cur) => {
-      const projects = listed
-        ? cur.projects
-        : cur.projects?.map((p) => (p.id === projectId ? { ...p, tests: [...p.tests, testFromId(result.id)] } : p))
+      const projects = listed ? cur.projects : cur.projects?.map((p) => (p.id === projectId ? { ...p, tests: [...p.tests, testFromId(result.id)] } : p))
       return { results: { ...cur.results, [key]: result }, projects }
     })
   })

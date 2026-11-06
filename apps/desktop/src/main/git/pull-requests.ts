@@ -22,7 +22,10 @@ async function runTool(root: string, program: 'gh' | 'glab', args: string[], opt
 async function remoteOf(root: string, status: GitStatus): Promise<string> {
   const tracked = status.upstream?.split('/')[0]
   if (tracked) return tracked
-  const remotes = (await git(root, ['remote']).catch(() => '')).split('\n').map((s) => s.trim()).filter(Boolean)
+  const remotes = (await git(root, ['remote']).catch(() => ''))
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean)
   return remotes.includes('origin') ? 'origin' : (remotes[0] ?? 'origin')
 }
 
@@ -35,7 +38,10 @@ export async function prInfo(root: string): Promise<GitPullRequestInfo & { remot
   const prefix = `${remote}/`
   const remoteBranches = (await gitBranches(root)).filter((b) => b.remote && b.name.startsWith(prefix)).map((b) => b.name.slice(prefix.length))
   const head = (await git(root, ['symbolic-ref', '--short', `refs/remotes/${remote}/HEAD`]).catch(() => '')).trim()
-  const defaultBase = (head.startsWith(prefix) ? head.slice(prefix.length) : undefined) ?? ['main', 'master', 'develop', 'trunk'].find((b) => remoteBranches.includes(b)) ?? remoteBranches[0]
+  const defaultBase =
+    (head.startsWith(prefix) ? head.slice(prefix.length) : undefined) ??
+    ['main', 'master', 'develop', 'trunk'].find((b) => remoteBranches.includes(b)) ??
+    remoteBranches[0]
   const bases = [...new Set([defaultBase, ...remoteBranches].filter((b): b is string => !!b && b !== branch))]
   const title = (await git(root, ['log', '-1', '--format=%s']).catch(() => '')).trim() || undefined
   const info: GitPullRequestInfo & { remote: string; web?: RemoteHost } = { host: host?.kind, branch, defaultBase, bases, title, remote, web: host }
@@ -84,7 +90,15 @@ export async function createPr(root: string, req: GitOpRequest): Promise<{ url: 
   else if (status.ahead > 0) await git(root, ['push'], NETWORK)
 
   if (info.tool === 'gh') {
-    const out = await runTool(root, 'gh', ['pr', 'create', `--title=${title}`, `--body=${body}`, `--base=${base}`, `--head=${info.branch}`, ...(req.draft ? ['--draft'] : [])])
+    const out = await runTool(root, 'gh', [
+      'pr',
+      'create',
+      `--title=${title}`,
+      `--body=${body}`,
+      `--base=${base}`,
+      `--head=${info.branch}`,
+      ...(req.draft ? ['--draft'] : [])
+    ])
     const url = firstUrl(out ?? '')
     if (url) return { url, text: out?.trim() }
   } else if (info.tool === 'glab') {

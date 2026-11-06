@@ -102,7 +102,10 @@ export function ChangesView({ root, status, run, refreshKey }: { root: string; s
           staged: selected.staged,
           apply: async (action, lines) => {
             const n = lines.length
-            if (action === 'discard' && !(await confirmDialog('Discard changes?', `Your changes on ${n} line${n > 1 ? 's' : ''} of ${selected.path} will be lost.`, 'Discard', true))) {
+            if (
+              action === 'discard' &&
+              !(await confirmDialog('Discard changes?', `Your changes on ${n} line${n > 1 ? 's' : ''} of ${selected.path} will be lost.`, 'Discard', true))
+            ) {
               return false
             }
             const label = action === 'stage' ? 'Staging' : action === 'unstage' ? 'Unstaging' : 'Discarding'

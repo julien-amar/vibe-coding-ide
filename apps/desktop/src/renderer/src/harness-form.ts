@@ -24,8 +24,7 @@ export function splitArgs(line: string): string[] {
 }
 
 /** Arguments back on one line (quoted when they hold spaces or quotes). */
-export const joinArgs = (args: string[] = []): string =>
-  args.map((a) => (a === '' || /[\s"']/.test(a) ? (a.includes('"') ? `'${a}'` : `"${a}"`) : a)).join(' ')
+export const joinArgs = (args: string[] = []): string => args.map((a) => (a === '' || /[\s"']/.test(a) ? (a.includes('"') ? `'${a}'` : `"${a}"`) : a)).join(' ')
 
 /** "KEY=value" (env) or "Name: value" (headers) lines as a map; blank lines and lines without a separator are skipped. */
 export function parsePairs(text: string, sep: '=' | ':'): Record<string, string> | undefined {

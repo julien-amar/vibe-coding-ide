@@ -80,7 +80,9 @@ export async function quit(hub: TestApp): Promise<void> {
 /** Text currently in the terminal of the visible tab (or a given terminal host). */
 export async function terminalText(page: Page, host = page.locator('.tab-panel.visible .terminal-host').first()): Promise<string> {
   return host.evaluate((el) => {
-    const term = (el as unknown as { __xterm?: { buffer: { active: { length: number; getLine(i: number): { translateToString(trim: boolean): string } | undefined } } } }).__xterm
+    const term = (
+      el as unknown as { __xterm?: { buffer: { active: { length: number; getLine(i: number): { translateToString(trim: boolean): string } | undefined } } } }
+    ).__xterm
     if (!term) return ''
     const b = term.buffer.active
     const lines: string[] = []
@@ -105,7 +107,9 @@ export function fakeToolsEnv(agentLog: string, editorLog: string): Record<string
   const dir = resolve(__dirname, 'fixtures', 'fake-tools')
   if (process.platform !== 'win32') for (const f of ['claude', 'codex', 'pi', 'opencode', 'gemini', 'code', 'gh']) chmodSync(join(dir, f), 0o755)
   const pathKey = Object.keys(process.env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH'
-  return { [pathKey]: `${dir}${delimiter}${process.env[pathKey] ?? ''}`, FAKE_AGENT_LOG: agentLog,
+  return {
+    [pathKey]: `${dir}${delimiter}${process.env[pathKey] ?? ''}`,
+    FAKE_AGENT_LOG: agentLog,
     FAKE_EDITOR_LOG: editorLog,
     // `gh` (GitHub CLI) and the browser: what they were asked, next to the other logs.
     FAKE_GH_LOG: join(dirname(agentLog), 'fake-gh.log'),
@@ -144,6 +148,9 @@ export function createRepo(base: string): string {
 
 /** Open a folder as a project (the native folder picker cannot be driven by a test). */
 export async function openProject(page: Page, root: string): Promise<void> {
-  await page.evaluate((r) => (window as unknown as { __vibeIdeTabs: { getState(): { openProject(root: string): Promise<void> } } }).__vibeIdeTabs.getState().openProject(r), root)
+  await page.evaluate(
+    (r) => (window as unknown as { __vibeIdeTabs: { getState(): { openProject(root: string): Promise<void> } } }).__vibeIdeTabs.getState().openProject(r),
+    root
+  )
   await expect(page.locator('.tab-panel.visible .git-panel')).toBeVisible()
 }

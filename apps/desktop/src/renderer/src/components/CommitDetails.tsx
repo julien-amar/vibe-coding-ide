@@ -59,8 +59,8 @@ export function CommitDetails({ root, commit, onClose }: { root: string; commit:
           <div className="commit-subject selectable">{subject || commit.subject}</div>
           {body.join('\n').trim() && <pre className="commit-body selectable">{body.join('\n').trim()}</pre>}
           <div className="muted">
-            <span className="git-hash selectable">{commit.hash.slice(0, 10)}</span> · {commit.author} · {new Date(commit.date * 1000).toLocaleString()} ({relativeTime(commit.date)})
-            {commit.parents.length > 1 && ` · merge — changes shown against ${commit.parents[0].slice(0, 7)} (first parent)`}
+            <span className="git-hash selectable">{commit.hash.slice(0, 10)}</span> · {commit.author} · {new Date(commit.date * 1000).toLocaleString()} (
+            {relativeTime(commit.date)}){commit.parents.length > 1 && ` · merge — changes shown against ${commit.parents[0].slice(0, 7)} (first parent)`}
             {commit.parents.length === 0 && ' · initial commit'}
           </div>
         </div>

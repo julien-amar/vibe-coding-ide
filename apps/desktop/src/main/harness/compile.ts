@@ -82,7 +82,7 @@ export function piMcpExtension(servers: Record<string, Record<string, unknown>>)
     '    try {',
     '      pi.registerMcpServer(name, config)',
     '    } catch (err) {',
-    "      console.error(`vibe-coding-ide: MCP server ${name}: ${err instanceof Error ? err.message : err}`)",
+    '      console.error(`vibe-coding-ide: MCP server ${name}: ${err instanceof Error ? err.message : err}`)',
     '    }',
     '  }',
     '}',
@@ -160,12 +160,17 @@ export function compileHarness(
       // -c overrides on top of ~/.codex/config.toml: per server, or (only these servers) the whole table.
       const servers = codexMcpServers(harness.mcpServers, target)
       if (harness.strictMcp) args.push('-c', `mcp_servers=${toml(servers)}`)
-      else for (const [name, table] of Object.entries(servers)) for (const [k, v] of Object.entries(table)) args.push('-c', `mcp_servers.${name}.${k}=${toml(v)}`)
+      else
+        for (const [name, table] of Object.entries(servers)) for (const [k, v] of Object.entries(table)) args.push('-c', `mcp_servers.${name}.${k}=${toml(v)}`)
       const text = [harness.instructions.trim(), skillsCatalog(skills, target)].filter(Boolean).join('\n\n')
       if (text) args.push('-c', `developer_instructions=${toml(text)}`)
       // Only these skills: Codex's own skills (bundled, ~/.codex, ~/.agents, the repository) switched off.
       if (strictSkills) {
-        const dirs = [...(home ? [join(home, '.codex', 'skills'), join(home, '.agents', 'skills')] : []), join(root, '.agents', 'skills'), join(root, '.codex', 'skills')]
+        const dirs = [
+          ...(home ? [join(home, '.codex', 'skills'), join(home, '.agents', 'skills')] : []),
+          join(root, '.agents', 'skills'),
+          join(root, '.codex', 'skills')
+        ]
         const others = skillNamesIn(dirs).filter((n) => !skillNames.includes(n))
         if (others.length) args.push('-c', `skills.config=${toml(others.map((name) => ({ name, enabled: false })))}`)
       }

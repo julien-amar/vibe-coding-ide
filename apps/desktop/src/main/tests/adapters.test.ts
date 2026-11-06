@@ -184,9 +184,11 @@ describe('Java (Maven / Gradle)', () => {
       { cls: 'sample.Other', method: 'b', line: 2, multi: true }
     ]
     expect(mergeJUnit(gradle, known).map((r) => r.id)).toEqual(['sample.MathTest::adds', 'sample.MathTest::addsPairs', 'sample.Other::Custom display name'])
-    expect(parseJavaTests(readFileSync(join(FIXTURE, 'java/src/test/java/sample/MathTest.java'), 'utf8')).filter((t) => t.multi).map((t) => t.method)).toEqual([
-      'addsPairs'
-    ])
+    expect(
+      parseJavaTests(readFileSync(join(FIXTURE, 'java/src/test/java/sample/MathTest.java'), 'utf8'))
+        .filter((t) => t.multi)
+        .map((t) => t.method)
+    ).toEqual(['addsPairs'])
     expect(jvmFilter('maven', { projectId: 'x', file: 'sample.MathTest', titlePath: ['adds'] })).toEqual(['-Dtest=sample.MathTest#adds'])
   })
 
@@ -234,32 +236,36 @@ const progressOf = () => {
 const statusOf = (results: TestResult[]): Record<string, string> => Object.fromEntries(results.map((r) => [r.id, r.status]))
 
 describe('real tools on the fixture projects', () => {
-  it.skipIf(!hasTool('go', ['C:\\Program Files\\Go\\bin\\go.exe']))('Go: lists, runs everything (subtests too), then one subtest', async () => {
-    const go = (await discoverTests(FIXTURE)).find((p) => p.framework === 'go')!
-    expect(go.relDir).toBe('go')
-    expect(go.error).toBeUndefined()
-    expect(go.tests.map((t) => `${t.id}@${t.source}:${t.line}`)).toEqual([
-      'mathx::TestAdd@mathx/mathx_test.go:5',
-      'mathx::TestFailsOnPurpose@mathx/mathx_test.go:11',
-      'mathx::TestSkipped@mathx/mathx_test.go:17',
-      'mathx::TestTable@mathx/mathx_test.go:21'
-    ])
-    const { progress, sender } = progressOf()
-    const all = await runTests(FIXTURE, { projectId: 'go:go' }, sender)
-    expect(all.ok).toBe(true)
-    expect(statusOf(all.results)).toEqual({
-      'mathx::TestAdd': 'passed',
-      'mathx::TestFailsOnPurpose': 'failed',
-      'mathx::TestSkipped': 'skipped',
-      'mathx::TestTable > small': 'passed',
-      'mathx::TestTable > large': 'passed',
-      'mathx::TestTable': 'passed'
-    })
-    expect(all.results.find((r) => r.status === 'failed')?.message).toContain('mathx/mathx_test.go:13: Add(2, 2) = 4, want 5')
-    expect(progress).toHaveLength(6)
-    const one = await runTests(FIXTURE, { projectId: 'go:go', file: 'mathx', titlePath: ['TestTable', 'large'] }, sender)
-    expect(Object.keys(statusOf(one.results)).sort()).toEqual(['mathx::TestTable', 'mathx::TestTable > large'])
-  }, 300_000)
+  it.skipIf(!hasTool('go', ['C:\\Program Files\\Go\\bin\\go.exe']))(
+    'Go: lists, runs everything (subtests too), then one subtest',
+    async () => {
+      const go = (await discoverTests(FIXTURE)).find((p) => p.framework === 'go')!
+      expect(go.relDir).toBe('go')
+      expect(go.error).toBeUndefined()
+      expect(go.tests.map((t) => `${t.id}@${t.source}:${t.line}`)).toEqual([
+        'mathx::TestAdd@mathx/mathx_test.go:5',
+        'mathx::TestFailsOnPurpose@mathx/mathx_test.go:11',
+        'mathx::TestSkipped@mathx/mathx_test.go:17',
+        'mathx::TestTable@mathx/mathx_test.go:21'
+      ])
+      const { progress, sender } = progressOf()
+      const all = await runTests(FIXTURE, { projectId: 'go:go' }, sender)
+      expect(all.ok).toBe(true)
+      expect(statusOf(all.results)).toEqual({
+        'mathx::TestAdd': 'passed',
+        'mathx::TestFailsOnPurpose': 'failed',
+        'mathx::TestSkipped': 'skipped',
+        'mathx::TestTable > small': 'passed',
+        'mathx::TestTable > large': 'passed',
+        'mathx::TestTable': 'passed'
+      })
+      expect(all.results.find((r) => r.status === 'failed')?.message).toContain('mathx/mathx_test.go:13: Add(2, 2) = 4, want 5')
+      expect(progress).toHaveLength(6)
+      const one = await runTests(FIXTURE, { projectId: 'go:go', file: 'mathx', titlePath: ['TestTable', 'large'] }, sender)
+      expect(Object.keys(statusOf(one.results)).sort()).toEqual(['mathx::TestTable', 'mathx::TestTable > large'])
+    },
+    300_000
+  )
 
   it.skipIf(!hasTool('cargo', [join(process.env.USERPROFILE ?? process.env.HOME ?? '', '.cargo', 'bin', 'cargo.exe')]))(
     'Rust: lists unit and integration tests, runs them all (a failure does not stop the others), then a module',
@@ -293,85 +299,97 @@ describe('real tools on the fixture projects', () => {
     600_000
   )
 
-  it.skipIf(!hasTool('dotnet', ['C:\\Program Files\\dotnet\\dotnet.exe']))('.NET: lists, runs everything with messages, then one class', async () => {
-    const net = (await discoverTests(FIXTURE)).find((p) => p.framework === 'dotnet')!
-    expect(net.error).toBeUndefined()
-    expect(net.tests.map((t) => `${t.id}@${t.source}:${t.line}`)).toEqual([
-      'SampleTests.MathTests::Adds@MathTests.cs:8',
-      'SampleTests.MathTests::FailsOnPurpose@MathTests.cs:11',
-      'SampleTests.MathTests::Skipped@MathTests.cs:14',
-      'SampleTests.MathTests::AddsPairs(a: 1, b: 1)@MathTests.cs:19',
-      'SampleTests.MathTests::AddsPairs(a: 1000, b: 2000)@MathTests.cs:19',
-      'SampleTests.MathTests+Nested::Works@MathTests.cs:24'
-    ])
-    const { progress, sender } = progressOf()
-    const all = await runTests(FIXTURE, { projectId: 'dotnet:dotnet' }, sender)
-    expect(all.ok).toBe(true)
-    expect(statusOf(all.results)).toEqual({
-      'SampleTests.MathTests::Adds': 'passed',
-      'SampleTests.MathTests::FailsOnPurpose': 'failed',
-      'SampleTests.MathTests::Skipped': 'skipped',
-      'SampleTests.MathTests::AddsPairs(a: 1, b: 1)': 'passed',
-      'SampleTests.MathTests::AddsPairs(a: 1000, b: 2000)': 'passed',
-      'SampleTests.MathTests+Nested::Works': 'passed'
-    })
-    expect(all.results.find((r) => r.status === 'failed')?.message).toMatch(/Assert\.Equal\(\) Failure[\s\S]*MathTests\.cs:line 11/)
-    expect(progress.map((p) => p.id).sort()).toEqual(Object.keys(statusOf(all.results)).sort())
-    const cls = await runTests(FIXTURE, { projectId: 'dotnet:dotnet', file: 'SampleTests.MathTests+Nested' }, sender)
-    expect(Object.keys(statusOf(cls.results))).toEqual(['SampleTests.MathTests+Nested::Works'])
-  }, 600_000)
+  it.skipIf(!hasTool('dotnet', ['C:\\Program Files\\dotnet\\dotnet.exe']))(
+    '.NET: lists, runs everything with messages, then one class',
+    async () => {
+      const net = (await discoverTests(FIXTURE)).find((p) => p.framework === 'dotnet')!
+      expect(net.error).toBeUndefined()
+      expect(net.tests.map((t) => `${t.id}@${t.source}:${t.line}`)).toEqual([
+        'SampleTests.MathTests::Adds@MathTests.cs:8',
+        'SampleTests.MathTests::FailsOnPurpose@MathTests.cs:11',
+        'SampleTests.MathTests::Skipped@MathTests.cs:14',
+        'SampleTests.MathTests::AddsPairs(a: 1, b: 1)@MathTests.cs:19',
+        'SampleTests.MathTests::AddsPairs(a: 1000, b: 2000)@MathTests.cs:19',
+        'SampleTests.MathTests+Nested::Works@MathTests.cs:24'
+      ])
+      const { progress, sender } = progressOf()
+      const all = await runTests(FIXTURE, { projectId: 'dotnet:dotnet' }, sender)
+      expect(all.ok).toBe(true)
+      expect(statusOf(all.results)).toEqual({
+        'SampleTests.MathTests::Adds': 'passed',
+        'SampleTests.MathTests::FailsOnPurpose': 'failed',
+        'SampleTests.MathTests::Skipped': 'skipped',
+        'SampleTests.MathTests::AddsPairs(a: 1, b: 1)': 'passed',
+        'SampleTests.MathTests::AddsPairs(a: 1000, b: 2000)': 'passed',
+        'SampleTests.MathTests+Nested::Works': 'passed'
+      })
+      expect(all.results.find((r) => r.status === 'failed')?.message).toMatch(/Assert\.Equal\(\) Failure[\s\S]*MathTests\.cs:line 11/)
+      expect(progress.map((p) => p.id).sort()).toEqual(Object.keys(statusOf(all.results)).sort())
+      const cls = await runTests(FIXTURE, { projectId: 'dotnet:dotnet', file: 'SampleTests.MathTests+Nested' }, sender)
+      expect(Object.keys(statusOf(cls.results))).toEqual(['SampleTests.MathTests+Nested::Works'])
+    },
+    600_000
+  )
 
-  it.skipIf(!hasTool('mvn'))('Maven: lists from the sources, runs everything (results per class), then one method', async () => {
-    const mvn = (await discoverTests(FIXTURE)).find((p) => p.framework === 'maven')!
-    expect(mvn.tests.map((t) => t.id)).toEqual([
-      'sample.MathTest::adds',
-      'sample.MathTest::failsOnPurpose',
-      'sample.MathTest::skipped',
-      'sample.MathTest::addsPairs',
-      'sample.MathTest$Inner::works'
-    ])
-    const { progress, sender } = progressOf()
-    const all = await runTests(FIXTURE, { projectId: 'maven:java' }, sender)
-    expect(all.ok).toBe(true)
-    expect(statusOf(all.results)).toEqual({
-      'sample.MathTest::adds': 'passed',
-      'sample.MathTest::failsOnPurpose': 'failed',
-      'sample.MathTest::skipped': 'skipped',
-      'sample.MathTest::addsPairs': 'passed',
-      'sample.MathTest$Inner::works': 'passed'
-    })
-    expect(all.results.find((r) => r.status === 'failed')?.message).toContain('2 + 2')
-    expect(progress.length).toBeGreaterThanOrEqual(5)
-    const one = await runTests(FIXTURE, { projectId: 'maven:java', file: 'sample.MathTest', titlePath: ['adds'], line: 15 }, sender)
-    expect(statusOf(one.results)).toEqual({ 'sample.MathTest::adds': 'passed' })
-    const nested = await runTests(FIXTURE, { projectId: 'maven:java', file: 'sample.MathTest$Inner' }, sender)
-    expect(statusOf(nested.results)).toEqual({ 'sample.MathTest$Inner::works': 'passed' })
-  }, 600_000)
+  it.skipIf(!hasTool('mvn'))(
+    'Maven: lists from the sources, runs everything (results per class), then one method',
+    async () => {
+      const mvn = (await discoverTests(FIXTURE)).find((p) => p.framework === 'maven')!
+      expect(mvn.tests.map((t) => t.id)).toEqual([
+        'sample.MathTest::adds',
+        'sample.MathTest::failsOnPurpose',
+        'sample.MathTest::skipped',
+        'sample.MathTest::addsPairs',
+        'sample.MathTest$Inner::works'
+      ])
+      const { progress, sender } = progressOf()
+      const all = await runTests(FIXTURE, { projectId: 'maven:java' }, sender)
+      expect(all.ok).toBe(true)
+      expect(statusOf(all.results)).toEqual({
+        'sample.MathTest::adds': 'passed',
+        'sample.MathTest::failsOnPurpose': 'failed',
+        'sample.MathTest::skipped': 'skipped',
+        'sample.MathTest::addsPairs': 'passed',
+        'sample.MathTest$Inner::works': 'passed'
+      })
+      expect(all.results.find((r) => r.status === 'failed')?.message).toContain('2 + 2')
+      expect(progress.length).toBeGreaterThanOrEqual(5)
+      const one = await runTests(FIXTURE, { projectId: 'maven:java', file: 'sample.MathTest', titlePath: ['adds'], line: 15 }, sender)
+      expect(statusOf(one.results)).toEqual({ 'sample.MathTest::adds': 'passed' })
+      const nested = await runTests(FIXTURE, { projectId: 'maven:java', file: 'sample.MathTest$Inner' }, sender)
+      expect(statusOf(nested.results)).toEqual({ 'sample.MathTest$Inner::works': 'passed' })
+    },
+    600_000
+  )
 
-  it.skipIf(!hasTool('gradle'))('Gradle: lists from the sources, runs everything (results per class), then one method', async () => {
-    const gradle = (await discoverTests(FIXTURE)).find((p) => p.framework === 'gradle')!
-    expect(gradle.relDir).toBe('gradle')
-    expect(gradle.tests.map((t) => t.id)).toEqual([
-      'sample.MathTest::adds',
-      'sample.MathTest::failsOnPurpose',
-      'sample.MathTest::skipped',
-      'sample.MathTest::addsPairs',
-      'sample.MathTest$Inner::works'
-    ])
-    const { progress, sender } = progressOf()
-    const all = await runTests(FIXTURE, { projectId: 'gradle:gradle' }, sender)
-    expect(all.ok).toBe(true)
-    expect(statusOf(all.results)).toEqual({
-      'sample.MathTest::adds': 'passed',
-      'sample.MathTest::failsOnPurpose': 'failed',
-      'sample.MathTest::skipped': 'skipped',
-      'sample.MathTest::addsPairs': 'passed',
-      'sample.MathTest$Inner::works': 'passed'
-    })
-    expect(all.results.find((r) => r.status === 'failed')?.message).toContain('2 + 2')
-    expect(progress.length).toBeGreaterThanOrEqual(5)
-    // Re-running only some tests (cleanTest: Gradle would otherwise skip them as "up to date").
-    const one = await runTests(FIXTURE, { projectId: 'gradle:gradle', file: 'sample.MathTest', titlePath: ['adds'], line: 15 }, sender)
-    expect(statusOf(one.results)).toEqual({ 'sample.MathTest::adds': 'passed' })
-  }, 900_000)
+  it.skipIf(!hasTool('gradle'))(
+    'Gradle: lists from the sources, runs everything (results per class), then one method',
+    async () => {
+      const gradle = (await discoverTests(FIXTURE)).find((p) => p.framework === 'gradle')!
+      expect(gradle.relDir).toBe('gradle')
+      expect(gradle.tests.map((t) => t.id)).toEqual([
+        'sample.MathTest::adds',
+        'sample.MathTest::failsOnPurpose',
+        'sample.MathTest::skipped',
+        'sample.MathTest::addsPairs',
+        'sample.MathTest$Inner::works'
+      ])
+      const { progress, sender } = progressOf()
+      const all = await runTests(FIXTURE, { projectId: 'gradle:gradle' }, sender)
+      expect(all.ok).toBe(true)
+      expect(statusOf(all.results)).toEqual({
+        'sample.MathTest::adds': 'passed',
+        'sample.MathTest::failsOnPurpose': 'failed',
+        'sample.MathTest::skipped': 'skipped',
+        'sample.MathTest::addsPairs': 'passed',
+        'sample.MathTest$Inner::works': 'passed'
+      })
+      expect(all.results.find((r) => r.status === 'failed')?.message).toContain('2 + 2')
+      expect(progress.length).toBeGreaterThanOrEqual(5)
+      // Re-running only some tests (cleanTest: Gradle would otherwise skip them as "up to date").
+      const one = await runTests(FIXTURE, { projectId: 'gradle:gradle', file: 'sample.MathTest', titlePath: ['adds'], line: 15 }, sender)
+      expect(statusOf(one.results)).toEqual({ 'sample.MathTest::adds': 'passed' })
+    },
+    900_000
+  )
 })

@@ -97,7 +97,10 @@ test('a failed test opens in the editor and is sent to the AI agent with "Fix wi
   await details.locator('.tests-location', { hasText: 'unit/math.check.ts:8' }).click()
   await expect.poll(() => readLog(hub.editorLog)).toMatch(/"-g","[^"]*math\.check\.ts:8:1"/)
   // So do the locations in the stack trace.
-  await details.locator('.tests-message .tests-location', { hasText: /math\.check\.ts:9:\d+/ }).first().click()
+  await details
+    .locator('.tests-message .tests-location', { hasText: /math\.check\.ts:9:\d+/ })
+    .first()
+    .click()
   await expect.poll(() => readLog(hub.editorLog)).toMatch(/math\.check\.ts:9:\d+"/)
   // Frames in dependencies outside the project folder (here the repository's node_modules; on
   // Windows Vitest prints them as file:/// URLs, shown without the scheme) open too.
@@ -142,7 +145,10 @@ test('"Fix with agent" opens an AI agent panel when none is running, and waits f
   const failing = panel.locator('.test-row.kind-test', { hasText: 'fails on purpose' }).first()
   await expect(failing.locator('.test-status')).toHaveClass(/st-failed/, { timeout: 90_000 })
   await failing.click()
-  await panel.locator('.tests-details').getByRole('button', { name: /Fix with agent/ }).click()
+  await panel
+    .locator('.tests-details')
+    .getByRole('button', { name: /Fix with agent/ })
+    .click()
 
   // A new agent panel appears, and gets the message once it has started.
   await expect(agentPane).toHaveCount(1)

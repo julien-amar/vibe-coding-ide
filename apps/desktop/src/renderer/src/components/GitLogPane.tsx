@@ -35,7 +35,9 @@ function GraphCell({ row, width, isHead }: { row: GraphRow; width: number; isHea
   })
   return (
     <svg className="git-graph" width={width} height={ROW_H} aria-hidden>
-      <g fill="none" strokeWidth={2}>{paths}</g>
+      <g fill="none" strokeWidth={2}>
+        {paths}
+      </g>
       <circle cx={cx} cy={mid} r={isHead ? 5 : 4} fill={isHead ? 'var(--bg)' : laneColor(row.col)} stroke={laneColor(row.col)} strokeWidth={2} />
     </svg>
   )
@@ -52,8 +54,18 @@ function RefBadges({ refs }: { refs: string[] }): React.JSX.Element {
             </span>
           )
         }
-        if (r === 'HEAD') return <span key={r} className="ref-badge head">HEAD</span>
-        if (r.startsWith('tag: ')) return <span key={r} className="ref-badge tag">{r.slice(5)}</span>
+        if (r === 'HEAD')
+          return (
+            <span key={r} className="ref-badge head">
+              HEAD
+            </span>
+          )
+        if (r.startsWith('tag: '))
+          return (
+            <span key={r} className="ref-badge tag">
+              {r.slice(5)}
+            </span>
+          )
         const remote = r.includes('/')
         return (
           <span key={r} className={`ref-badge ${remote ? 'remote' : 'branch'}`}>
@@ -115,11 +127,8 @@ export function GitLogPane({ root, visible, tick }: { root: string; visible: boo
 
   return (
     <div className="git-pane">
-
       {log && !log.isRepo && (
-        <div className="pane-message">
-          {log.error ? <p className="error">{log.error}</p> : <p>This folder is not a git repository.</p>}
-        </div>
+        <div className="pane-message">{log.error ? <p className="error">{log.error}</p> : <p>This folder is not a git repository.</p>}</div>
       )}
       {log?.isRepo && log.error && <div className="pane-message error">{log.error}</div>}
       {log?.isRepo && !log.error && commits.length === 0 && <div className="pane-message">No commits yet.</div>}

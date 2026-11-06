@@ -17,15 +17,18 @@ export function readProjectMcpJson(root: string): McpServer[] {
   } catch {
     return []
   }
-  return Object.entries(json.mcpServers ?? {}).map(([name, s]) =>
-    sanitizeHarness({
-      mcpServers: [
-        s.url
-          ? { name, transport: s.type === 'sse' ? 'sse' : 'http', url: s.url, headers: s.headers }
-          : { name, transport: 'stdio', command: s.command, args: s.args, env: s.env }
-      ]
-    }).mcpServers[0]
-  ).filter(Boolean)
+  return Object.entries(json.mcpServers ?? {})
+    .map(
+      ([name, s]) =>
+        sanitizeHarness({
+          mcpServers: [
+            s.url
+              ? { name, transport: s.type === 'sse' ? 'sse' : 'http', url: s.url, headers: s.headers }
+              : { name, transport: 'stdio', command: s.command, args: s.args, env: s.env }
+          ]
+        }).mcpServers[0]
+    )
+    .filter(Boolean)
 }
 
 // ---------------------------------------------------------------------------
@@ -102,7 +105,13 @@ export function parseHttpReply(contentType: string, body: string, id: number): R
   const candidates = contentType.includes('text/event-stream')
     ? body
         .split(/\r?\n\r?\n/)
-        .map((ev) => ev.split(/\r?\n/).filter((l) => l.startsWith('data:')).map((l) => l.slice(5).trimStart()).join('\n'))
+        .map((ev) =>
+          ev
+            .split(/\r?\n/)
+            .filter((l) => l.startsWith('data:'))
+            .map((l) => l.slice(5).trimStart())
+            .join('\n')
+        )
         .filter(Boolean)
     : [body]
   for (const c of candidates) {

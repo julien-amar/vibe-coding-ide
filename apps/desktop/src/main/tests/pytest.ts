@@ -72,14 +72,23 @@ export const pytestAdapter: Adapter = {
     work.write('vci_pytest.py', PYTEST_PLUGIN)
     const python = findPython(dir)
     const lines: LiveLine[] = []
-    const live = new LiveOutput(() => undefined, (l) => lines.push(l))
-    const cmd = programCommand(dir, python.program, [...python.args, '-m', 'pytest', '--collect-only', '-q', '-p', 'vci_pytest', '--rootdir=.'], pytestEnv(dir, work.dir))
+    const live = new LiveOutput(
+      () => undefined,
+      (l) => lines.push(l)
+    )
+    const cmd = programCommand(
+      dir,
+      python.program,
+      [...python.args, '-m', 'pytest', '--collect-only', '-q', '-p', 'vci_pytest', '--rootdir=.'],
+      pytestEnv(dir, work.dir)
+    )
     const r = await runQuiet(dir, cmd, (t) => live.push(t))
     live.flush()
     const tests = lines.filter((l) => l.collected).map((l) => pytestCase(l.collected!, l.line ?? undefined))
     const errors = lines.filter((l) => l.collectError !== undefined).map((l) => `${l.collectError}\n${l.message ?? ''}`)
     // Exit code 5: no tests collected (not an error).
-    if (tests.length === 0 && r.code !== 0 && r.code !== 5 && errors.length === 0) return { tests, error: tail(r.output) || `pytest failed (exit code ${r.code}).` }
+    if (tests.length === 0 && r.code !== 0 && r.code !== 5 && errors.length === 0)
+      return { tests, error: tail(r.output) || `pytest failed (exit code ${r.code}).` }
     return { tests, error: errors.length ? errors.join('\n\n') : undefined }
   },
 

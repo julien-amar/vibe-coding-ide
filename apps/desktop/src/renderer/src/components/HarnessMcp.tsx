@@ -153,7 +153,17 @@ export function McpView({
   )
 }
 
-function ServerEditor({ server, taken, onSave, onCancel }: { server: McpServer; taken: string[]; onSave: (s: McpServer) => void; onCancel: () => void }): React.JSX.Element {
+function ServerEditor({
+  server,
+  taken,
+  onSave,
+  onCancel
+}: {
+  server: McpServer
+  taken: string[]
+  onSave: (s: McpServer) => void
+  onCancel: () => void
+}): React.JSX.Element {
   const [name, setName] = useState(server.name)
   const [transport, setTransport] = useState(server.transport)
   const [command, setCommand] = useState(server.command ?? '')

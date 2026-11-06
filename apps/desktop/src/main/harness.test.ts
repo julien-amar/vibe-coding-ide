@@ -54,7 +54,16 @@ describe('harness model and storage', () => {
     expect(h).toEqual({
       mcpServers: [
         { name: 'files', transport: 'stdio', command: 'npx', args: ['-y', 'x'], env: { A: '1' }, url: undefined, headers: undefined, enabled: true },
-        { name: 'web', transport: 'http', command: undefined, args: undefined, env: undefined, url: 'https://x/mcp', headers: { Authorization: 'Bearer t' }, enabled: false },
+        {
+          name: 'web',
+          transport: 'http',
+          command: undefined,
+          args: undefined,
+          env: undefined,
+          url: 'https://x/mcp',
+          headers: { Authorization: 'Bearer t' },
+          enabled: false
+        },
         { name: 'odd', transport: 'stdio', command: 'c', args: undefined, env: undefined, url: undefined, headers: undefined, enabled: true }
       ],
       skills: [{ path: 'skills/a', enabled: true }],
@@ -249,7 +258,13 @@ describe('compiling a harness for Claude Code', () => {
     expect(agentPath(target, `${root}\\skills\\a`)).toBe('/home/me/proj/skills/a')
     expect(agentPath({ kind: 'host' }, 'C:\\x')).toBe('C:\\x')
     const out = join(base, 'wsl-out')
-    const { args } = compileHarness('claude', sanitizeHarness({ mcpServers: [{ name: 'n', command: 'npx', args: ['-y', 'pkg'] }], instructions: 'x' }), base, out, target)
+    const { args } = compileHarness(
+      'claude',
+      sanitizeHarness({ mcpServers: [{ name: 'n', command: 'npx', args: ['-y', 'pkg'] }], instructions: 'x' }),
+      base,
+      out,
+      target
+    )
     // (A Windows temp folder becomes /mnt/<drive>/…; other systems' paths are already Linux paths.)
     expect(args[1]).toMatch(process.platform === 'win32' ? /^\/mnt\/[a-z]\/.*\/wsl-out\/mcp\.json$/ : /\/wsl-out\/mcp\.json$/)
     // npx is not wrapped in cmd /c inside WSL.
@@ -289,7 +304,7 @@ describe('skills and the repository .mcp.json', () => {
       ['harness', 'gone', undefined, true],
       ['project', 'lint-it', 'Lints the code', false]
     ])
-    expect(skillMeta('---\nname: x\ndescription: \'Does y\'\n---\nbody')).toEqual({ name: 'x', description: 'Does y' })
+    expect(skillMeta("---\nname: x\ndescription: 'Does y'\n---\nbody")).toEqual({ name: 'x', description: 'Does y' })
   })
 
   it('imports the servers of the repository .mcp.json', () => {

@@ -2,8 +2,20 @@ import { describe, expect, it } from 'vitest'
 import type { TestCase, TestProject } from '@shared/types'
 import { fixPrompt, runCommand } from './test-prompt'
 
-const project = (framework: TestProject['framework'], relDir = 'apps/web'): TestProject => ({ id: `${framework}:${relDir}`, framework, dir: '/r/' + relDir, relDir, tests: [] })
-const t = (file: string, suite: string[], name: string, line?: number): TestCase => ({ id: `${file}::${[...suite, name].join(' > ')}`, file, suite, name, line })
+const project = (framework: TestProject['framework'], relDir = 'apps/web'): TestProject => ({
+  id: `${framework}:${relDir}`,
+  framework,
+  dir: '/r/' + relDir,
+  relDir,
+  tests: []
+})
+const t = (file: string, suite: string[], name: string, line?: number): TestCase => ({
+  id: `${file}::${[...suite, name].join(' > ')}`,
+  file,
+  suite,
+  name,
+  line
+})
 
 describe('Fix with agent prompts', () => {
   it('gives the command that runs exactly one test, per framework (quotes that work in bash and PowerShell)', () => {
@@ -12,7 +24,9 @@ describe('Fix with agent prompts', () => {
     )
     expect(runCommand(project('jest', ''), t('a.test.js', ['strings'], 'joins'))).toBe(`npx jest 'a.test.js' -t '^strings joins$'`)
     expect(runCommand(project('playwright', ''), t('e2e/a.spec.ts', [], 'works', 12))).toBe(`npx playwright test 'e2e/a.spec.ts:12'`)
-    expect(runCommand(project('pytest', 'api'), t('tests/test_a.py', ['TestX'], 'test_y[1]'))).toBe(`cd 'api' && python -m pytest 'tests/test_a.py::TestX::test_y[1]'`)
+    expect(runCommand(project('pytest', 'api'), t('tests/test_a.py', ['TestX'], 'test_y[1]'))).toBe(
+      `cd 'api' && python -m pytest 'tests/test_a.py::TestX::test_y[1]'`
+    )
     expect(runCommand(project('vitest', ''), undefined, 'src/a.test.ts')).toBe(`npx vitest run 'src/a.test.ts'`)
     // Go: package folder and one anchored pattern per level; Rust: module path; .NET: class + method
     // (all cases of a data-driven test); Maven / Gradle: class + method.
@@ -20,7 +34,9 @@ describe('Fix with agent prompts', () => {
       `cd 'go' && go test './mathx' -run '^TestTable$/^small$'`
     )
     expect(runCommand(project('cargo', ''), t('src/lib.rs', ['tests', 'nested'], 'works'))).toBe(`cargo test -- 'tests::nested::works' --exact`)
-    expect(runCommand(project('dotnet', ''), t('Ns.MathTests', [], 'AddsPairs(a: 1, b: 1)'))).toBe(`dotnet test --filter 'FullyQualifiedName=Ns.MathTests.AddsPairs'`)
+    expect(runCommand(project('dotnet', ''), t('Ns.MathTests', [], 'AddsPairs(a: 1, b: 1)'))).toBe(
+      `dotnet test --filter 'FullyQualifiedName=Ns.MathTests.AddsPairs'`
+    )
     expect(runCommand(project('maven', ''), t('sample.MathTest$Inner', [], 'works'))).toBe(`mvn test '-Dtest=sample.MathTest$Inner#works'`)
     expect(runCommand(project('gradle', ''), t('sample.MathTest', [], 'adds'))).toBe(`gradle test --tests 'sample.MathTest.adds'`)
     // A name with a single quote: double quotes, with backslashes and $ escaped for the shell
@@ -29,7 +45,9 @@ describe('Fix with agent prompts', () => {
   })
 
   it('describes one failure with its location, error and how to check the fix', () => {
-    const p = fixPrompt(project('vitest'), [{ test: t('src/a.test.ts', ['math'], 'adds', 8), message: '\x1b[31mAssertionError: expected 4 to be 5\x1b[39m\n    at src/a.test.ts:9:19' }])
+    const p = fixPrompt(project('vitest'), [
+      { test: t('src/a.test.ts', ['math'], 'adds', 8), message: '\x1b[31mAssertionError: expected 4 to be 5\x1b[39m\n    at src/a.test.ts:9:19' }
+    ])
     expect(p).toContain('This Vitest test fails. Please fix it.')
     expect(p).toContain('Test: math › adds')
     expect(p).toContain('File: apps/web/src/a.test.ts:8')

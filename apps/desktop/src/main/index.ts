@@ -2,7 +2,16 @@ import { appendFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, type Rectangle, type WebContents } from 'electron'
 import { mapPanes, sessionIdsOf } from '@shared/layout'
-import type { GitOpRequest, PackageUpdateInfo, PtyCreateRequest, PtyCreateResult, TabSnapshot, TestRunRequest, WindowInit, WindowTabsState } from '@shared/types'
+import type {
+  GitOpRequest,
+  PackageUpdateInfo,
+  PtyCreateRequest,
+  PtyCreateResult,
+  TabSnapshot,
+  TestRunRequest,
+  WindowInit,
+  WindowTabsState
+} from '@shared/types'
 import { openInEditor } from './editor'
 import { gitLog, gitOp, GitWatcher } from './git'
 import { checkMcpServer, HARNESS_SUPPORT, listSkills, readProjectMcpJson, readSkillFile, sanitizeHarness } from './harness'
@@ -93,9 +102,7 @@ function scheduleSave(): void {
 // ---------- Windows ----------
 
 function overlayColors(): { color: string; symbolColor: string } {
-  return nativeTheme.shouldUseDarkColors
-    ? { color: '#1f1f1f', symbolColor: '#ffffff' }
-    : { color: '#f3f3f3', symbolColor: '#1a1a1a' }
+  return nativeTheme.shouldUseDarkColors ? { color: '#1f1f1f', symbolColor: '#ffffff' } : { color: '#f3f3f3', symbolColor: '#1a1a1a' }
 }
 
 interface CreateOptions {
@@ -118,9 +125,7 @@ function createWindow(opts: CreateOptions = {}): BrowserWindow {
     title: 'vibe-coding-ide',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1f1f1f' : '#f3f3f3',
     titleBarStyle: 'hidden',
-    ...(isMac
-      ? { trafficLightPosition: { x: 14, y: 13 } }
-      : { titleBarOverlay: { ...overlayColors(), height: TITLEBAR_HEIGHT } }),
+    ...(isMac ? { trafficLightPosition: { x: 14, y: 13 } } : { titleBarOverlay: { ...overlayColors(), height: TITLEBAR_HEIGHT } }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
@@ -185,7 +190,12 @@ function restoreOrCreate(): void {
     return
   }
   for (const w of saved) {
-    createWindow({ bounds: visibleBounds(w.bounds) ?? { width: w.bounds.width, height: w.bounds.height }, maximized: w.maximized, tabs: w.tabs, activeIndex: w.activeIndex })
+    createWindow({
+      bounds: visibleBounds(w.bounds) ?? { width: w.bounds.width, height: w.bounds.height },
+      maximized: w.maximized,
+      tabs: w.tabs,
+      activeIndex: w.activeIndex
+    })
   }
 }
 
@@ -315,9 +325,7 @@ function registerIpc(): void {
   ipcMain.handle('project:recent', () => recentProjects())
   ipcMain.on('project:touch', (_e, root: string) => touchProject(String(root)))
 
-  ipcMain.handle('git:log', (_e, root: string) =>
-    isDir(String(root)) ? gitLog(String(root)) : { isRepo: false, error: 'Folder not found', commits: [] }
-  )
+  ipcMain.handle('git:log', (_e, root: string) => (isDir(String(root)) ? gitLog(String(root)) : { isRepo: false, error: 'Folder not found', commits: [] }))
   ipcMain.handle('git:op', (_e, root: string, req: GitOpRequest) =>
     isDir(String(root)) ? gitOp(String(root), req ?? { op: 'status' }) : { ok: false, error: 'Folder not found' }
   )

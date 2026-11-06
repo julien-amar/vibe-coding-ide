@@ -87,12 +87,7 @@ function TabItem({
       ) : (
         <span className="tab-title">{tabTitle(tab)}</span>
       )}
-      <button
-        className="tab-close"
-        title="Close tab (Ctrl+Shift+W)"
-        onMouseDown={(e) => e.stopPropagation()}
-        onClick={() => close(tab.id)}
-      >
+      <button className="tab-close" title="Close tab (Ctrl+Shift+W)" onMouseDown={(e) => e.stopPropagation()} onClick={() => close(tab.id)}>
         ×
       </button>
     </div>
@@ -143,11 +138,7 @@ export function TabStrip(): React.JSX.Element {
             }}
           />
         ))}
-        <button
-          className={`new-tab${launcherOpen ? ' open' : ''}`}
-          title="New tab (Ctrl+Shift+T)"
-          onClick={() => setLauncherOpen(!launcherOpen)}
-        >
+        <button className={`new-tab${launcherOpen ? ' open' : ''}`} title="New tab (Ctrl+Shift+T)" onClick={() => setLauncherOpen(!launcherOpen)}>
           +
         </button>
       </div>

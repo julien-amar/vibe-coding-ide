@@ -123,6 +123,11 @@ export const goAdapter: Adapter = {
     const fileErrors = [...failedPkgs]
       .filter((p) => ![...results.values()].some((r) => r.id.startsWith(`${p}::`) && r.status === 'failed'))
       .map((p) => ({ file: p, message: (pkgOutput.get(p) ?? []).join('').trim() || 'The package failed to build: see the output.' }))
-    return { ok: code === 0 || code === 1, error: code === 0 || code === 1 ? undefined : 'go test failed: see the output.', results: [...results.values()], fileErrors }
+    return {
+      ok: code === 0 || code === 1,
+      error: code === 0 || code === 1 ? undefined : 'go test failed: see the output.',
+      results: [...results.values()],
+      fileErrors
+    }
   }
 }
