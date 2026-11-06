@@ -3,6 +3,7 @@ import type { Profile, RecentProject, TabKind } from '@shared/types'
 import { loadProfiles } from '../profiles'
 import { useTabs } from '../store'
 import { LINUX_LOGO, Logo } from '../logos'
+import { ContainersIcon } from './KindBadge'
 import { ProfileIcon } from './ProfileIcon'
 import { useSettingsUi } from './SettingsDialog'
 
@@ -19,11 +20,11 @@ interface Entry {
   remove?: () => void
 }
 
-const GROUP_ORDER = ['Projects', 'Shells', 'WSL distributions', 'AI agents']
+const GROUP_ORDER = ['Projects', 'Shells', 'WSL distributions', 'AI agents', 'Tools']
 const PROFILE_GROUP: Record<Profile['kind'], string> = { shell: 'Shells', wsl: 'WSL distributions', agent: 'AI agents' }
 
 /** Tab types from the plan that are not built yet; shown so the launcher reflects the roadmap. */
-const COMING_SOON = ['Web browser', 'Messaging', 'Containers', 'S/FTP client']
+const COMING_SOON = ['Web browser', 'Messaging', 'S/FTP client']
 
 export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Element {
   const [profiles, setProfiles] = useState<Profile[] | null>(null)
@@ -103,7 +104,18 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
           badge: p.kind,
           profile: p,
           run: () => void openProfile(p)
-        }))
+        })),
+      {
+        key: 'tool:containers',
+        group: 'Tools',
+        label: 'Containers',
+        detail: 'Docker, Podman, wslc: containers, images, volumes, networks, Compose',
+        badge: 'containers' as const,
+        run: () => {
+          onClose()
+          useTabs.getState().openContainers()
+        }
+      }
     ]
     const q = query.trim().toLowerCase()
     const filtered = q ? list.filter((e) => `${e.label} ${e.group} ${e.detail ?? ''}`.toLowerCase().includes(q)) : list
@@ -200,7 +212,13 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
                       title={item.detail}
                     >
                       <span className="launcher-item-icon">
-                        {item.profile && item.badge !== 'project' ? <ProfileIcon profile={item.profile} size={20} /> : <FolderIcon wsl={!!item.profile} />}
+                        {item.badge === 'containers' ? (
+                          <ContainersIcon size={20} />
+                        ) : item.profile && item.badge !== 'project' ? (
+                          <ProfileIcon profile={item.profile} size={20} />
+                        ) : (
+                          <FolderIcon wsl={!!item.profile} />
+                        )}
                       </span>
                       <span className="launcher-item-text">
                         <span className="launcher-item-name">{item.label}</span>
@@ -272,12 +290,14 @@ const CATEGORY_CLASS: Record<string, string> = {
   Shells: 'shell',
   'WSL distributions': 'wsl',
   'AI agents': 'agent',
+  Tools: 'tools',
   'Coming soon': 'soon'
 }
 
 function CategoryIcon({ group }: { group: string }): React.JSX.Element {
   const cls = `launcher-category-icon ${CATEGORY_CLASS[group] ?? ''}`
   if (group === 'WSL distributions') return <Logo svg={LINUX_LOGO} size={14} className={cls} />
+  if (group === 'Tools') return <ContainersIcon size={15} />
   return (
     <svg className={cls} viewBox="0 0 16 16" aria-hidden>
       {group === 'Projects' && <path d="M1.5 4.5a1.5 1.5 0 011.5-1.5h3l1.5 1.5H13a1.5 1.5 0 011.5 1.5v6A1.5 1.5 0 0113 13.5H3A1.5 1.5 0 011.5 12z" />}

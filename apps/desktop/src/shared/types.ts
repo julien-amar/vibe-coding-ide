@@ -116,6 +116,123 @@ export interface AppSettings {
   defaultAgent?: string
 }
 
+// ---------------------------------------------------------------------------
+// Containers tab
+
+/** Container engines: Docker and Podman through the Engine API, wslc (WSL containers) through its CLI. */
+export type ContainerBackendId = 'docker' | 'podman' | 'wslc'
+
+export interface ContainerBackendInfo {
+  id: ContainerBackendId
+  label: string
+  /** The engine answers. */
+  available: boolean
+  /** Version / endpoint shown next to the name. */
+  detail?: string
+  /** Why it is not available (not installed, not running…). */
+  error?: string
+  /** What it can do (wslc: no pause, no compose). */
+  features: { pause: boolean; compose: boolean }
+}
+
+export interface ContainerPort {
+  /** Published on the host (absent: only exposed). */
+  host?: number
+  container: number
+  protocol: string
+  ip?: string
+}
+
+export interface ContainerInfo {
+  id: string
+  name: string
+  image: string
+  /** running, exited, paused, created, restarting, dead… */
+  state: string
+  /** "Up 2 hours", "Exited (0) 3 days ago". */
+  status: string
+  ports: ContainerPort[]
+  /** Unix seconds. */
+  created?: number
+  /** Started by Docker Compose. */
+  compose?: { project: string; service: string; workingDir?: string; configFiles?: string[] }
+}
+
+export interface ImageInfo {
+  id: string
+  /** repository:tag (none: dangling). */
+  tags: string[]
+  /** Bytes (Engine) or a human size (wslc). */
+  size: number | string
+  created?: number
+  /** Containers using it, when known. */
+  containers?: number
+}
+
+export interface VolumeInfo {
+  name: string
+  driver: string
+  mountpoint?: string
+  created?: string
+}
+
+export interface NetworkInfo {
+  id: string
+  name: string
+  driver: string
+  scope?: string
+}
+
+/** A Docker Compose project (from its containers' labels). */
+export interface ComposeProject {
+  name: string
+  workingDir?: string
+  configFiles: string[]
+  services: { name: string; state: string; container: string }[]
+}
+
+export type ContainerListKind = 'containers' | 'images' | 'volumes' | 'networks' | 'compose'
+
+export interface ContainerListResult {
+  ok: boolean
+  error?: string
+  containers?: ContainerInfo[]
+  images?: ImageInfo[]
+  volumes?: VolumeInfo[]
+  networks?: NetworkInfo[]
+  compose?: ComposeProject[]
+}
+
+export type ContainerTarget = 'container' | 'image' | 'volume' | 'network'
+
+/** Actions on one object (remove: also images, volumes, networks). */
+export type ContainerAction = 'start' | 'stop' | 'restart' | 'pause' | 'unpause' | 'kill' | 'remove'
+
+/** Long operations through the engine's CLI, with live output (a job). */
+export type ContainerJob =
+  | { kind: 'pull'; image: string }
+  | { kind: 'build'; context: string; dockerfile?: string; tag?: string; target?: string; buildArgs?: string[] }
+  | { kind: 'run'; image: string; name?: string; ports?: string[]; env?: string[]; volumes?: string[]; network?: string; restart?: string }
+  | { kind: 'compose'; project: string; action: 'up' | 'down' | 'restart' | 'pull' | 'stop'; configFiles: string[]; workingDir?: string }
+
+/** Live stats of a container (one sample). */
+export interface ContainerStats {
+  cpu: number
+  memUsed: number
+  memLimit: number
+  netRx: number
+  netTx: number
+  blockRead: number
+  blockWrite: number
+  pids?: number
+}
+
+/** A stream (logs, stats, job output) sent to the window, by id. */
+export type ContainerStreamEvent =
+  | { stream: string; kind: 'text'; text: string }
+  | { stream: string; kind: 'stats'; stats: ContainerStats }
+  | { stream: string; kind: 'end'; code?: number; error?: string }
+
 export interface UpdateStatus {
   state: 'idle' | 'checking' | 'none' | 'available' | 'downloading' | 'ready' | 'error'
   version?: string
@@ -143,7 +260,7 @@ export interface PtyCreateResult {
 }
 
 /** Kinds of top-level tabs. Terminal-like tabs reuse the profile kind. */
-export type TabKind = ProfileKind | 'project'
+export type TabKind = ProfileKind | 'project' | 'containers'
 
 export type PaneType = 'terminal' | 'agent' | 'git' | 'tests'
 
@@ -419,7 +536,7 @@ export interface GitOpResult {
 /** Serializable description of a tab, used for moving tabs between windows and for layout restore. */
 export interface TabSnapshot {
   kind: TabKind
-  /** Terminal-like tabs: the profile to launch. */
+  /** Terminal-like tabs: the profile to launch. Containers tabs: the engine (docker, podman, wslc). */
   profileId?: string
   autoTitle: string
   customTitle?: string
@@ -539,6 +656,25 @@ export interface IdeApi {
     projectMcpServers(root: string): Promise<McpServer[]>
     /** Which agents support which parts of a harness. */
     support(): Promise<AgentHarnessSupport[]>
+  }
+  containers: {
+    /** The engines found (Docker, Podman, wslc) and whether they answer. */
+    backends(): Promise<ContainerBackendInfo[]>
+    list(backend: ContainerBackendId, kind: ContainerListKind): Promise<ContainerListResult>
+    action(backend: ContainerBackendId, target: ContainerTarget, id: string, action: ContainerAction): Promise<{ ok: boolean; error?: string }>
+    /** Removes the unused images / volumes / networks, or the stopped containers. */
+    prune(backend: ContainerBackendId, target: ContainerTarget): Promise<{ ok: boolean; error?: string; text?: string }>
+    create(backend: ContainerBackendId, target: 'volume' | 'network', name: string): Promise<{ ok: boolean; error?: string }>
+    inspect(backend: ContainerBackendId, target: ContainerTarget, id: string): Promise<{ ok: boolean; error?: string; text?: string }>
+    /** Streams (a container's logs or stats, a job's output): events arrive through onStream. */
+    logs(backend: ContainerBackendId, id: string): Promise<string>
+    stats(backend: ContainerBackendId, id: string): Promise<string>
+    job(backend: ContainerBackendId, job: ContainerJob): Promise<string>
+    stopStream(stream: string): void
+    onStream(cb: (e: ContainerStreamEvent) => void): () => void
+    /** A terminal profile running a shell in a container, or the engine's registry login. */
+    shellProfile(backend: ContainerBackendId, id: string, name?: string): Promise<Profile | null>
+    loginProfile(backend: ContainerBackendId, registry: string): Promise<Profile | null>
   }
   settings: {
     get(): Promise<AppSettings>

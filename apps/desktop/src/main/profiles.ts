@@ -300,6 +300,12 @@ export function wslAgents(distro: string): Promise<Profile[]> {
   })
 }
 
+/** Profiles made at run time (a shell in a container, a registry login): found by id, never listed. */
+const extraProfiles = new Map<string, Profile>()
+export function registerProfile(p: Profile): void {
+  extraProfiles.set(p.id, p)
+}
+
 export async function findProfile(id: string): Promise<Profile | undefined> {
-  return (await listProfiles()).find((p) => p.id === id)
+  return extraProfiles.get(id) ?? (await listProfiles()).find((p) => p.id === id)
 }

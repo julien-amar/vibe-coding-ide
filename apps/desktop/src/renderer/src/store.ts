@@ -61,6 +61,10 @@ interface State {
   paneDrop?: PaneDropTarget
   init(): Promise<void>
   openProfile(profile: Profile): Promise<void>
+  /** The Containers tab (one per window: focused when already open). */
+  openContainers(): void
+  /** The engine a Containers tab shows (kept with the tab). */
+  setContainersBackend(tabId: string, backend: string): void
   openProject(root: string): Promise<void>
   /** Add a tab whose sessions already exist (moved from another window). */
   insertExisting(snapshot: TabSnapshot, index?: number): void
@@ -240,6 +244,10 @@ export const useTabs = create<State>((set, get) => ({
         tabs.push({ id: newTabId(), kind: 'project', autoTitle: snap.project.name, customTitle: snap.customTitle, project: { ...snap.project, layout } })
         continue
       }
+      if (snap.kind === 'containers') {
+        tabs.push({ id: newTabId(), kind: 'containers', profileId: snap.profileId, autoTitle: 'Containers', customTitle: snap.customTitle })
+        continue
+      }
       // Restored terminal tab: start a fresh session with the same profile.
       const profile = list.find((p) => p.id === snap.profileId)
       if (!profile) continue
@@ -260,6 +268,18 @@ export const useTabs = create<State>((set, get) => ({
     // Nothing to restore: a window whose last tab was closed shows the welcome screen; a first
     // window (nothing saved yet) opens a shell.
     if (tabs.length === 0 && !init.restored) await openDefaultShell()
+  },
+
+  openContainers() {
+    set({ launcherOpen: false })
+    const existing = get().tabs.find((t) => t.kind === 'containers')
+    if (existing) return set({ activeId: existing.id })
+    const tab: Tab = { id: newTabId(), kind: 'containers', autoTitle: 'Containers' }
+    set((st) => ({ tabs: [...st.tabs, tab], activeId: tab.id }))
+  },
+
+  setContainersBackend(tabId, backend) {
+    set((st) => ({ tabs: st.tabs.map((t) => (t.id === tabId ? { ...t, profileId: backend } : t)) }))
   },
 
   async openProfile(profile) {

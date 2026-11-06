@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import type { AppSettings, IdeApi, PackageUpdateInfo, TestResult, UpdateStatus } from '@shared/types'
+import type { AppSettings, ContainerStreamEvent, IdeApi, PackageUpdateInfo, TestResult, UpdateStatus } from '@shared/types'
 
 const api: IdeApi = {
   platform: process.platform,
@@ -85,6 +85,25 @@ const api: IdeApi = {
     pickSkillFolder: (root) => ipcRenderer.invoke('harness:pickSkillFolder', root),
     projectMcpServers: (root) => ipcRenderer.invoke('harness:projectMcp', root),
     support: () => ipcRenderer.invoke('harness:support')
+  },
+  containers: {
+    backends: () => ipcRenderer.invoke('containers:backends'),
+    list: (backend, kind) => ipcRenderer.invoke('containers:list', backend, kind),
+    action: (backend, target, id, action) => ipcRenderer.invoke('containers:action', backend, target, id, action),
+    prune: (backend, target) => ipcRenderer.invoke('containers:prune', backend, target),
+    create: (backend, target, name) => ipcRenderer.invoke('containers:create', backend, target, name),
+    inspect: (backend, target, id) => ipcRenderer.invoke('containers:inspect', backend, target, id),
+    logs: (backend, id) => ipcRenderer.invoke('containers:logs', backend, id),
+    stats: (backend, id) => ipcRenderer.invoke('containers:stats', backend, id),
+    job: (backend, job) => ipcRenderer.invoke('containers:job', backend, job),
+    stopStream: (stream) => ipcRenderer.send('containers:stopStream', stream),
+    onStream: (cb) => {
+      const listener = (_e: IpcRendererEvent, ev: ContainerStreamEvent): void => cb(ev)
+      ipcRenderer.on('containers:stream', listener)
+      return () => ipcRenderer.off('containers:stream', listener)
+    },
+    shellProfile: (backend, id, name) => ipcRenderer.invoke('containers:shellProfile', backend, id, name),
+    loginProfile: (backend, registry) => ipcRenderer.invoke('containers:loginProfile', backend, registry)
   },
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),

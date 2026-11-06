@@ -8,6 +8,7 @@ import './harness.css'
 import './welcome.css'
 import './launcher.css'
 import './settings.css'
+import './containers.css'
 import { App } from './App'
 
 document.body.classList.add(`platform-${window.ide.platform}`)

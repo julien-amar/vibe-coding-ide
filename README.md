@@ -62,6 +62,18 @@ A tabbed development environment — see [PLAN.md](PLAN.md) for the full design.
 - **WSL projects** (`\\wsl.localhost\<distro>\...`): git runs inside the distribution, the terminal opens the distro's shell in the project folder, and the agent defaults to one installed inside the distro (e.g. `claude` in Ubuntu), falling back to the Windows one.
 - Project tabs move between windows like any other tab and are restored on start. Right-click → **Reset layout** rebuilds the tab as a new project tab for its folder (Git, Tests in the rail, terminal, AI agent), after a confirmation: its terminals and agent restart, and the agent's panel settings are cleared.
 
+### Containers tab
+`+` → **Tools** → *Containers* (one per window; restored on start with its engine).
+
+- **Engines:** **Docker** and **Podman** through the Docker Engine API — `DOCKER_HOST` / `CONTAINER_HOST`, else their usual sockets and named pipes (Docker Desktop, Rancher Desktop, Podman machine…) — and **wslc** (WSL containers on Windows) through its command line tool. The switcher shows which ones answer, with their version; one that is not running says so.
+- **Containers:** state, image, Compose project, published ports (click one to open `http://localhost:<port>`); start, stop, restart, pause / resume (Docker, Podman), **shell** (a terminal tab running `exec -it … sh`), remove; prune the stopped ones. The selected container's **logs** (followed, searchable), **live stats** (CPU and memory with graphs, network, block I/O, processes) and **inspect**.
+- **Images:** pull (live output), **build** from a folder (tag, Dockerfile, target stage, build arguments; live output), **run** (name, ports, volumes, environment, network, restart policy), remove, prune.
+- **Volumes / networks:** create, inspect, remove, prune (built-in networks are kept).
+- **Compose** (Docker, Podman): projects from their containers' labels, with each service's state; up, restart, stop, pull, down; *Compose up a folder…* for a project not started yet.
+- **Registry login:** a terminal tab running `docker login` / `podman login` / `wslc login`: the password is typed there and kept by the engine's credential store (the OS keychain).
+
+The lists refresh every 3 s while the tab is on screen. Pull, build, run and Compose use the engine's own command line tool (so its credentials and contexts apply), the rest the Engine API (or wslc).
+
 **Known limits:** SSH and dev-container projects are not supported yet; closing one of several windows drops it from the saved layout — only the last window / app quit is saved (same as Windows Terminal). WSL's `/tmp` is not visible from Windows, so WSL projects must live elsewhere (e.g. under your home).
 
 ## Requirements
@@ -89,6 +101,7 @@ Everything lives in `apps/desktop/src`:
 | `main/harness/` | AI agent panel settings: `model`, `support` (what each agent gets), `compile` (into each agent's flags and files), `skills`, `mcp` (health check), `launch` (npm shims, versions), `target` (host or WSL paths) |
 | `main/tests/` | Tests panel adapters (Vitest/Jest/Playwright, pytest, Go, Rust, .NET, Maven/Gradle) on `core.ts`; reporters injected at run time in `main/test-helpers/` |
 | `main/wsl.ts`, `main/profiles.ts` | Running programs in WSL distributions; shells, distributions and agents found on the machine |
+| `main/containers/` | Containers tab backend: `engine` (Docker Engine API client: endpoints, streams), `engine-backend` (Docker, Podman), `wslc-backend` (wslc CLI), `index` (IPC, CLI jobs, shell / login terminals) |
 | `main/updater.ts`, `main/package-updates.ts` | The app's own updates; package updates of the systems shells run on |
 | `shared/` | Types and pure helpers used by both sides (layout tree, WSL paths, partial staging patches, agent settings) |
 | `renderer/src/` | React UI: `store.ts` (tabs, layouts), `components/` (one file per panel or view: `GitPanel` + `GitChanges` / `GitBranches` / `GitPullRequest`, `HarnessDialog` + `HarnessMcp` / `HarnessSkills` / `HarnessInstructions`, `TestPanel`…) |

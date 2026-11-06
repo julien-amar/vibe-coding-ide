@@ -1,4 +1,5 @@
 import { useCallback, useEffect } from 'react'
+import { ContainersView } from './components/ContainersView'
 import { DialogHost } from './components/Dialogs'
 import { Launcher } from './components/Launcher'
 import { ProjectView } from './components/ProjectView'
@@ -60,6 +61,8 @@ export function App(): React.JSX.Element {
             <div key={t.id} className={`tab-panel${visible ? ' visible' : ''}`}>
               {t.kind === 'project' ? (
                 <ProjectView tab={t} visible={visible} />
+              ) : t.kind === 'containers' ? (
+                <ContainersView tab={t} visible={visible} />
               ) : (
                 t.sessionId && (
                   <TerminalView

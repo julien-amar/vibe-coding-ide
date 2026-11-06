@@ -23,6 +23,7 @@ import { sanitizeTab } from './layout-sanitize'
 import { loadLayout, saveLayout, visibleBounds, type SavedWindow } from './layout-store'
 import { checkUpdates, forgetUpdates, type UpdateTarget } from './package-updates'
 import { findProfile, listProfiles, wslAgents } from './profiles'
+import { registerContainerIpc } from './containers'
 import { forgetProject, recentProjects, touchProject } from './projects'
 import { PtyManager } from './pty-manager'
 import { discoverTests, runTests, stopAllTests, stopTests } from './test-runner'
@@ -235,6 +236,7 @@ function transferAll(ids: string[], from: WebContents, to: WebContents): boolean
 // ---------- IPC ----------
 
 function registerIpc(): void {
+  registerContainerIpc(ipcMain)
   ipcMain.handle('profiles:list', async (_e, refresh?: boolean) => offeredProfiles(await listProfiles(Boolean(refresh))))
   ipcMain.handle('profiles:all', () => listProfiles())
   ipcMain.handle('settings:get', () => getSettings())
