@@ -13,7 +13,8 @@ export function InstructionsView({ harness, save }: { harness: Harness; save: (h
     const { harness: h, text: t } = latest.current
     if (t !== h.instructions) void save({ ...h, instructions: t })
   }
-  // Save when leaving the view.
+  // Save when leaving the view (flush reads the latest values through a ref).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => () => flush(), [])
 
   return (

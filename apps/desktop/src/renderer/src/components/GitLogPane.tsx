@@ -96,7 +96,7 @@ export function GitLogPane({ root, visible, tick }: { root: string; visible: boo
     wasVisible.current = visible
   }, [visible, load])
 
-  const commits = log?.commits ?? []
+  const commits = useMemo(() => log?.commits ?? [], [log])
   const graph = useMemo(() => computeGraph(commits), [commits])
 
   // Opening the details panel shortens the list: keep the selected commit in view.

@@ -4,6 +4,7 @@
  */
 
 /** OSC 9;9;"path" (Windows Terminal convention) and OSC 7;file://host/path. */
+// eslint-disable-next-line no-control-regex -- terminal escape sequences (ESC, BEL) are what is parsed
 const OSC_CWD = /\x1b\](?:9;9;"?([^"\x07\x1b]*)"?|7;file:\/\/[^/\x07\x1b]*(\/[^\x07\x1b]*))(?:\x07|\x1b\\)/g
 
 export function lastReportedCwd(data: string): string | undefined {

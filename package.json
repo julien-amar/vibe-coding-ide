@@ -7,6 +7,7 @@
     "build": "pnpm --filter @vibe-coding-ide/desktop build",
     "start": "pnpm --filter @vibe-coding-ide/desktop start",
     "typecheck": "pnpm --filter @vibe-coding-ide/desktop typecheck",
+    "lint": "pnpm --filter @vibe-coding-ide/desktop lint",
     "ensure-electron": "node -e \"require('fs').existsSync('node_modules/electron/dist')||require('child_process').execSync('node node_modules/electron/install.js',{stdio:'inherit'})\"",
     "postinstall": "node scripts/postinstall.cjs",
     "test": "pnpm --filter @vibe-coding-ide/desktop test",

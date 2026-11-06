@@ -162,6 +162,7 @@ export function surefirePatterns(pom: string): { includes: string[]; excludes: s
   return { includes: list('include'), excludes: list('exclude') }
 }
 
+// eslint-disable-next-line no-irregular-whitespace -- a zero-width space keeps "**/" from ending the comment
 /** Ant-style pattern (`**​/*Test.java`, `Test*`, `com/x/**`) as a regex on a path under src/test/java. */
 function antRegex(pattern: string): RegExp {
   const p = pattern.replace(/\\/g, '/').replace(/^\//, '').replace(/\.(java|class)$/, '')

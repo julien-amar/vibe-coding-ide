@@ -81,8 +81,8 @@ interface VitestListed {
 }
 
 /** `vitest list --json` / the list helper: [{ name: "suite > test", file, location? }] */
-export function parseVitestList(dir: string, list: VitestListed[]): TestCase[] {
-  return list.map((t) => {
+export function parseVitestList(dir: string, listed: VitestListed[]): TestCase[] {
+  return listed.map((t) => {
     const parts = t.name.split(' > ')
     const file = relFile(dir, t.file)
     return { id: testId(file, parts), file, suite: parts.slice(0, -1), name: parts[parts.length - 1], line: t.location?.line }
