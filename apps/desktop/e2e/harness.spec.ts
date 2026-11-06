@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { cleanup, createRepo, launch, openProject, quit, readLog, tempDir, type TestApp } from './app'
+import { cleanup, closeApp, createRepo, launch, openProject, quit, readLog, tempDir, type TestApp } from './app'
 
 /** A minimal MCP server (stdio) with two tools. */
 const FAKE_MCP = resolve(__dirname, 'fixtures', 'fake-tools', 'fake-mcp-server.cjs')
@@ -17,7 +17,7 @@ test.beforeEach(async () => {
 })
 
 test.afterEach(async () => {
-  await hub.app.close().catch(() => undefined)
+  await closeApp(hub)
   cleanup(profile)
   cleanup(work)
 })

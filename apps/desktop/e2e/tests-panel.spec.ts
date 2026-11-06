@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { expect, test } from '@playwright/test'
-import { cleanup, launch, openProject, readLog, tempDir, type TestApp } from './app'
+import { cleanup, closeApp, launch, openProject, readLog, tempDir, type TestApp } from './app'
 
 /**
  * A project with Vitest, Jest, Playwright and pytest tests (passing, failing on purpose,
@@ -21,7 +21,7 @@ test.beforeEach(async () => {
 })
 
 test.afterEach(async () => {
-  await hub.app.close().catch(() => undefined)
+  await closeApp(hub)
   cleanup(profile)
 })
 

@@ -66,6 +66,29 @@ export function readLog(file: string): string {
   }
 }
 
+/**
+ * End a test's app (after each test): close it, and if it has not exited within 15 s (seen on
+ * Windows runners), end its whole process tree — a hung close must not time the worker out.
+ */
+export async function closeApp(hub: TestApp | undefined): Promise<void> {
+  if (!hub) return
+  const proc = hub.app.process()
+  const closed = await Promise.race([
+    hub.app.close().then(
+      () => true,
+      () => true
+    ),
+    new Promise<boolean>((r) => setTimeout(() => r(false), 15_000))
+  ])
+  if (closed || proc.exitCode !== null || proc.pid === undefined) return
+  try {
+    if (process.platform === 'win32') execFileSync('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { stdio: 'ignore' })
+    else process.kill(-proc.pid, 'SIGKILL')
+  } catch {
+    proc.kill('SIGKILL')
+  }
+}
+
 /** Close the window like a user (saves the layout) and wait for the app to exit. */
 export async function quit(hub: TestApp): Promise<void> {
   const exited = hub.app.waitForEvent('close')

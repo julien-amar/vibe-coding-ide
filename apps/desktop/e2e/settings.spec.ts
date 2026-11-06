@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { cleanup, createRepo, launch, openProject, tempDir, type TestApp } from './app'
+import { cleanup, closeApp, createRepo, launch, openProject, tempDir, type TestApp } from './app'
 
 let hub: TestApp
 let profile: string
@@ -14,7 +14,7 @@ test.beforeEach(async () => {
 })
 
 test.afterEach(async () => {
-  await hub.app.close().catch(() => undefined)
+  await closeApp(hub)
   cleanup(profile)
   cleanup(work)
 })

@@ -120,15 +120,18 @@ button:disabled {
   grid-template-columns: minmax(260px, 38%) 1fr;
 }
 
-/* Narrow panel: file list on top (up to ~60% of the height), diff below. */
+/* Narrow panel: file list on top (up to ~60% of the height), diff below; a short panel scrolls as a
+   whole rather than squeezing the file list or the diff to nothing. */
 @container (max-width: 720px) {
   .changes-view {
     grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(0, 1fr);
+    /* (A scrolling column counts as 0 high in an auto row: give the file list a floor.) */
+    grid-template-rows: minmax(220px, auto) minmax(200px, 1fr);
+    overflow-y: auto;
   }
 
   .changes-side {
-    max-height: 62cqh;
+    max-height: max(62cqh, 220px);
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }
@@ -142,6 +145,8 @@ button:disabled {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  /* A short panel: the column scrolls, the file lists keep their room. */
+  overflow-y: auto;
   border-right: 1px solid var(--border);
 }
 
@@ -176,7 +181,8 @@ button:disabled {
 
 .file-lists {
   flex: 1;
-  min-height: 0;
+  /* About three rows, whatever the panel's height. */
+  min-height: 96px;
   overflow-y: auto;
   padding-bottom: 8px;
 }
@@ -288,6 +294,8 @@ button:disabled {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  /* Nothing of the diff (long lines, its buttons) spills over the next panel. */
+  overflow: hidden;
 }
 
 .diff-title {
@@ -342,10 +350,11 @@ button:disabled {
 
 .diff-selection-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  height: 30px;
-  padding: 0 10px;
+  gap: 4px 8px;
+  min-height: 30px;
+  padding: 4px 10px;
   font-size: 12px;
   border-bottom: 1px solid var(--border);
   background: var(--surface-2);

@@ -3,7 +3,7 @@ import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { expect, test, type Page } from '@playwright/test'
-import { cleanup, createRepo, launch, openProject, readLog, tempDir, type TestApp } from './app'
+import { cleanup, closeApp, createRepo, launch, openProject, readLog, tempDir, type TestApp } from './app'
 
 let hub: TestApp
 let profile: string
@@ -23,7 +23,7 @@ test.beforeEach(async () => {
 })
 
 test.afterEach(async () => {
-  await hub.app.close().catch(() => undefined)
+  await closeApp(hub)
   cleanup(profile)
   cleanup(work)
 })
@@ -80,8 +80,10 @@ test('changes can be staged and committed from the Changes view', async () => {
   await expect(gitPanel(page).locator('.git-row').first()).toContainText('Commit from the e2e test')
 })
 
-test('hunks and single lines can be staged, unstaged and discarded', async () => {
+test('hunks and single lines can be staged, unstaged and discarded (in a small window)', async () => {
   const { page } = hub
+  // A small window, like CI runners': a short, narrow Git panel must keep its files and buttons usable.
+  await page.setViewportSize({ width: 800, height: 600 })
   const git = (...args: string[]): string => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' })
   const original = Array.from({ length: 12 }, (_, i) => `line ${i + 1}`).join('\n') + '\n'
   writeFileSync(join(repo, 'list.txt'), original)

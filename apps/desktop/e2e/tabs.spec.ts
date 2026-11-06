@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { cleanup, launch, quit, tempDir, terminalText, typeInTerminal, type TestApp } from './app'
+import { cleanup, closeApp, launch, quit, tempDir, terminalText, type TestApp, typeInTerminal } from './app'
 
 let hub: TestApp
 let profile: string
@@ -10,7 +10,7 @@ test.beforeEach(async () => {
 })
 
 test.afterEach(async () => {
-  await hub.app.close().catch(() => undefined)
+  await closeApp(hub)
   cleanup(profile)
 })
 

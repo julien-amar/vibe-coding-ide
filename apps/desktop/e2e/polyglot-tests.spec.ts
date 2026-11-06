@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { delimiter, join, resolve } from 'node:path'
 import { expect, test, type Locator } from '@playwright/test'
-import { cleanup, launch, openProject, readLog, tempDir, type TestApp } from './app'
+import { cleanup, closeApp, launch, openProject, readLog, tempDir, type TestApp } from './app'
 
 /** Go, Rust, .NET and Java (Maven) tests: passing, failing on purpose, skipped, subtests / nested classes. */
 const FIXTURE = resolve(__dirname, 'fixtures', 'polyglot-tests')
@@ -27,7 +27,7 @@ test.beforeEach(async () => {
 })
 
 test.afterEach(async () => {
-  await hub.app.close().catch(() => undefined)
+  await closeApp(hub)
   cleanup(profile)
 })
 
