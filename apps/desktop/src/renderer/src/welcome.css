@@ -1,0 +1,207 @@
+/* Welcome screen (a window without tabs). */
+
+.welcome {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.welcome-inner {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 40px 24px 32px;
+}
+
+.welcome-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.welcome-mark {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+}
+
+.welcome-hero h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.welcome-hero p {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.welcome-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 22px 0 28px;
+}
+
+.welcome-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.welcome-actions button:hover {
+  background: var(--hover);
+}
+
+.welcome-actions button.primary {
+  color: var(--accent-text);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.welcome-actions button.primary:hover {
+  filter: brightness(1.08);
+}
+
+.welcome-actions kbd {
+  padding: 1px 5px;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.welcome-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.welcome-card {
+  padding: 14px 16px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.welcome-art {
+  margin: -2px -4px 10px;
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.welcome-art svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* One column in a narrow window: the drawing stays card-sized (centred). */
+  max-height: 150px;
+}
+
+.welcome-card h2 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.welcome-card p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+/* Illustration colours: the theme's tokens, so they follow light / dark. */
+.w-surface {
+  fill: var(--surface);
+}
+.w-surface-2 {
+  fill: var(--pane-header);
+}
+.w-stroke {
+  stroke: var(--border);
+  stroke-width: 1.5;
+}
+.w-bar {
+  fill: var(--pane-header);
+}
+.w-dot {
+  fill: var(--border);
+}
+.w-muted {
+  fill: var(--text-muted);
+  opacity: 0.35;
+}
+.w-muted-stroke {
+  stroke: var(--text-muted);
+}
+.w-shell {
+  fill: var(--badge-shell);
+}
+.w-shell-soft {
+  fill: color-mix(in srgb, var(--badge-shell) 14%, transparent);
+}
+.w-shell-stroke {
+  stroke: var(--badge-shell);
+}
+.w-wsl {
+  fill: var(--badge-wsl);
+}
+.w-wsl-stroke {
+  stroke: var(--badge-wsl);
+}
+.w-agent {
+  fill: var(--badge-agent);
+}
+.w-agent-soft {
+  fill: color-mix(in srgb, var(--badge-agent) 16%, transparent);
+}
+.w-agent-stroke {
+  stroke: var(--badge-agent);
+}
+.w-project {
+  fill: var(--badge-project);
+}
+.w-project-soft {
+  fill: color-mix(in srgb, var(--badge-project) 12%, transparent);
+}
+.w-project-stroke {
+  stroke: var(--badge-project);
+}
+.w-accent-fill {
+  fill: var(--accent);
+}
+.w-accent-soft {
+  fill: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.w-accent-stroke {
+  stroke: var(--accent);
+}
+.w-add {
+  fill: color-mix(in srgb, var(--success) 22%, transparent);
+}
+.w-del {
+  fill: color-mix(in srgb, var(--danger) 20%, transparent);
+}
+.w-ok {
+  fill: var(--success);
+}
+.w-ok-stroke {
+  stroke: var(--success);
+}
+.w-fail-stroke {
+  stroke: var(--danger);
+}

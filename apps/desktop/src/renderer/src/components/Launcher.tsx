@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Profile, RecentProject, TabKind } from '@shared/types'
 import { loadProfiles } from '../profiles'
 import { useTabs } from '../store'
-import { KindBadge } from './KindBadge'
+import { LINUX_LOGO, Logo } from '../logos'
 import { ProfileIcon } from './ProfileIcon'
+import { useSettingsUi } from './SettingsDialog'
 
 interface Entry {
   key: string
@@ -103,6 +104,14 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
 
   useEffect(() => setCursor(0), [query])
 
+  // Keyboard moves keep the selected entry in view.
+  const selectedRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    // A statement, not the effect's return value: scrollIntoView returns a Promise in recent
+    // Chromium, which React would take for a cleanup function.
+    void selectedRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [cursor])
+
   const refresh = (): void => {
     setProfiles(null)
     void loadProfiles(true).then(setProfiles)
@@ -124,9 +133,33 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
   return (
     <div className="launcher" ref={rootRef} onKeyDown={onKeyDown} role="dialog" aria-label="New tab">
       <div className="launcher-search">
-        <input autoFocus placeholder="Open a new tab…" value={query} onChange={(e) => setQuery(e.target.value)} />
-        <button className="icon-button" title="Rescan shells" onClick={refresh}>
+        <svg className="launcher-search-icon" viewBox="0 0 16 16" aria-hidden>
+          <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+          <path d="M10.5 10.5l3 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+        <input autoFocus placeholder="Open a project, shell or AI agent…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <button className="icon-button" title="Rescan shells and agents" onClick={refresh}>
           ⟳
+        </button>
+        <button
+          className="icon-button launcher-settings"
+          title="Settings: theme, WSL, shown shells and agents"
+          aria-label="Settings"
+          onClick={() => {
+            onClose()
+            useSettingsUi.getState().setOpen(true)
+          }}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden>
+            <path
+              d="M6.8 1.5h2.4l.4 1.9a5 5 0 011.3.75l1.8-.6 1.2 2.1-1.4 1.3a5 5 0 010 1.5l1.4 1.3-1.2 2.1-1.8-.6a5 5 0 01-1.3.75l-.4 1.9H6.8l-.4-1.9a5 5 0 01-1.3-.75l-1.8.6-1.2-2.1 1.4-1.3a5 5 0 010-1.5L2.1 5.65l1.2-2.1 1.8.6a5 5 0 011.3-.75z"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.3"
+              strokeLinejoin="round"
+            />
+            <circle cx="8" cy="8" r="2.1" fill="none" stroke="currentColor" strokeWidth="1.3" />
+          </svg>
         </button>
       </div>
       <div className="launcher-list" role="listbox">
@@ -137,22 +170,31 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
           if (items.length === 0) return null
           return (
             <div key={g} className="launcher-group">
-              <div className="launcher-group-label">{g}</div>
+              <div className="launcher-group-label">
+                <CategoryIcon group={g} />
+                <span>{g}</span>
+                <span className="launcher-group-count">{items.length}</span>
+              </div>
               {items.map((item) => {
                 const idx = entries.indexOf(item)
                 return (
                   <button
                     key={item.key}
+                    ref={idx === cursor ? selectedRef : undefined}
                     role="option"
                     aria-selected={idx === cursor}
                     className={`launcher-item${idx === cursor ? ' selected' : ''}`}
-                    onMouseEnter={() => setCursor(idx)}
+                    onMouseMove={() => setCursor(idx)}
                     onClick={item.run}
                     title={item.detail}
                   >
-                    {item.profile ? <ProfileIcon profile={item.profile} /> : <KindBadge kind={item.badge} />}
-                    <span className="launcher-item-name">{item.label}</span>
-                    <span className="launcher-item-source">{item.detail && `\u200E${item.detail}\u200E`}</span>
+                    <span className="launcher-item-icon">
+                      {item.profile && item.badge !== 'project' ? <ProfileIcon profile={item.profile} size={20} /> : <FolderIcon wsl={!!item.profile} />}
+                    </span>
+                    <span className="launcher-item-text">
+                      <span className="launcher-item-name">{item.label}</span>
+                      {item.detail && <span className="launcher-item-source">{`‎${item.detail}‎`}</span>}
+                    </span>
                   </button>
                 )
               })}
@@ -161,16 +203,83 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
         })}
         {!query && (
           <div className="launcher-group">
-            <div className="launcher-group-label">Coming soon</div>
-            {COMING_SOON.map((name) => (
-              <div key={name} className="launcher-item disabled" aria-disabled>
-                <span className="kind-badge soon">··</span>
-                <span className="launcher-item-name">{name}</span>
-              </div>
-            ))}
+            <div className="launcher-group-label">
+              <CategoryIcon group="Coming soon" />
+              <span>Coming soon</span>
+            </div>
+            <div className="launcher-soon">
+              {COMING_SOON.map((name) => (
+                <span key={name} className="launcher-soon-item">
+                  {name}
+                </span>
+              ))}
+            </div>
           </div>
         )}
       </div>
+      <div className="launcher-footer" aria-hidden>
+        <span>
+          <kbd>↑</kbd>
+          <kbd>↓</kbd> move
+        </span>
+        <span>
+          <kbd>Enter</kbd> open
+        </span>
+        <span>
+          <kbd>Esc</kbd> close
+        </span>
+      </div>
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Icons of the launcher's categories (drawn in the category's colour)
+
+const CATEGORY_CLASS: Record<string, string> = {
+  Projects: 'project',
+  Shells: 'shell',
+  'WSL distributions': 'wsl',
+  'AI agents': 'agent',
+  'Coming soon': 'soon'
+}
+
+function CategoryIcon({ group }: { group: string }): React.JSX.Element {
+  const cls = `launcher-category-icon ${CATEGORY_CLASS[group] ?? ''}`
+  if (group === 'WSL distributions') return <Logo svg={LINUX_LOGO} size={14} className={cls} />
+  return (
+    <svg className={cls} viewBox="0 0 16 16" aria-hidden>
+      {group === 'Projects' && <path d="M1.5 4.5a1.5 1.5 0 011.5-1.5h3l1.5 1.5H13a1.5 1.5 0 011.5 1.5v6A1.5 1.5 0 0113 13.5H3A1.5 1.5 0 011.5 12z" />}
+      {group === 'Shells' && (
+        <>
+          <rect x="1" y="2" width="14" height="12" rx="2" />
+          <path d="M4 6l2.5 2L4 10M8 10.5h4" fill="none" stroke="var(--surface)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </>
+      )}
+      {group === 'AI agents' && (
+        <>
+          <path d="M7 1.5l1.4 3.6L12 6.5 8.4 7.9 7 11.5 5.6 7.9 2 6.5l3.6-1.4z" />
+          <path d="M12.5 9.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" />
+        </>
+      )}
+      {group === 'Coming soon' && (
+        <>
+          <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M8 4.5V8l2.5 1.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </>
+      )}
+    </svg>
+  )
+}
+
+/** Projects: a folder (with Tux for a folder inside a WSL distribution). */
+function FolderIcon({ wsl }: { wsl: boolean }): React.JSX.Element {
+  return (
+    <span className="launcher-folder">
+      <svg viewBox="0 0 20 20" aria-hidden>
+        <path d="M2 5.5A1.5 1.5 0 013.5 4h4l1.8 1.8h7.2A1.5 1.5 0 0118 7.3v7.2a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 012 14.5z" />
+      </svg>
+      {wsl && <Logo svg={LINUX_LOGO} size={11} className="launcher-folder-badge" />}
+    </span>
   )
 }

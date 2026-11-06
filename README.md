@@ -6,11 +6,13 @@ A tabbed development environment — see [PLAN.md](PLAN.md) for the full design.
 
 ### Tabs, shells & windows
 - Tab strip with rename (double-click / context menu), drag to reorder, close (×, middle-click, Ctrl+Shift+W); each tab shows the icon of its shell, distribution or agent.
-- `+` launcher (Ctrl+Shift+T): projects, shells found on PATH, Git Bash, WSL distributions, AI agent CLIs (claude, codex, gemini, opencode, pi).
-- Terminal tabs (xterm.js + node-pty), copy/paste (Ctrl+C with selection, Ctrl+V, right-click), clickable links, light/dark theme following the OS.
+- `+` launcher (Ctrl+Shift+T): projects, shells found on PATH, Git Bash, WSL distributions, AI agent CLIs (claude, codex, gemini, opencode, pi) — in two columns, grouped under category logos, each entry with its path or source; search, ↑↓ and Enter.
+- **Settings** (⚙ in the launcher, saved in the app's data folder, applied to every window at once): theme (system, light or dark); **WSL integration** on or off (off: distributions, projects in them and their agents are not offered, and `wsl.exe` is not started to look for them); which shells, distributions and AI agents are offered (hidden ones are left out of the launcher, the defaults of new projects and the agent switcher; open tabs keep running).
+- A window without tabs shows a welcome screen (what the app does, open a project or a new tab).
+- Terminal tabs (xterm.js + node-pty), copy/paste (Ctrl+C with selection, Ctrl+V, right-click), clickable links, light/dark theme following the OS (or Settings).
 - Drag a tab out of the window to open it in a new window, or onto another vibe-coding-ide window to move it there (also: right-click → **Move to new window**). Processes keep running. A window closes when its last tab closes or moves away.
 - **Package updates:** when a shell starts, vibe-coding-ide checks once whether its system has pending package updates — **Windows via winget** for PowerShell, cmd, Git Bash and other Windows shells; the **distribution** for WSL shells (apt, dnf, pacman, apk or zypper, using the cached package lists). If so, a status bar under the terminal offers **Update now**, which types the update command (`winget upgrade --all`, `sudo apt update && sudo apt upgrade -y`, …) into that terminal, where you follow the progress and answer prompts (sudo password, UAC); **×** dismisses it.
-- Icons: the real icon of the installed software where Windows provides one (executable icon, the distro's own `shortcut.ico`, Git for Windows' icon), otherwise a small coloured monogram unique to that entry.
+- Icons: AI agents show their own logos (Claude Code, Codex, Gemini CLI, opencode, pi — see [third-party notices](apps/desktop/THIRD-PARTY-NOTICES.md)); shells and distributions the real icon of the installed software where Windows provides one (executable icon, the distro's own `shortcut.ico`, Git for Windows' icon), otherwise a small coloured monogram unique to that entry.
 
 ### Layout restore
 - Window positions/sizes, tabs, custom names, the active tab, project layouts and collapsed panels are saved to `%APPDATA%/vibe-coding-ide/layout.json` (`~/Library/Application Support/vibe-coding-ide`, `~/.config/vibe-coding-ide`) and restored on start.
@@ -58,7 +60,7 @@ A tabbed development environment — see [PLAN.md](PLAN.md) for the full design.
 
     Agents running **inside WSL** get the same, with paths written for Linux (`/mnt/c/…`, the project's Linux path), MCP server commands run in the distribution (as typed), and **Check** starting servers there too. Checked against Claude Code 2.1, Codex CLI 0.166, opencode 2.2 (and 1.19), pi 1.5 and Gemini CLI 0.67. Agents installed with npm on Windows are started directly (not through their `.cmd` shim), so arguments keep their quotes and line breaks. After a change, the running agent shows **Restart** to apply it.
 - **WSL projects** (`\\wsl.localhost\<distro>\...`): git runs inside the distribution, the terminal opens the distro's shell in the project folder, and the agent defaults to one installed inside the distro (e.g. `claude` in Ubuntu), falling back to the Windows one.
-- Project tabs move between windows like any other tab and are restored on start.
+- Project tabs move between windows like any other tab and are restored on start. Right-click → **Reset layout** puts back the default panels (Git, Tests in the rail, terminal, AI agent), keeping the first panel of each kind with its process and agent settings; extra panels close after a confirmation.
 
 **Known limits:** SSH and dev-container projects are not supported yet; closing one of several windows drops it from the saved layout — only the last window / app quit is saved (same as Windows Terminal). WSL's `/tmp` is not visible from Windows, so WSL projects must live elsewhere (e.g. under your home).
 

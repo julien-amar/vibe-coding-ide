@@ -22,12 +22,23 @@ test('starts with a working shell tab', async () => {
   await expect.poll(() => terminalText(page)).toMatch(/vibe-coding-ide-e2e-ok[\s\S]*vibe-coding-ide-e2e-ok/) // typed command + its output
 })
 
-test('the + launcher lists projects and shells, and opens a new tab', async () => {
+test('the + launcher lists projects, shells and AI agents (with their logos), and opens a new tab', async () => {
   const { page } = hub
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
   await page.locator('.new-tab').click()
   const launcher = page.locator('.launcher')
   await expect(launcher).toBeVisible()
   await expect(launcher.locator('.launcher-group-label')).toContainText(['Projects', 'Shells'])
+  // Each category has its logo; each AI agent (fake ones on PATH) its own logo.
+  await expect(launcher.locator('.launcher-group-label .launcher-category-icon').first()).toBeVisible()
+  const agents = launcher.locator('.launcher-group', { hasText: 'AI agents' })
+  await expect(agents.locator('.agent-logo')).toHaveCount(5)
+  for (const agent of ['claude', 'codex', 'gemini', 'opencode', 'pi']) await expect(agents.locator(`.agent-logo.${agent} svg`)).toHaveCount(1)
+  // The keyboard moves the selection.
+  await page.keyboard.press('ArrowDown')
+  await expect(launcher.locator('.launcher-item.selected .launcher-item-name')).not.toHaveText('Open folder…')
+  await page.keyboard.press('ArrowUp')
 
   // Search narrows the list; Enter opens the selected entry.
   await launcher.locator('input').fill('open folder…')
@@ -38,6 +49,8 @@ test('the + launcher lists projects and shells, and opens a new tab', async () =
   await expect(launcher).toBeHidden()
   await expect(page.locator('.tab')).toHaveCount(2)
   await expect(page.locator('.tab.active')).toHaveAttribute('data-tab-id', /tab-/)
+  // Closing the launcher must not break the page (an effect once returned a Promise).
+  expect(errors).toEqual([])
 })
 
 test('tabs can be renamed, reordered and closed', async () => {

@@ -101,6 +101,16 @@ export interface AgentHarnessSupport {
 
 /** Pending package updates of the system a shell runs on (shown as a status bar on its terminal). */
 /** The app's own update (from GitHub Releases). */
+/** Application-wide settings (Settings screen), kept in the app's data folder. */
+export interface AppSettings {
+  /** Colours: the system's, or forced light / dark. */
+  theme: 'system' | 'light' | 'dark'
+  /** Find WSL distributions (and the agents installed in them); off: wsl.exe is not started for that. */
+  wsl: boolean
+  /** Profiles (shells, distributions, agents) not offered in the launcher or as defaults. */
+  hiddenProfiles: string[]
+}
+
 export interface UpdateStatus {
   state: 'idle' | 'checking' | 'none' | 'available' | 'downloading' | 'ready' | 'error'
   version?: string
@@ -443,7 +453,10 @@ export interface IdeApi {
   /** Debugging hooks for automated UI checks are exposed (remote debugging or VIBE_CODING_IDE_DEBUG=1). */
   debug: boolean
   profiles: {
+    /** The profiles offered (hidden ones and, with WSL off, distributions left out). */
     list(refresh?: boolean): Promise<Profile[]>
+    /** Every profile found, hidden ones included (Settings screen). */
+    all(): Promise<Profile[]>
     /** Icon of the installed shell/distro/agent as a data: URL, or null (draw a monogram). */
     icon(profileId: string): Promise<string | null>
     /** Agent CLIs installed inside a WSL distribution (starts the distro; cached). */
@@ -513,6 +526,12 @@ export interface IdeApi {
     projectMcpServers(root: string): Promise<McpServer[]>
     /** Which agents support which parts of a harness. */
     support(): Promise<AgentHarnessSupport[]>
+  }
+  settings: {
+    get(): Promise<AppSettings>
+    /** Changes some settings; every window gets the result through onChanged. */
+    set(patch: Partial<AppSettings>): Promise<AppSettings>
+    onChanged(cb: (s: AppSettings) => void): () => void
   }
   update: {
     /** The current state (the window asks at start; changes arrive through onStatus). */

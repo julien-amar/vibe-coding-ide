@@ -232,12 +232,14 @@
   min-height: 110px;
 }
 
-.tests-bottom:not(.open) .tests-bottom-bar {
+/* The bar stays at the bottom: open, the content sits above it, separated by the bar's top border. */
+.tests-bottom-bar {
+  gap: 8px;
   border-bottom: 0;
 }
 
-.tests-bottom-bar {
-  gap: 8px;
+.tests-bottom.open .tests-bottom-bar {
+  border-top: 1px solid var(--border);
 }
 
 .tests-run-error {

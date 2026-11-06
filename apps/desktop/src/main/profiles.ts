@@ -228,6 +228,15 @@ function agents(): Profile[] {
 }
 
 let cache: Profile[] | undefined
+/** WSL integration (Settings): off, distributions and the agents inside them are not looked for. */
+let wslEnabled = true
+
+export function setWslEnabled(on: boolean): void {
+  if (on === wslEnabled) return
+  wslEnabled = on
+  cache = undefined
+  wslAgentCache.clear()
+}
 /** Agents found inside WSL distributions (discovered on demand, per distro). */
 const wslAgentCache = new Map<string, Profile[]>()
 const wslHomeCache = new Map<string, Promise<string | undefined>>()
@@ -249,7 +258,7 @@ export function wslHome(distro: string): Promise<string | undefined> {
 export async function listProfiles(refresh = false): Promise<Profile[]> {
   if (cache && !refresh) return [...cache, ...[...wslAgentCache.values()].flat()]
   const shells = isWin ? windowsShells() : unixShells()
-  const [distros] = await Promise.all([wslDistros()])
+  const distros = wslEnabled ? await wslDistros() : []
   cache = [...shells, ...distros, ...agents()]
   return [...cache, ...[...wslAgentCache.values()].flat()]
 }
@@ -262,6 +271,7 @@ const AGENT_LABELS: Record<string, string> = { claude: 'Claude Code', codex: 'Co
  * starts the distro, so it is only done when a WSL project needs it.
  */
 export function wslAgents(distro: string): Promise<Profile[]> {
+  if (!wslEnabled) return Promise.resolve([])
   const known = wslAgentCache.get(distro)
   if (known) return Promise.resolve(known)
   const wsl = wslExe()

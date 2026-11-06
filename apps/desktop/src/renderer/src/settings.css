@@ -1,0 +1,198 @@
+/* Settings screen (opened from the launcher). */
+
+.settings-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 640px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 64px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.settings-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px 12px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.settings-head .icon-button {
+  height: 30px;
+  color: var(--text-muted);
+}
+
+.settings-body {
+  overflow-y: auto;
+  padding: 6px 20px 18px;
+}
+
+.settings-section {
+  padding: 14px 0 4px;
+}
+
+.settings-section + .settings-section {
+  border-top: 1px solid var(--border);
+}
+
+.settings-section.disabled .settings-list {
+  opacity: 0.5;
+}
+
+.settings-section h3 {
+  display: flex;
+  align-items: center;
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settings-count {
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.settings-theme {
+  display: inline-flex;
+}
+
+.settings-theme button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+}
+
+.settings-theme svg {
+  width: 14px;
+  height: 14px;
+}
+
+.settings-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 4px 12px;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.settings-row:hover {
+  background: var(--hover);
+}
+
+.settings-section.disabled .settings-row {
+  cursor: default;
+}
+
+.settings-section.disabled .settings-row:hover {
+  background: transparent;
+}
+
+.settings-toggle {
+  padding: 4px 0;
+}
+
+.settings-toggle:hover {
+  background: transparent;
+}
+
+.settings-row-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-row-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.settings-row-source {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.settings-row-help {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.settings-note {
+  margin: 14px 0 0;
+  font-size: 12px;
+}
+
+/* Switch (role=switch) */
+.switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 34px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition:
+    transform 0.15s,
+    background 0.15s;
+}
+
+.switch.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.switch.on .switch-knob {
+  transform: translateX(14px);
+  background: var(--accent-text);
+}
+
+.switch:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

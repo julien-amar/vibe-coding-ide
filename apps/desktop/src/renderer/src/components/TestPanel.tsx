@@ -233,7 +233,15 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
         })}
       </div>
 
+      {/* Details / Output: the bar stays at the bottom, the content opens above it. */}
       <div className={`tests-bottom${bottomOpen ? ' open' : ''}`}>
+        {!bottomOpen ? null : view === 'output' ? (
+          <pre ref={outputRef} className="tests-output">
+            {stripAnsi(st.output) || 'Run tests to see their output here.'}
+          </pre>
+        ) : (
+          <TestDetails node={selectedRow} root={root} tabId={tabId} projects={st.projects ?? []} results={st.results} fileErrors={st.fileErrors} />
+        )}
         <div className="pane-toolbar tests-bottom-bar">
           <div className="segmented" role="tablist">
             <button className={bottomOpen && view === 'details' ? 'active' : ''} onClick={() => show('details')}>
@@ -255,18 +263,11 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
             </button>
           )}
           {bottomOpen && (
-            <button className="icon-button pane-action" title="Hide details" onClick={() => setBottomOpen(false)}>
+            <button className="icon-button pane-action" title={view === 'output' ? 'Hide the output' : 'Hide details'} onClick={() => setBottomOpen(false)}>
               ▾
             </button>
           )}
         </div>
-        {!bottomOpen ? null : view === 'output' ? (
-          <pre ref={outputRef} className="tests-output">
-            {stripAnsi(st.output) || 'Run tests to see their output here.'}
-          </pre>
-        ) : (
-          <TestDetails node={selectedRow} root={root} tabId={tabId} projects={st.projects ?? []} results={st.results} fileErrors={st.fileErrors} />
-        )}
       </div>
     </div>
   )

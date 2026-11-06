@@ -77,6 +77,11 @@ interface State {
   setLauncherOpen(open: boolean): void
   setDrop(drop: DropTarget | undefined): void
   setLayout(tabId: string, layout: LayoutNode): void
+  /**
+   * A project back to the default arrangement (Git, Tests, terminal, AI agent). The first panel of
+   * each kind is kept (its process, output and agent settings); the other panels close.
+   */
+  resetLayout(tabId: string): Promise<void>
   /** Collapse a project pane into the side rail, or bring it back. */
   setPaneCollapsed(tabId: string, paneId: string, collapsed: boolean): void
   /** (Re)start a project pane, optionally with another profile (e.g. switch agent). */
@@ -358,6 +363,26 @@ export const useTabs = create<State>((set, get) => ({
     const cur = get().drop
     if (cur?.tabId === drop?.tabId && cur?.side === drop?.side) return
     set({ drop })
+  },
+
+  async resetLayout(tabId) {
+    const tab = get().tabs.find((t) => t.id === tabId)
+    if (!tab?.project) return
+    const { root, layout } = tab.project
+    const panes = panesOf(layout)
+    const list = await profilesFor(root)
+    const kept = new Set<string>()
+    let fresh = mapPanes(defaultProjectLayout(defaultShell(list, root), defaultAgent(list, root)), (slot) => {
+      const old = panes.find((p) => p.type === slot.type && !kept.has(p.id))
+      if (!old) return { ...slot, id: newPaneId() }
+      kept.add(old.id)
+      return { ...old, collapsed: slot.collapsed }
+    })
+    // Panels that are not part of the default arrangement close: their processes stop.
+    const { paneExit } = get()
+    for (const p of panes) if (!kept.has(p.id) && p.sessionId && paneExit[p.sessionId] === undefined) window.ide.pty.kill(p.sessionId)
+    fresh = await startPaneSessions(fresh, root)
+    get().setLayout(tabId, fresh)
   },
 
   setLayout(tabId, layout) {

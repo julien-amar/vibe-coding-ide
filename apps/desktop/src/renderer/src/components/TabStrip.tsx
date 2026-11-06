@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { tabTitle, toSnapshot, useTabs, type Tab } from '../store'
 import { onTabDragEnd, onTabDragStart } from '../tab-dnd'
 import { useProfiles } from '../profiles'
+import { panesOf } from '@shared/layout'
+import { confirmDialog } from './Dialogs'
 import { KindBadge } from './KindBadge'
 import { ProfileIcon } from './ProfileIcon'
 import { UpdateBadge } from './UpdateBadge'
@@ -116,6 +118,30 @@ export function TabStrip(): React.JSX.Element {
   }, [menu])
 
   const menuTab = menu && tabs.find((t) => t.id === menu.tabId)
+
+  /** A project's default panels again; panels beyond the first of each kind close (after confirming). */
+  const resetLayout = async (tab: Tab): Promise<void> => {
+    if (!tab.project) return
+    const seen = new Set<string>()
+    const closing = panesOf(tab.project.layout).filter((p) => {
+      const extra = seen.has(p.type)
+      seen.add(p.type)
+      return extra
+    })
+    if (closing.length) {
+      const running = closing.filter((p) => p.sessionId).length
+      const ok = await confirmDialog(
+        'Reset layout?',
+        `${closing.length} panel${closing.length > 1 ? 's' : ''} beyond the default ones will close` +
+          (running ? ` (${running === 1 ? 'its process stops' : 'their processes stop'}).` : '.') +
+          ' The first Git, Tests, terminal and AI agent panels are kept as they are.',
+        'Reset',
+        true
+      )
+      if (!ok) return
+    }
+    await useTabs.getState().resetLayout(tab.id)
+  }
   const act = (fn: () => void) => () => {
     fn()
     setMenu(undefined)
@@ -153,6 +179,11 @@ export function TabStrip(): React.JSX.Element {
           >
             Move to new window
           </button>
+          {menuTab.kind === 'project' && (
+            <button title="Back to the default panels: Git, Tests, terminal and AI agent" onClick={act(() => void resetLayout(menuTab))}>
+              Reset layout
+            </button>
+          )}
           <div className="context-menu-separator" />
           <button onClick={act(() => close(menu.tabId))}>Close tab</button>
           <button disabled={tabs.length < 2} onClick={act(() => closeOthers(menu.tabId))}>

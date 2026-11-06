@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Profile } from '@shared/types'
+import { agentLogo, Logo } from '../logos'
 
 /** Icon data URLs from the main process, fetched once per profile. */
 const iconCache = new Map<string, Promise<string | null>>()
@@ -66,15 +67,20 @@ function monogramFor(profile: Profile): Monogram {
 
 export function ProfileIcon({ profile, size = 16 }: { profile: Profile; size?: number }): React.JSX.Element {
   const [src, setSrc] = useState<string | null | undefined>(undefined)
+  // AI agents: their own logo (npm installs and most agent binaries carry no icon).
+  const logo = profile.kind === 'agent' ? agentLogo(profile.id) : undefined
 
+  const hasLogo = logo !== undefined
   useEffect(() => {
+    if (hasLogo) return
     let alive = true
     void fetchIcon(profile.id).then((s) => alive && setSrc(s))
     return () => {
       alive = false
     }
-  }, [profile.id])
+  }, [profile.id, hasLogo])
 
+  if (logo) return <Logo svg={logo.svg} size={size} className={`profile-icon agent-logo ${logo.agent}`} />
   if (src) return <img className="profile-icon" src={src} width={size} height={size} alt="" draggable={false} />
   if (src === undefined) return <span className="profile-icon placeholder" style={{ width: size, height: size }} />
   const m = monogramFor(profile)

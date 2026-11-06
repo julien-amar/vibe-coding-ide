@@ -1,11 +1,12 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import type { IdeApi, PackageUpdateInfo, TestResult, UpdateStatus } from '@shared/types'
+import type { AppSettings, IdeApi, PackageUpdateInfo, TestResult, UpdateStatus } from '@shared/types'
 
 const api: IdeApi = {
   platform: process.platform,
   debug: process.argv.includes('--vibe-coding-ide-debug'),
   profiles: {
     list: (refresh) => ipcRenderer.invoke('profiles:list', refresh),
+    all: () => ipcRenderer.invoke('profiles:all'),
     icon: (id) => ipcRenderer.invoke('profiles:icon', id),
     wslAgents: (distro) => ipcRenderer.invoke('profiles:wslAgents', distro)
   },
@@ -83,6 +84,15 @@ const api: IdeApi = {
     pickSkillFolder: (root) => ipcRenderer.invoke('harness:pickSkillFolder', root),
     projectMcpServers: (root) => ipcRenderer.invoke('harness:projectMcp', root),
     support: () => ipcRenderer.invoke('harness:support')
+  },
+  settings: {
+    get: () => ipcRenderer.invoke('settings:get'),
+    set: (patch) => ipcRenderer.invoke('settings:set', patch),
+    onChanged: (cb) => {
+      const listener = (_e: IpcRendererEvent, s: AppSettings): void => cb(s)
+      ipcRenderer.on('settings:changed', listener)
+      return () => ipcRenderer.off('settings:changed', listener)
+    }
   },
   update: {
     status: () => ipcRenderer.invoke('update:status'),

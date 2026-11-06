@@ -14,6 +14,8 @@ directories:
 files:
   - out/**
   - package.json
+  # Licences of the bundled third-party logos.
+  - THIRD-PARTY-NOTICES.md
 
 # Native binaries cannot run from inside the asar archive.
 asarUnpack:

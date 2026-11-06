@@ -12,6 +12,7 @@ import type {
   WindowInit,
   WindowTabsState
 } from '@shared/types'
+import { applySettings, getSettings, offeredProfiles, updateSettings } from './app-settings'
 import { openInEditor } from './editor'
 import { gitLog, gitOp, GitWatcher } from './git'
 import { checkMcpServer, HARNESS_SUPPORT, listSkills, readProjectMcpJson, readSkillFile, sanitizeHarness } from './harness'
@@ -227,8 +228,11 @@ function transferAll(ids: string[], from: WebContents, to: WebContents): boolean
 // ---------- IPC ----------
 
 function registerIpc(): void {
-  ipcMain.handle('profiles:list', (_e, refresh?: boolean) => listProfiles(Boolean(refresh)))
-  ipcMain.handle('profiles:wslAgents', (_e, distro: string) => wslAgents(String(distro)))
+  ipcMain.handle('profiles:list', async (_e, refresh?: boolean) => offeredProfiles(await listProfiles(Boolean(refresh))))
+  ipcMain.handle('profiles:all', () => listProfiles())
+  ipcMain.handle('settings:get', () => getSettings())
+  ipcMain.handle('settings:set', (_e, patch: unknown) => updateSettings(patch))
+  ipcMain.handle('profiles:wslAgents', async (_e, distro: string) => offeredProfiles(await wslAgents(String(distro))))
   ipcMain.handle('profiles:icon', async (_e, id: string) => {
     const profile = await findProfile(String(id))
     return profile ? profileIcon(profile) : null
@@ -391,6 +395,7 @@ function registerIpc(): void {
 app.whenReady().then(() => {
   // Generated agent settings of earlier runs (their agents are gone).
   rmSync(harnessRuns(), { recursive: true, force: true })
+  applySettings()
   registerIpc()
   void listProfiles() // warm the cache
   restoreOrCreate()

@@ -3,7 +3,10 @@ import { DialogHost } from './components/Dialogs'
 import { Launcher } from './components/Launcher'
 import { ProjectView } from './components/ProjectView'
 import { TabStrip } from './components/TabStrip'
+import { SettingsDialog } from './components/SettingsDialog'
 import { TerminalView } from './components/TerminalView'
+import { Welcome } from './components/Welcome'
+import { loadProfiles } from './profiles'
 import { onSessionExit } from './pty-bus'
 import { handleAppShortcut } from './shortcuts'
 import { useTabs } from './store'
@@ -26,6 +29,15 @@ export function App(): React.JSX.Element {
   }, [])
 
   useEffect(() => onSessionExit((id, code) => useTabs.getState().sessionExited(id, code)), [])
+
+  // Settings changed (here or in another window): the profiles offered may have changed.
+  useEffect(
+    () =>
+      window.ide.settings.onChanged(() => {
+        void loadProfiles(true)
+      }),
+    []
+  )
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -61,13 +73,9 @@ export function App(): React.JSX.Element {
             </div>
           )
         })}
-        {ready && tabs.length === 0 && (
-          <div className="empty-state">
-            <p>No tabs open.</p>
-            <button onClick={() => setLauncherOpen(true)}>Open a tab</button>
-          </div>
-        )}
+        {ready && tabs.length === 0 && <Welcome />}
       </main>
+      <SettingsDialog />
       <DialogHost />
     </div>
   )
