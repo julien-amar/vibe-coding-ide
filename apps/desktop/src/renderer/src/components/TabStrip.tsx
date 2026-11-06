@@ -4,6 +4,7 @@ import { onTabDragEnd, onTabDragStart } from '../tab-dnd'
 import { useProfiles } from '../profiles'
 import { KindBadge } from './KindBadge'
 import { ProfileIcon } from './ProfileIcon'
+import { UpdateBadge } from './UpdateBadge'
 
 interface MenuState {
   tabId: string
@@ -151,6 +152,7 @@ export function TabStrip(): React.JSX.Element {
         </button>
       </div>
       <div className="titlebar-drag" />
+      <UpdateBadge />
       {menu && menuTab && (
         <div className="context-menu" style={{ left: menu.x, top: menu.y }} onMouseDown={(e) => e.stopPropagation()}>
           <button onClick={act(() => setEditingId(menu.tabId))}>Rename tab</button>

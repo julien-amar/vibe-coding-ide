@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { delimiter, join, resolve } from 'node:path'
+import { delimiter, dirname, join, resolve } from 'node:path'
 import { _electron as electron, expect, type ElectronApplication, type Page } from '@playwright/test'
 
 const MAIN = resolve(__dirname, '..', 'out', 'main', 'index.js')
@@ -103,9 +103,14 @@ export async function typeInTerminal(page: Page, text: string): Promise<void> {
  */
 export function fakeToolsEnv(agentLog: string, editorLog: string): Record<string, string> {
   const dir = resolve(__dirname, 'fixtures', 'fake-tools')
-  if (process.platform !== 'win32') for (const f of ['claude', 'codex', 'pi', 'gemini', 'code']) chmodSync(join(dir, f), 0o755)
+  if (process.platform !== 'win32') for (const f of ['claude', 'codex', 'pi', 'opencode', 'gemini', 'code', 'gh']) chmodSync(join(dir, f), 0o755)
   const pathKey = Object.keys(process.env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH'
-  return { [pathKey]: `${dir}${delimiter}${process.env[pathKey] ?? ''}`, FAKE_AGENT_LOG: agentLog, FAKE_EDITOR_LOG: editorLog }
+  return { [pathKey]: `${dir}${delimiter}${process.env[pathKey] ?? ''}`, FAKE_AGENT_LOG: agentLog,
+    FAKE_EDITOR_LOG: editorLog,
+    // `gh` (GitHub CLI) and the browser: what they were asked, next to the other logs.
+    FAKE_GH_LOG: join(dirname(agentLog), 'fake-gh.log'),
+    VIBE_CODING_IDE_BROWSER_LOG: join(dirname(agentLog), 'browser.log')
+  }
 }
 
 /** A small git repository: main with 2 commits, a feature branch merged into it, a renamed file. */

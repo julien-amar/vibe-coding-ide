@@ -2,7 +2,10 @@ import { spawn } from 'node:child_process'
 import { existsSync, realpathSync, watch, type FSWatcher } from 'node:fs'
 import { join } from 'node:path'
 import type { WebContents } from 'electron'
-import type { GitBranch, GitCommit, GitCommitFile, GitLog, GitOpRequest, GitOpResult, GitStatus, GitStatusFile, GitWorktree } from '@shared/types'
+import type { GitBranch, GitCommit, GitCommitFile, GitLog, GitOpRequest, GitOpResult, GitPullRequestInfo, GitStatus, GitStatusFile, GitWorktree } from '@shared/types'
+import { firstUrl, newPullRequestUrl, parseRemote, type RemoteHost } from './git-hosting'
+import { partialPatch, partialUnsupported } from '@shared/git-patch'
+import { directLaunch } from './harness'
 import { which } from './profiles'
 import { parseWslPath } from '@shared/wsl-paths'
 
@@ -25,13 +28,13 @@ function gitBinary(): string {
 const BASE_CONFIG = ['-c', 'core.quotepath=off', '-c', 'log.showSignature=false', '-c', 'color.ui=false']
 
 /**
- * How to run git for a project root. Repos inside WSL (\\wsl.localhost\<distro>\…)
- * run the distro's own git through wsl.exe — faster and correct (permissions,
+ * How to run git for a project root. Repos inside WSL (\\wsl.localhost\<distro>\â€¦)
+ * run the distro's own git through wsl.exe â€” faster and correct (permissions,
  * symlinks, line endings) compared to Windows git over the network share.
  * --exec runs git directly: without it wsl.exe passes the command line through
  * the distro shell, which would mangle arguments such as --format=%(refname).
  */
-function gitCommand(root: string, args: string[]): { file: string; args: string[] } {
+function gitCommand(root: string, args: string[]): { file: string; args: string[]; cwd?: string } {
   const wsl = process.platform === 'win32' ? parseWslPath(root) : undefined
   if (wsl) {
     const wslExe = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe')
@@ -40,20 +43,48 @@ function gitCommand(root: string, args: string[]): { file: string; args: string[
   return { file: gitBinary(), args: ['-C', root, ...BASE_CONFIG, ...args] }
 }
 
+/**
+ * How to run a hosting tool (gh, glab) in the repository: inside the distribution for WSL
+ * repositories (through a login shell, where its PATH and credentials are), else from PATH.
+ */
+function toolCommand(root: string, program: 'gh' | 'glab', args: string[]): { file: string; args: string[]; cwd?: string } | undefined {
+  const wsl = process.platform === 'win32' ? parseWslPath(root) : undefined
+  if (wsl) {
+    const wslExe = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe')
+    return { file: wslExe, args: ['-d', wsl.distro, '--cd', wsl.path, '--exec', 'bash', '-lc', `exec ${program} "$@"`, program, ...args] }
+  }
+  const exe = which(program)
+  if (!exe) return undefined
+  // A command shim (npm-style .cmd): its script is started directly (cmd.exe would mangle a
+  // description with quotes or line breaks; Node cannot spawn .cmd files without a shell).
+  if (/\.(cmd|bat)$/i.test(exe)) {
+    const direct = directLaunch(exe, args)
+    return direct ? { file: direct.command, args: direct.args, cwd: root } : undefined
+  }
+  return { file: exe, args, cwd: root }
+}
+
 interface RunOptions {
   timeout?: number
   input?: string
   /** Exit codes that are not errors (e.g. 1 for `git diff --no-index` with differences). */
   okCodes?: number[]
+  /** Extra environment variables. */
+  env?: Record<string, string>
 }
 
 function git(root: string, args: string[], opts: RunOptions = {}): Promise<string> {
-  const cmd = gitCommand(root, args)
+  return run(gitCommand(root, args), `git ${args[0]}`, opts)
+}
+
+function run(cmd: { file: string; args: string[]; cwd?: string }, label: string, opts: RunOptions = {}): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd.file, cmd.args, {
+      cwd: cmd.cwd,
       windowsHide: true,
       // Never block on a terminal credential prompt; credential managers (GUI) still work.
-      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C.UTF-8' }
+      // gh / glab: no prompts, no pager, no colours.
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C.UTF-8', GH_PROMPT_DISABLED: '1', NO_COLOR: '1', PAGER: 'cat', ...(opts.env ?? {}) }
     })
     const out: Buffer[] = []
     const err: Buffer[] = []
@@ -72,7 +103,7 @@ function git(root: string, args: string[], opts: RunOptions = {}): Promise<strin
       clearTimeout(timer)
       const stdout = Buffer.concat(out).toString('utf8')
       if (code === 0 || (code !== null && opts.okCodes?.includes(code))) resolve(stdout)
-      else reject(new Error(Buffer.concat(err).toString('utf8').trim() || `git ${args[0]} failed (exit ${code})`))
+      else reject(new Error(Buffer.concat(err).toString('utf8').trim() || stdout.trim() || `${label} failed (exit ${code})`))
     })
     if (opts.input !== undefined) child.stdin.end(opts.input)
     else child.stdin.end()
@@ -190,7 +221,7 @@ async function gitBranches(root: string): Promise<GitBranch[]> {
   return branches
 }
 
-/** Linux path of a worktree inside WSL → Windows path, so it can be opened as a project. */
+/** Linux path of a worktree inside WSL â†’ Windows path, so it can be opened as a project. */
 function toProjectPath(root: string, p: string): string {
   const wsl = process.platform === 'win32' ? parseWslPath(root) : undefined
   return wsl && p.startsWith('/') ? `\\\\wsl.localhost\\${wsl.distro}${p.replace(/\//g, '\\')}` : p.replace(/\//g, process.platform === 'win32' ? '\\' : '/')
@@ -296,6 +327,116 @@ export function worktreeDir(root: string, feature: string): string {
 }
 
 /**
+ * Diff options, whatever the user's git configuration: no colours or external diff tool, and the
+ * usual a/ b/ prefixes (diff.noprefix / diff.mnemonicPrefix would break `git apply` of the lines).
+ */
+const DIFF_FLAGS = ['--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/']
+
+/** A file's unstaged (worktree vs index) or staged (index vs HEAD) diff. */
+const fileDiff = (root: string, path: string, staged: boolean): Promise<string> => git(root, ['diff', ...DIFF_FLAGS, ...(staged ? ['--cached'] : []), '--', path])
+
+// ---------- Pull requests ----------
+
+/** Runs gh / glab; undefined when it is not installed (on PATH, or in the WSL distribution). */
+async function runTool(root: string, program: 'gh' | 'glab', args: string[], opts: RunOptions = {}): Promise<string | undefined> {
+  const cmd = toolCommand(root, program, args)
+  if (!cmd) return undefined
+  try {
+    return await run(cmd, program, { timeout: NETWORK.timeout, ...opts })
+  } catch (err) {
+    const e = err as NodeJS.ErrnoException
+    if (e.code === 'ENOENT' || /command not found|exec: .*: not found|No such file or directory/i.test(e.message)) return undefined
+    throw err
+  }
+}
+
+/** The remote the current branch tracks (else origin). */
+async function remoteOf(root: string, status: GitStatus): Promise<string> {
+  const tracked = status.upstream?.split('/')[0]
+  if (tracked) return tracked
+  const remotes = (await git(root, ['remote']).catch(() => '')).split('\n').map((s) => s.trim()).filter(Boolean)
+  return remotes.includes('origin') ? 'origin' : (remotes[0] ?? 'origin')
+}
+
+async function prInfo(root: string): Promise<GitPullRequestInfo & { remote: string; web?: RemoteHost }> {
+  const status = await gitStatus(root)
+  const branch = status.branch
+  const remote = await remoteOf(root, status)
+  const url = (await git(root, ['remote', 'get-url', remote]).catch(() => '')).trim()
+  const host = url ? parseRemote(url) : undefined
+  const prefix = `${remote}/`
+  const remoteBranches = (await gitBranches(root)).filter((b) => b.remote && b.name.startsWith(prefix)).map((b) => b.name.slice(prefix.length))
+  const head = (await git(root, ['symbolic-ref', '--short', `refs/remotes/${remote}/HEAD`]).catch(() => '')).trim()
+  const defaultBase = (head.startsWith(prefix) ? head.slice(prefix.length) : undefined) ?? ['main', 'master', 'develop', 'trunk'].find((b) => remoteBranches.includes(b)) ?? remoteBranches[0]
+  const bases = [...new Set([defaultBase, ...remoteBranches].filter((b): b is string => !!b && b !== branch))]
+  const title = (await git(root, ['log', '-1', '--format=%s']).catch(() => '')).trim() || undefined
+  const info: GitPullRequestInfo & { remote: string; web?: RemoteHost } = { host: host?.kind, branch, defaultBase, bases, title, remote, web: host }
+  if (!branch || !host) return info
+  try {
+    if (host.kind === 'github') {
+      const out = await runTool(root, 'gh', ['pr', 'list', '--head', branch, '--state', 'open', '--json', 'number,url,title,state,isDraft', '--limit', '1'])
+      if (out !== undefined) {
+        info.tool = 'gh'
+        const pr = (JSON.parse(out || '[]') as { number: number; url: string; title: string; state: string; isDraft?: boolean }[])[0]
+        if (pr) info.existing = { number: pr.number, url: pr.url, title: pr.title, state: pr.state.toLowerCase(), draft: pr.isDraft }
+      }
+    } else if (host.kind === 'gitlab') {
+      const out = await runTool(root, 'glab', ['mr', 'list', '--source-branch', branch, '--output', 'json'])
+      if (out !== undefined) {
+        info.tool = 'glab'
+        const mr = (JSON.parse(out || '[]') as { iid: number; web_url: string; title: string; state: string; draft?: boolean }[])[0]
+        if (mr) info.existing = { number: mr.iid, url: mr.web_url, title: mr.title, state: mr.state, draft: mr.draft }
+      }
+    }
+  } catch (err) {
+    // Installed but not usable (not logged in, no networkâ€¦): the host's page still works.
+    info.tool = undefined
+    info.toolError = (err as Error).message.split('\n')[0]
+  }
+  return info
+}
+
+/**
+ * Creates a pull (merge) request for the current branch: pushes it first (publishing it if
+ * needed), then creates the request with gh / glab â€” or returns the host's "new pull request"
+ * page when neither is available.
+ */
+async function createPr(root: string, req: GitOpRequest): Promise<{ url: string; openPage?: boolean; text?: string }> {
+  const info = await prInfo(root)
+  if (!info.branch) throw new Error('Switch to a branch first.')
+  if (!info.web) throw new Error('The remote is not on GitHub, GitLab, Bitbucket or Azure DevOps.')
+  const base = String(req.base ?? info.defaultBase ?? '')
+  if (!info.bases.includes(base)) throw new Error(`Unknown target branch "${base}"`)
+  const title = String(req.title ?? '').trim()
+  const body = String(req.body ?? '')
+  if (info.tool && !title) throw new Error('Enter a title.')
+
+  const status = await gitStatus(root)
+  if (!status.upstream) await git(root, ['push', '--set-upstream', info.remote, 'HEAD'], NETWORK)
+  else if (status.ahead > 0) await git(root, ['push'], NETWORK)
+
+  if (info.tool === 'gh') {
+    const out = await runTool(root, 'gh', ['pr', 'create', `--title=${title}`, `--body=${body}`, `--base=${base}`, `--head=${info.branch}`, ...(req.draft ? ['--draft'] : [])])
+    const url = firstUrl(out ?? '')
+    if (url) return { url, text: out?.trim() }
+  } else if (info.tool === 'glab') {
+    const out = await runTool(root, 'glab', [
+      'mr',
+      'create',
+      `--title=${title}`,
+      `--description=${body}`,
+      `--target-branch=${base}`,
+      `--source-branch=${info.branch}`,
+      ...(req.draft ? ['--draft'] : []),
+      '--yes'
+    ])
+    const url = firstUrl(out ?? '')
+    if (url) return { url, text: out?.trim() }
+  }
+  return { url: newPullRequestUrl(info.web, base, info.branch), openPage: true }
+}
+
+/**
  * All write/read actions the Git panel can perform. Each maps to a fixed git
  * command line; user-provided values are validated and passed after `--`
  * where git allows it, so a renderer can never inject arbitrary git options.
@@ -308,10 +449,33 @@ export async function gitOp(root: string, req: GitOpRequest): Promise<GitOpResul
       case 'diff': {
         const path = pathList(req.path)[0]
         let text: string
-        if (req.untracked) text = await git(root, ['diff', '--no-color', '--no-index', '--', '/dev/null', path], { okCodes: [1] })
-        else text = await git(root, ['diff', '--no-color', ...(req.staged ? ['--cached'] : []), '--', path])
+        if (req.untracked) text = await git(root, ['diff', ...DIFF_FLAGS, '--no-index', '--', '/dev/null', path], { okCodes: [1] })
+        else text = await fileDiff(root, path, !!req.staged)
         return { ok: true, text }
       }
+      case 'applyLines': {
+        // Stage / unstage / discard some lines: a patch of those lines, applied by git.
+        const path = pathList(req.path)[0]
+        const staged = !!req.staged
+        const action = req.action
+        if (staged ? action !== 'unstage' : action !== 'stage' && action !== 'discard') throw new Error('Invalid action')
+        const diff = await fileDiff(root, path, staged)
+        if (diff !== req.diffText) throw new Error('The file changed meanwhile: check its changes again.')
+        const why = partialUnsupported(diff)
+        if (why) throw new Error(`The lines of a ${why} cannot be ${action === 'discard' ? 'discarded' : `${action}d`} separately.`)
+        const patch = partialPatch(diff, (req.lines ?? []).filter((n) => Number.isInteger(n)), action !== 'stage')
+        if (!patch) throw new Error('No changed line selected.')
+        const args = ['apply', ...(action === 'discard' ? [] : ['--cached']), ...(action === 'stage' ? [] : ['--reverse']), '--recount', '--whitespace=nowarn', '-']
+        await git(root, args, { input: patch })
+        return { ok: true }
+      }
+      case 'prInfo': {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { remote, web, ...pr } = await prInfo(root)
+        return { ok: true, pr }
+      }
+      case 'createPr':
+        return { ok: true, ...(await createPr(root, req)) }
       case 'stage':
         await git(root, ['add', '-A', '--', ...pathList(req.paths)])
         return { ok: true }
@@ -439,7 +603,7 @@ export async function gitOp(root: string, req: GitOpRequest): Promise<GitOpResul
 
 /**
  * Notifies subscribed windows when a repository's refs change (commit,
- * checkout, fetch…). Local repos use a file watcher on `.git`; WSL repos (no
+ * checkout, fetchâ€¦). Local repos use a file watcher on `.git`; WSL repos (no
  * reliable file events over \\wsl.localhost) are polled.
  */
 export class GitWatcher {

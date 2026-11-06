@@ -10,7 +10,7 @@ export interface DialogField {
   placeholder?: string
   /** Render a select with these options instead of a text input. */
   options?: string[]
-  kind?: 'text' | 'checkbox'
+  kind?: 'text' | 'checkbox' | 'textarea'
 }
 
 export interface DialogRequest {
@@ -111,6 +111,21 @@ function DialogBox({ req }: { req: NonNullable<DialogState['current']> }): React
                     <option key={o}>{o}</option>
                   ))}
                 </select>
+              ) : f.kind === 'textarea' ? (
+                <textarea
+                  className="selectable"
+                  rows={6}
+                  value={String(values[f.name])}
+                  placeholder={f.placeholder}
+                  onChange={(e) => setValues({ ...values, [f.name]: e.target.value })}
+                  onKeyDown={(e) => {
+                    // Enter is a new line here; Ctrl+Enter confirms.
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                      e.preventDefault()
+                      close(values)
+                    }
+                  }}
+                />
               ) : (
                 <input
                   ref={(el) => {

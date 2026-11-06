@@ -1,7 +1,9 @@
-import { appendFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { expect, test, type Page } from '@playwright/test'
-import { cleanup, createRepo, launch, openProject, tempDir, type TestApp } from './app'
+import { cleanup, createRepo, launch, openProject, readLog, tempDir, type TestApp } from './app'
 
 let hub: TestApp
 let profile: string
@@ -76,6 +78,91 @@ test('changes can be staged and committed from the Changes view', async () => {
 
   await view(page, 'History')
   await expect(gitPanel(page).locator('.git-row').first()).toContainText('Commit from the e2e test')
+})
+
+test('hunks and single lines can be staged, unstaged and discarded', async () => {
+  const { page } = hub
+  const git = (...args: string[]): string => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' })
+  const original = Array.from({ length: 12 }, (_, i) => `line ${i + 1}`).join('\n') + '\n'
+  writeFileSync(join(repo, 'list.txt'), original)
+  git('add', 'list.txt')
+  git('commit', '-q', '-m', 'Add list')
+  // Two hunks: line 2 changed (+ a line added), line 11 removed.
+  writeFileSync(join(repo, 'list.txt'), original.replace('line 2\n', 'line TWO\nadded\n').replace('line 11\n', ''))
+
+  await view(page, 'Changes')
+  const changes = gitPanel(page).locator('.changes-view')
+  await changes.locator('.file-row', { hasText: 'list.txt' }).click()
+  const diff = changes.locator('.changes-diff')
+  await expect(diff.locator('.diff-line.hunk')).toHaveCount(2)
+
+  // Stage the second hunk only.
+  await diff.locator('.diff-line.hunk').nth(1).locator('button', { hasText: 'Stage' }).click()
+  await expect.poll(() => git('show', ':list.txt')).toBe(original.replace('line 11\n', ''))
+  await expect(diff.locator('.diff-line.hunk')).toHaveCount(1)
+
+  // Select the added line alone and stage it (the "line TWO" change stays unstaged).
+  await diff.locator('.diff-line.add', { hasText: '+added' }).click()
+  await expect(diff.locator('.diff-selection-bar')).toContainText('1 line selected')
+  await diff.locator('.diff-selection-bar button', { hasText: 'Stage' }).click()
+  await expect.poll(() => git('show', ':list.txt')).toBe(original.replace('line 2\n', 'line 2\nadded\n').replace('line 11\n', ''))
+
+  // Discard the remaining change (line 2 → line TWO), after confirming — once the diff shows the
+  // staged line gone (acting on the previous diff is refused: "the file changed meanwhile").
+  await expect(diff.locator('.diff-line.add', { hasText: '+added' })).toHaveCount(0)
+  await expect(diff.locator('.diff-line.hunk')).toHaveCount(1)
+  await diff.locator('.diff-line.hunk button', { hasText: 'Discard' }).click()
+  await page.locator('.dialog button', { hasText: 'Discard' }).click()
+  await expect.poll(() => readFileSync(join(repo, 'list.txt'), 'utf8')).toBe(original.replace('line 2\n', 'line 2\nadded\n').replace('line 11\n', ''))
+
+  // Unstage the added line from the staged diff.
+  await changes.locator('.file-row', { hasText: 'list.txt' }).first().click()
+  await expect(diff.locator('.diff-title')).toContainText('staged')
+  await diff.locator('.diff-line.add', { hasText: '+added' }).click()
+  await diff.locator('.diff-selection-bar button', { hasText: 'Unstage' }).click()
+  await expect.poll(() => git('show', ':list.txt')).toBe(original.replace('line 11\n', ''))
+})
+
+test('a pull request is created with gh (branch pushed first), then opened', async () => {
+  const { page } = hub
+  const git = (...args: string[]): string => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' })
+  // A GitHub remote whose pushes go to a local bare repository.
+  const origin = join(work, 'origin.git')
+  execFileSync('git', ['init', '-q', '--bare', origin])
+  git('remote', 'add', 'origin', 'https://github.com/e2e/demo-repo.git')
+  git('config', `url.${pathToFileURL(origin).href}.pushInsteadOf`, 'https://github.com/e2e/demo-repo.git')
+  git('push', '-q', '-u', 'origin', 'main')
+  git('switch', '-q', '-c', 'feature/pr')
+  writeFileSync(join(repo, 'pr.txt'), 'pr\n')
+  git('add', 'pr.txt')
+  git('commit', '-q', '-m', 'Add the PR file')
+  const ghLog = join(profile, 'fake-gh.log')
+  const browserLog = join(profile, 'browser.log')
+
+  await expect(gitPanel(page).locator('.git-toolbar .ref-badge').first()).toHaveText('feature/pr')
+  await gitPanel(page).locator('.git-toolbar button', { hasText: 'Pull request' }).click()
+  const dialog = page.locator('.dialog')
+  await expect(dialog.locator('h2')).toHaveText('New pull request')
+  await expect(dialog.locator('input').first()).toHaveValue('Add the PR file')
+  await dialog.locator('textarea').fill('First line\n"quoted" second line')
+  await expect(dialog.locator('select')).toHaveValue('main')
+  await dialog.locator('button', { hasText: 'Push & create' }).click()
+
+  await expect(page.locator('.toast', { hasText: 'Created https://github.com/e2e/demo-repo/pull/1' })).toBeVisible()
+  expect(readLog(browserLog)).toContain('https://github.com/e2e/demo-repo/pull/1')
+  // Pushed (published) first, then created with the exact description.
+  expect(execFileSync('git', ['--git-dir', origin, 'branch', '--list', 'feature/pr'], { encoding: 'utf8' })).toContain('feature/pr')
+  const create = readLog(ghLog)
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => JSON.parse(l) as string[])
+    .find((a) => a[1] === 'create')
+  expect(create).toEqual(expect.arrayContaining(['--title=Add the PR file', '--body=First line\n"quoted" second line', '--base=main', '--head=feature/pr']))
+
+  // The branch now has an open pull request: the button opens it.
+  await gitPanel(page).locator('.git-toolbar button', { hasText: 'Pull request' }).click()
+  await expect(page.locator('.toast', { hasText: '#1: Add the PR file' })).toBeVisible()
+  expect(readLog(browserLog).trim().split('\n')).toHaveLength(2)
 })
 
 test('branches can be created and switched from the Branches view', async () => {

@@ -2,6 +2,12 @@
 // prompt, then records everything typed or pasted into it in $FAKE_AGENT_LOG.
 const fs = require('fs')
 
+// `<agent> --version` (vibe-coding-ide checks some agents' version): answer like opencode 2 / pi 1.5.
+if (process.argv.includes('--version')) {
+  process.stdout.write('fake-agent v2.2.5\n')
+  process.exit(0)
+}
+
 const log = process.env.FAKE_AGENT_LOG
 // Each start's folder and arguments (e.g. the agent settings flags), one JSON line per start, next to the log.
 if (log) fs.appendFileSync(`${log}.argv`, JSON.stringify({ cwd: process.cwd(), args: process.argv.slice(2) }) + '\n')

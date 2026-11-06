@@ -3,7 +3,7 @@ import type { GitBranch, GitOpRequest, GitOpResult, GitStatus, GitStatusFile, Gi
 import { useTabs } from '../store'
 import { relativeTime } from '../time'
 import { confirmDialog, notify, openDialog } from './Dialogs'
-import { DiffView, STATUS_LABEL } from './GitDiff'
+import { DiffView, STATUS_LABEL, type DiffLineActions } from './GitDiff'
 import { GitLogPane } from './GitLogPane'
 
 type View = 'history' | 'changes' | 'branches'
@@ -104,6 +104,14 @@ export function GitPanel({ root, visible, openProject }: { root: string; visible
             >
               {status.upstream ? 'Push' : 'Publish'}
             </button>
+            <button
+              className="tool-button"
+              disabled={!!busy || !status.branch}
+              title="Open this branch's pull request, or create one"
+              onClick={() => void pullRequest(root, setBusy, run)}
+            >
+              Pull request
+            </button>
           </>
         )}
         <button className="icon-button" title="Refresh" onClick={refresh}>
@@ -117,6 +125,66 @@ export function GitPanel({ root, visible, openProject }: { root: string; visible
       </div>
     </div>
   )
+}
+
+// ---------- Pull requests ----------
+
+const HOST_LABEL: Record<string, string> = { github: 'GitHub', gitlab: 'GitLab', bitbucket: 'Bitbucket', azure: 'Azure DevOps' }
+
+/**
+ * The branch's open pull request opens in the browser; otherwise a dialog creates one — with gh /
+ * glab when installed, else on the host's "new pull request" page. The branch is pushed first.
+ */
+async function pullRequest(root: string, setBusy: (s: string | null) => void, run: Run): Promise<void> {
+  setBusy('Checking pull requests')
+  const r = await window.ide.git.op(root, { op: 'prInfo' })
+  setBusy(null)
+  const pr = r.pr
+  if (!r.ok || !pr) return notify(r.error ?? 'Could not read the repository', 'error')
+  if (!pr.branch) return notify('Switch to a branch first.', 'error')
+  if (!pr.host) return notify('The remote is not on GitHub, GitLab, Bitbucket or Azure DevOps.', 'error')
+  if (pr.existing) {
+    notify(`${pr.existing.draft ? 'Draft ' : ''}#${pr.existing.number}: ${pr.existing.title}`, 'info')
+    window.ide.app.openExternal(pr.existing.url)
+    return
+  }
+  if (!pr.bases.length) return notify('The remote has no branch to target yet: push a base branch first.', 'error')
+  const host = HOST_LABEL[pr.host]
+  const kind = pr.host === 'gitlab' ? 'merge request' : 'pull request'
+  const message = pr.tool
+    ? `Pushes ${pr.branch}, then creates the ${kind} on ${host} with ${pr.tool}.`
+    : `Pushes ${pr.branch}, then opens ${host}'s page to create the ${kind}.` +
+      (pr.toolError
+        ? ` (${pr.host === 'gitlab' ? 'glab' : 'gh'} could not be used: ${pr.toolError})`
+        : pr.host === 'github' || pr.host === 'gitlab'
+          ? ` Install ${pr.host === 'github' ? 'GitHub CLI (gh)' : 'glab'} to create it from here.`
+          : '')
+  const v = await openDialog({
+    title: `New ${kind}`,
+    message,
+    fields: [
+      ...(pr.tool
+        ? [
+            { name: 'title', label: 'Title', value: pr.title ?? '' },
+            { name: 'body', label: 'Description', kind: 'textarea' as const, placeholder: 'What changes, and why (Markdown)' }
+          ]
+        : []),
+      { name: 'base', label: `Into (${pr.branch} →)`, options: pr.bases },
+      ...(pr.tool ? [{ name: 'draft', label: 'Draft', kind: 'checkbox' as const }] : [])
+    ],
+    confirmLabel: pr.tool ? 'Push & create' : `Push & open ${host}`
+  })
+  if (!v) return
+  const res = await run(pr.tool ? `Creating the ${kind}` : 'Pushing', {
+    op: 'createPr',
+    title: String(v.title ?? ''),
+    body: String(v.body ?? ''),
+    base: String(v.base),
+    draft: Boolean(v.draft)
+  })
+  if (!res.ok || !res.url) return
+  notify(res.openPage ? `Opened ${host} to create the ${kind}` : `Created ${res.url}`, 'success')
+  window.ide.app.openExternal(res.url)
 }
 
 // ---------- Changes ----------
@@ -172,7 +240,10 @@ function ChangesView({ root, status, run, refreshKey }: { root: string; status: 
   useEffect(() => {
     if (!selected) return
     const list = selected.staged ? staged : unstaged
-    if (!list.some((f) => f.path === selected.path)) setSelected(undefined)
+    const file = list.find((f) => f.path === selected.path)
+    if (!file) setSelected(undefined)
+    // An untracked file that got committed / added since (or the reverse): show its real diff.
+    else if (!selected.staged && (file.worktree === '?') !== selected.untracked) setSelected({ ...selected, untracked: file.worktree === '?' })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status])
 
@@ -206,6 +277,23 @@ function ChangesView({ root, status, run, refreshKey }: { root: string; status: 
     )
     if (ok) await run('Discarding', { op: 'discard', paths: [f.path], untracked })
   }
+
+  /** Partial staging of the selected file's diff (not for untracked files: stage them whole). */
+  const lineActions: DiffLineActions | undefined =
+    selected && !selected.untracked && !diff.loading
+      ? {
+          staged: selected.staged,
+          apply: async (action, lines) => {
+            const n = lines.length
+            if (action === 'discard' && !(await confirmDialog('Discard changes?', `Your changes on ${n} line${n > 1 ? 's' : ''} of ${selected.path} will be lost.`, 'Discard', true))) {
+              return false
+            }
+            const label = action === 'stage' ? 'Staging' : action === 'unstage' ? 'Unstaging' : 'Discarding'
+            const r = await run(label, { op: 'applyLines', path: selected.path, staged: selected.staged, action, lines, diffText: diff.text })
+            return r.ok
+          }
+        }
+      : undefined
 
   if (!status) return <div className="pane-message">This folder is not a git repository.</div>
 
@@ -303,7 +391,7 @@ function ChangesView({ root, status, run, refreshKey }: { root: string; status: 
               <span className="file-name">{selected.path}</span>
               <span className="muted">{selected.staged ? 'staged' : selected.untracked ? 'untracked' : 'not staged'}</span>
             </div>
-            <DiffView text={diff.text} loading={diff.loading} />
+            <DiffView text={diff.text} loading={diff.loading} actions={lineActions} />
           </>
         ) : (
           <div className="pane-message">Select a file to see its changes.</div>

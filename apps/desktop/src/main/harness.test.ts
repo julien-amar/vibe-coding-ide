@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
 import {
   agentOf,
@@ -182,16 +183,30 @@ describe('compiling a harness for Claude Code', () => {
       instructions: [join(out, 'instructions.md')],
       skills: { paths: [join(root, 'skills', 'haiku')] }
     })
+    // opencode 2 shares a background service started without this config: the panel gets a private one.
+    expect(compileHarness('opencode', sample(root), root, out, { kind: 'host' }, { opencodeMajor: 2 }).args).toEqual(['--standalone'])
+    expect(compileHarness('opencode', sample(root), root, out, { kind: 'host' }, { opencodeMajor: 1 }).args).toEqual([])
   })
 
-  it('pi: instructions file and skill folders as flags (pi has no MCP support)', () => {
+  it('pi: MCP servers through a session-only extension, instructions file and skill folders as flags', async () => {
     const root = join(base, 'piproj')
     const out = join(base, 'pi-out')
+    const extension = join(out, 'mcp-servers.mjs')
     expect(compileHarness('pi', sample(root), root, out)).toEqual({
-      args: ['--append-system-prompt', join(out, 'instructions.md'), '--skill', join(root, 'skills', 'haiku')],
+      args: ['--extension', extension, '--append-system-prompt', join(out, 'instructions.md'), '--skill', join(root, 'skills', 'haiku')],
       env: {}
     })
-    expect(supportOf('pi')).toMatchObject({ mcp: false, skills: true, instructions: true })
+    // The extension registers the enabled servers (names made valid for pi) when pi loads it.
+    const registered: Record<string, unknown> = {}
+    const mod = (await import(pathToFileURL(extension).href)) as { default: (pi: unknown) => void }
+    mod.default({ registerMcpServer: (name: string, config: unknown) => (registered[name] = config) })
+    expect(registered).toEqual({
+      'demo-tools': { command: 'node', args: ['x.js', 'a "quoted" arg'], env: { TOKEN: 'x' } },
+      web: { url: 'https://example.com/mcp', headers: { Authorization: 'Bearer t' } }
+    })
+    // An older pi (no MCP): the extension does nothing instead of failing.
+    expect(() => mod.default({})).not.toThrow()
+    expect(supportOf('pi')).toMatchObject({ mcp: true, skills: true, instructions: true, strictMcp: false })
     expect(supportOf('gemini')).toMatchObject({ mcp: false, skills: false, instructions: false })
   })
 

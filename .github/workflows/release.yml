@@ -8,6 +8,8 @@
 # The app version is taken from the tag.
 # Try out: Run workflow with "tag" left empty builds the installers as
 #          workflow artifacts without publishing anything.
+# Installed apps update themselves from the latest release (the latest*.yml files uploaded with
+# the installers). Signing: see apps/desktop/scripts/release-build.cjs.
 name: Release
 
 on:
@@ -76,11 +78,26 @@ jobs:
       - name: Unit tests
         run: pnpm test
 
+      # Signed when the repository has the signing secrets / variables, unsigned otherwise
+      # (names in apps/desktop/scripts/release-build.cjs).
       - name: Build installers
-        run: pnpm --filter @vibe-coding-ide/desktop dist
+        working-directory: apps/desktop
+        run: node scripts/release-build.cjs
         env:
-          # No signing certificates configured yet (installers are unsigned).
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ vars.AZURE_SIGNING_PROFILE }}
+          AZURE_SIGNING_PUBLISHER: ${{ vars.AZURE_SIGNING_PUBLISHER }}
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Upload installers
         uses: actions/upload-artifact@v4
@@ -93,6 +110,9 @@ jobs:
             apps/desktop/dist/*.zip
             apps/desktop/dist/*.AppImage
             apps/desktop/dist/*.deb
+            # What installed apps read to update themselves (electron-updater).
+            apps/desktop/dist/latest*.yml
+            apps/desktop/dist/*.blockmap
 
   publish:
     name: Publish GitHub Release

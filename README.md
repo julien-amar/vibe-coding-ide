@@ -23,10 +23,11 @@ A tabbed development environment — see [PLAN.md](PLAN.md) for the full design.
 - **Terminal / AI agent panels** run in the project folder; switch the shell or agent from the header (with icons). A panel whose process exits shows a **Restart** button.
 - **Git panel:**
   - *History* — all branches with a commit graph, branch/tag badges, commit details on click.
-  - *Changes* — staged and unstaged files with diffs; stage / unstage / discard per file or all; commit or amend (Ctrl+Enter).
+  - *Changes* — staged and unstaged files with diffs; stage / unstage / discard per file or all, **per hunk** (buttons on each `@@` line) or **per line** (click changed lines, Shift+click for a range, then Stage / Unstage / Discard); commit or amend (Ctrl+Enter).
   - *Branches* — switch, create, rename, merge into the current branch, delete (with a confirmation for unmerged branches), check out remote branches.
   - **New feature…** — creates `feature/<name>` in its own folder next to the repository (a git worktree) and opens it as a new project with its own terminal and agent, so you can work on it in parallel. Worktrees can be reopened or removed from the Branches view.
   - Fetch / Pull / Push (Publish for a branch without upstream), ahead/behind counts. Refreshes automatically when the repository changes.
+  - **Pull request** — opens the branch's open pull (merge) request, or creates one: pushes the branch first, then creates it with **GitHub CLI** (`gh`) or **glab** when installed and logged in (title, Markdown description, target branch, draft), otherwise opens the host's "new pull request" page (GitHub, GitLab, Bitbucket, Azure DevOps). WSL projects use the `gh` / `glab` of the distribution.
 - **Tests panel:** finds the project's tests, also in sub-folders of a monorepo, and lists them by file and `describe()` block / module / class:
 
   | Framework | Found from | Grouped by | Runs with |
@@ -51,15 +52,15 @@ A tabbed development environment — see [PLAN.md](PLAN.md) for the full design.
     |---|---|---|---|---|---|
     | **Claude Code** | `--mcp-config` | `--plugin-dir` (a session-only plugin) | `--append-system-prompt-file` | `--strict-mcp-config` | `--settings`: your and the repository's skills `off`, bundled skills disabled (installed plugins' skills stay) |
     | **Codex CLI** | `-c mcp_servers.<name>…` | listed in its instructions (name, description, `SKILL.md` location) | `-c developer_instructions` | ✓ (replaces the server list) | `-c skills.config` turns off its skills (bundled, `~/.codex`, `~/.agents`, the repository) |
-    | **opencode** | `OPENCODE_CONFIG` (an extra config file) | `skills.paths` | `instructions` | ✗ (always adds your servers) | `permission.skill`: deny all but the panel's |
-    | **pi** | ✗ (pi has no MCP support) | `--skill` | `--append-system-prompt` | — | `--no-skills` |
+    | **opencode** | `OPENCODE_CONFIG` (an extra config file); opencode 2 also gets `--standalone`, a private server (its shared background service would not see the panel's config) | `skills.paths` | `instructions` | ✗ (your and the repository's servers always apply) | `permission.skill`: deny all but the panel's |
+    | **pi** | a session-only extension (`--extension`) calling `pi.registerMcpServer` (pi 1.5+) | `--skill` | `--append-system-prompt` | ✗ (`~/.pi/agent/mcp.json` and `.pi/mcp.json` always apply) | `--no-skills` |
     | **Gemini CLI** | ✗ | ✗ | ✗ | Gemini only reads `~/.gemini` or the repository's `.gemini` | ✗ |
 
-    Agents running **inside WSL** get the same, with paths written for Linux (`/mnt/c/…`, the project's Linux path), MCP server commands run in the distribution (as typed), and **Check** starting servers there too. Checked against Claude Code 2.1, Codex CLI 0.166, opencode 1.19, pi 0.73 and Gemini CLI 0.67. Agents installed with npm on Windows are started directly (not through their `.cmd` shim), so arguments keep their quotes and line breaks. After a change, the running agent shows **Restart** to apply it.
+    Agents running **inside WSL** get the same, with paths written for Linux (`/mnt/c/…`, the project's Linux path), MCP server commands run in the distribution (as typed), and **Check** starting servers there too. Checked against Claude Code 2.1, Codex CLI 0.166, opencode 2.2 (and 1.19), pi 1.5 and Gemini CLI 0.67. Agents installed with npm on Windows are started directly (not through their `.cmd` shim), so arguments keep their quotes and line breaks. After a change, the running agent shows **Restart** to apply it.
 - **WSL projects** (`\\wsl.localhost\<distro>\...`): git runs inside the distribution, the terminal opens the distro's shell in the project folder, and the agent defaults to one installed inside the distro (e.g. `claude` in Ubuntu), falling back to the Windows one.
 - Project tabs move between windows like any other tab and are restored on start.
 
-**Known limits:** SSH and dev-container projects are not supported yet; staging is per file (no partial hunks); closing one of several windows drops it from the saved layout — only the last window / app quit is saved (same as Windows Terminal). WSL's `/tmp` is not visible from Windows, so WSL projects must live elsewhere (e.g. under your home).
+**Known limits:** SSH and dev-container projects are not supported yet; closing one of several windows drops it from the saved layout — only the last window / app quit is saved (same as Windows Terminal). WSL's `/tmp` is not visible from Windows, so WSL projects must live elsewhere (e.g. under your home).
 
 ## Requirements
 Node 22+, pnpm, Git. Windows also needs WSL for WSL tabs and projects.
@@ -96,7 +97,17 @@ End-to-end tests put fake `claude` and `code` commands first on PATH (`e2e/fixtu
   git tag v0.2.0
   git push origin v0.2.0
   ```
-  Installers: Windows `.exe` (NSIS), macOS `.dmg` / `.zip` (Apple Silicon), Linux `.AppImage` / `.deb`. They are **unsigned** for now (Windows SmartScreen and macOS Gatekeeper will warn). You can also release from *Actions → Release → Run workflow* by entering the tag (e.g. `v0.2.0`): it is created on the selected branch's commit. Leave the tag empty to only build the installers as downloadable artifacts.
+  Installers: Windows `.exe` (NSIS), macOS `.dmg` / `.zip` (Apple Silicon), Linux `.AppImage` / `.deb`. You can also release from *Actions → Release → Run workflow* by entering the tag (e.g. `v0.2.0`): it is created on the selected branch's commit. Leave the tag empty to only build the installers as downloadable artifacts.
+- **Auto-update:** installed apps check the latest GitHub Release at start and every 6 hours. On Windows and Linux the update downloads in the background and the title bar shows **Restart to update** (also installed when you quit). A signed macOS build does the same; an unsigned one shows **Version x is available**, linking to the release page (macOS refuses unsigned updates). `VIBE_CODING_IDE_NO_UPDATE=1` turns it off.
+- **Signing:** installers are signed when the repository has these secrets (*Settings → Secrets and variables → Actions*); without them they are unsigned (Windows SmartScreen and macOS Gatekeeper warn).
+
+  | Platform | Secrets | Variables |
+  |---|---|---|
+  | Windows — code signing certificate | `WIN_CSC_LINK` (base64 `.pfx`), `WIN_CSC_KEY_PASSWORD` | |
+  | Windows — Azure Trusted Signing | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` | `AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT`, `AZURE_SIGNING_PROFILE`, `AZURE_SIGNING_PUBLISHER` |
+  | macOS — Developer ID (+ notarization) | `MAC_CSC_LINK` (base64 `.p12`), `MAC_CSC_KEY_PASSWORD` (+ `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`) | |
+
+  `node apps/desktop/scripts/release-build.cjs --dry-run` shows what a build would use.
 - Local installer for the current OS: `pnpm --filter @vibe-coding-ide/desktop dist` (output in `apps/desktop/dist`).
 
 ## Shortcuts

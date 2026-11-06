@@ -100,6 +100,18 @@ export interface AgentHarnessSupport {
 }
 
 /** Pending package updates of the system a shell runs on (shown as a status bar on its terminal). */
+/** The app's own update (from GitHub Releases). */
+export interface UpdateStatus {
+  state: 'idle' | 'checking' | 'none' | 'available' | 'downloading' | 'ready' | 'error'
+  version?: string
+  /** downloading: 0–100. */
+  percent?: number
+  /** available: the app cannot update itself (unsigned macOS app): download it from url. */
+  manual?: boolean
+  url?: string
+  error?: string
+}
+
 export interface PackageUpdateInfo {
   /** "Windows" or the WSL distribution name. */
   system: string
@@ -303,6 +315,28 @@ export type GitOp =
   | 'removeWorktree'
   | 'commitFiles'
   | 'commitDiff'
+  | 'applyLines'
+  | 'prInfo'
+  | 'createPr'
+
+/** Where the repository is hosted and how pull requests are made (prInfo). */
+export interface GitPullRequestInfo {
+  /** The remote's host; undefined when it is not a known host (GitHub, GitLab, Bitbucket, Azure DevOps). */
+  host?: 'github' | 'gitlab' | 'bitbucket' | 'azure'
+  /** Command line tool creating the request in the app (gh / glab); without it, the host's page opens. */
+  tool?: 'gh' | 'glab'
+  /** Why the tool cannot be used (not logged in…). */
+  toolError?: string
+  branch?: string
+  /** The remote's default branch (the usual target). */
+  defaultBase?: string
+  /** Remote branches a request can target. */
+  bases: string[]
+  /** Title proposed for a new request: the branch's last commit subject. */
+  title?: string
+  /** The open request of the branch, if any. */
+  existing?: { number: number; url: string; title: string; state: string; draft?: boolean }
+}
 
 export interface GitOpRequest {
   op: GitOp
@@ -323,6 +357,19 @@ export interface GitOpRequest {
   parent?: string
   /** commitDiff: previous path of a renamed file. */
   origPath?: string
+  /**
+   * applyLines: stage / unstage / discard some changed lines of the file's diff (`staged`: the
+   * staged diff). `lines` are indices in diffText.split('\n'); `diffText` is the diff shown, which
+   * must still be the file's diff.
+   */
+  action?: 'stage' | 'unstage' | 'discard'
+  lines?: number[]
+  diffText?: string
+  /** createPr: the request. */
+  title?: string
+  body?: string
+  base?: string
+  draft?: boolean
 }
 
 /** A file changed by a commit. */
@@ -345,6 +392,12 @@ export interface GitOpResult {
   path?: string
   /** commitFiles: files changed by the commit (text = full commit message). */
   files?: GitCommitFile[]
+  /** prInfo: pull requests of the repository. */
+  pr?: GitPullRequestInfo
+  /** createPr: the new request's address (created by gh / glab), or the host's page to open. */
+  url?: string
+  /** createPr: the url is the host's "new pull request" page (no gh / glab), not a created request. */
+  openPage?: boolean
 }
 
 /** Serializable description of a tab, used for moving tabs between windows and for layout restore. */
@@ -460,6 +513,14 @@ export interface IdeApi {
     projectMcpServers(root: string): Promise<McpServer[]>
     /** Which agents support which parts of a harness. */
     support(): Promise<AgentHarnessSupport[]>
+  }
+  update: {
+    /** The current state (the window asks at start; changes arrive through onStatus). */
+    status(): Promise<UpdateStatus>
+    onStatus(cb: (s: UpdateStatus) => void): () => void
+    check(): void
+    /** Restart into the downloaded update. */
+    install(): void
   }
   app: {
     openExternal(url: string): void

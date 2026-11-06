@@ -53,26 +53,25 @@ test('tabs can be renamed, reordered and closed', async () => {
   await page.keyboard.press('Enter')
   await expect(page.locator('.tab').first().locator('.tab-title')).toHaveText('First tab')
 
-  // Reorder by drag and drop onto the right half of the second tab (tab widths differ per OS).
-  // HTML5 drag and drop needs several moves over the target to fire dragover reliably.
-  const from = (await page.locator('.tab').first().boundingBox())!
-  const to = (await page.locator('.tab').nth(1).boundingBox())!
-  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
-  await page.mouse.down()
-  for (let i = 1; i <= 10; i++) {
-    await page.mouse.move(to.x + (to.width * 0.75 * i) / 10, to.y + to.height / 2)
+  // Reorder by drag and drop onto the right half of the second tab. The drag events are dispatched
+  // in the page: a mouse-driven HTML5 drag goes through the OS drag loop, which on Windows runners
+  // sometimes shows the drop marker but never delivers the drop.
+  const tabs = page.locator('.tab')
+  const dt = await page.evaluateHandle(() => new DataTransfer())
+  const at = async (el: typeof tabs, fx: number): Promise<{ clientX: number; clientY: number; screenX: number; screenY: number }> => {
+    const b = (await el.boundingBox())!
+    const s = await page.evaluate(() => ({ x: window.screenX, y: window.screenY }))
+    const p = { clientX: b.x + b.width * fx, clientY: b.y + b.height / 2 }
+    return { ...p, screenX: s.x + p.clientX, screenY: s.y + p.clientY + 30 }
   }
-  // Chromium does not always report the last position of an HTML5 drag, and the tab strip can
-  // shift once the drag starts (seen on Windows CI): keep nudging the mouse over the right half of
-  // the target, measured again each time, until the drop marker follows.
-  for (let i = 0; i < 30 && !/drop-after/.test((await page.locator('.tab').nth(1).getAttribute('class')) ?? ''); i++) {
-    const now = (await page.locator('.tab').nth(1).boundingBox())!
-    await page.mouse.move(now.x + now.width * (0.7 + (i % 2) * 0.1), now.y + now.height / 2 + (i % 3) - 1)
-    await page.waitForTimeout(50)
-  }
-  await expect(page.locator('.tab').nth(1)).toHaveClass(/drop-after/)
-  await page.mouse.up()
-  await expect(page.locator('.tab').nth(1).locator('.tab-title')).toHaveText('First tab')
+  await tabs.first().dispatchEvent('dragstart', { dataTransfer: dt, ...(await at(tabs.first(), 0.5)) })
+  await tabs.nth(1).dispatchEvent('dragover', { dataTransfer: dt, ...(await at(tabs.nth(1), 0.75)) })
+  await expect(tabs.nth(1)).toHaveClass(/drop-after/)
+  await tabs.nth(1).dispatchEvent('drop', { dataTransfer: dt, ...(await at(tabs.nth(1), 0.75)) })
+  await page.evaluate((d) => (d.dropEffect = 'move'), dt)
+  await tabs.first().dispatchEvent('dragend', { dataTransfer: dt, ...(await at(tabs.first(), 0.5)) })
+  await expect(tabs.nth(1).locator('.tab-title')).toHaveText('First tab')
+  await expect(tabs).toHaveCount(2)
 
   // Close with ×.
   await page.locator('.tab').nth(1).hover()

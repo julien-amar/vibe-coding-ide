@@ -105,6 +105,32 @@ body.platform-darwin .titlebar {
   align-self: stretch;
 }
 
+/* The app's own update (title bar, before the window controls). */
+.update-badge {
+  align-self: center;
+  margin: 0 8px;
+  padding: 3px 10px;
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  -webkit-app-region: no-drag;
+}
+
+.update-badge.ready {
+  cursor: pointer;
+  color: var(--accent-text);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.update-badge.ready:hover {
+  filter: brightness(1.1);
+}
+
 .tab-strip {
   display: flex;
   align-items: flex-end;

@@ -332,6 +332,69 @@ button:disabled {
   background: rgba(59, 130, 246, 0.08);
 }
 
+/* Partial staging: hunk buttons, selectable changed lines. */
+.diff-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.diff-selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  flex-shrink: 0;
+}
+
+.diff-line.with-actions {
+  display: flex;
+  align-items: center;
+}
+
+.hunk-actions {
+  position: sticky;
+  right: 6px;
+  margin-left: auto;
+  padding-left: 12px;
+  display: inline-flex;
+  gap: 4px;
+  font-family: system-ui, sans-serif;
+}
+
+.hunk-actions .tool-button {
+  height: 16px;
+  padding: 0 6px;
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.diff.partial .selectable-line {
+  cursor: pointer;
+}
+
+.diff.partial .selectable-line:hover {
+  filter: brightness(1.15);
+}
+
+.diff-line.line-selected {
+  box-shadow: inset 3px 0 0 var(--accent);
+  outline: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: -1px;
+}
+
+.dialog .dialog-field textarea {
+  height: auto;
+  padding: 6px 8px;
+  resize: vertical;
+  min-height: 90px;
+}
+
 .diff-line.meta {
   color: var(--text-muted);
   font-weight: 600;
@@ -452,7 +515,8 @@ button:disabled {
 }
 
 .dialog-field input,
-.dialog-field select {
+.dialog-field select,
+.dialog-field textarea {
   height: 30px;
   padding: 0 8px;
   font: inherit;
@@ -464,7 +528,8 @@ button:disabled {
 }
 
 .dialog-field input:focus,
-.dialog-field select:focus {
+.dialog-field select:focus,
+.dialog-field textarea:focus {
   border-color: var(--accent);
 }
 

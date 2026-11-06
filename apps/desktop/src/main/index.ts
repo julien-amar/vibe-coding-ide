@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { existsSync, rmSync, statSync } from 'node:fs'
+import { appendFileSync, existsSync, rmSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, type Rectangle, type WebContents } from 'electron'
@@ -10,12 +10,14 @@ import { loadLayout, saveLayout, visibleBounds, type SavedWindow } from './layou
 import { profileIcon } from './icons'
 import { findProfile, listProfiles, wslAgents, wslHome } from './profiles'
 import { recentProjects, touchProject } from './projects'
+import { checkForUpdates, installUpdate, startUpdates, updateStatus } from './updater'
 import { PtyManager } from './pty-manager'
 import { checkUpdates, forgetUpdates, type UpdateTarget } from './package-updates'
 import { parseWslPath } from '@shared/wsl-paths'
 import { discoverTests, runTests, stopAllTests, stopTests } from './test-runner'
 import { openInEditor } from './editor'
 import {
+  agentMajorVersion,
   agentOf,
   checkMcpServer,
   compileHarness,
@@ -336,7 +338,9 @@ function registerIpc(): void {
       const agent = agentOf(profile.id)
       const outDirFor = join(outDir, `${agent ?? 'agent'}${profile.wslDistro ? `-${profile.wslDistro}` : ''}`)
       const target: HarnessTarget = profile.wslDistro ? { kind: 'wsl', distro: profile.wslDistro, home: await wslHome(profile.wslDistro) } : { kind: 'host' }
-      const extra = compileHarness(agent, harness, root, outDirFor, target)
+      // opencode 2 needs a private server for the panel's settings (opencode 1 does not know the flag).
+      const opencodeMajor = agent === 'opencode' ? await agentMajorVersion(launch) : undefined
+      const extra = compileHarness(agent, harness, root, outDirFor, target, { opencodeMajor })
       if (extra.args.length || Object.keys(extra.env).length) launch = withHarness(launch, extra)
     }
     const sessionId = ptys.create(launch, req.cols, req.rows, e.sender, cwd)
@@ -466,10 +470,22 @@ function registerIpc(): void {
       : { ok: false, error: 'Folder not found' }
   )
 
+  ipcMain.handle('update:status', () => updateStatus())
+  ipcMain.on('update:check', () => checkForUpdates())
+  ipcMain.on('update:install', () => {
+    // quitAndInstall closes the windows one by one: save them all first (like an explicit quit).
+    saveNow(true)
+    quitting = true
+    installUpdate()
+  })
+
   ipcMain.on('app:openExternal', (_e, url: string) => {
     try {
       const { protocol } = new URL(url)
-      if (protocol === 'http:' || protocol === 'https:') void shell.openExternal(url)
+      if (protocol !== 'http:' && protocol !== 'https:') return
+      // End-to-end tests record the pages instead of opening a browser.
+      if (process.env.VIBE_CODING_IDE_BROWSER_LOG) appendFileSync(process.env.VIBE_CODING_IDE_BROWSER_LOG, `${url}\n`)
+      else void shell.openExternal(url)
     } catch {
       /* invalid URL */
     }
@@ -482,6 +498,7 @@ app.whenReady().then(() => {
   registerIpc()
   void listProfiles() // warm the cache
   restoreOrCreate()
+  startUpdates().catch((err) => console.error('Updates unavailable:', err))
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) restoreOrCreate()
   })

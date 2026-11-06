@@ -291,19 +291,25 @@ test('other agents get the settings in their own format (Codex CLI, pi) or are s
   await dialog.getByLabel('Only these skills').check()
   await page.keyboard.press('Escape')
 
-  // pi: instructions and skills as flags, its own skills off (--no-skills); no MCP (shown as such,
-  // "Only these servers" disabled).
+  // pi: MCP servers through a session-only extension, instructions and skills as flags, its own
+  // skills off (--no-skills); "Only these servers" is not possible.
   const pi = await useAgent('agent:pi')
   expect(pi.indexOf('--no-skills')).toBeGreaterThan(-1)
   expect(pi.indexOf('--no-skills')).toBeLessThan(pi.indexOf('--skill'))
   expect(readFileSync(pi[pi.indexOf('--append-system-prompt') + 1], 'utf8')).toBe('Use pnpm.\nSay "hi" first.\n')
   expect(pi[pi.indexOf('--skill') + 1]).toMatch(/agent-skills[\\/]haiku$/)
-  expect(pi.join(' ')).not.toContain('demo-tools')
+  const extension = readFileSync(pi[pi.indexOf('--extension') + 1], 'utf8')
+  expect(extension).toContain('pi.registerMcpServer(name, config)')
+  expect(extension).toContain('"demo-tools"')
   dialog = await openSettings(page, pane)
-  await expect(dialog.locator('.harness-support-line .no')).toHaveText(['✗ MCP servers'])
-  await expect(dialog.locator('.harness-support-line')).toContainText('pi has no MCP support')
+  await expect(dialog.locator('.harness-support-line .no')).toHaveCount(0)
+  await expect(dialog.locator('.harness-support-line')).toContainText('session-only extension')
   await expect(dialog.getByLabel('Only these servers')).toBeDisabled()
   await page.keyboard.press('Escape')
+
+  // opencode 2 (the fake reports 2.2.5): a private server, so the panel's config applies.
+  const opencode = await useAgent('agent:opencode')
+  expect(opencode).toEqual(['--standalone'])
 
   // Gemini CLI: nothing passed, and the dialog says why.
   const gemini = await useAgent('agent:gemini')

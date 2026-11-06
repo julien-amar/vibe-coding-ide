@@ -37,8 +37,12 @@ mac:
   target:
     - target: dmg
     - target: zip
-  # Unsigned until an Apple Developer ID is configured (users must right-click > Open the first time).
-  identity: null
+  # Signed and notarized by the release workflow when the Apple secrets exist (scripts/release-build.cjs);
+  # otherwise unsigned (users must right-click > Open the first time).
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
 
 linux:
   # Defaults to the package name (@vibe-coding-ide/desktop), which is not a valid file name.
@@ -52,5 +56,10 @@ linux:
     - AppImage
     - deb
 
-# Publishing is done by the release workflow (gh release), not by electron-builder.
-publish: null
+# Where the app looks for updates (electron-updater). The release workflow uploads the installers and
+# the latest*.yml / *.blockmap files electron-builder generates for them (gh release); electron-builder
+# itself never publishes (--publish never).
+publish:
+  provider: github
+  owner: julien-amar
+  repo: vibe-coding-ide
