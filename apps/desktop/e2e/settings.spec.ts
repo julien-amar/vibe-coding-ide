@@ -122,7 +122,7 @@ test('settings: version, default AI agent of new projects, reset to defaults; Ct
   const { page } = hub
   // Ctrl+T: the launcher (new tab).
   await page.locator('.tab.active').click()
-  await page.keyboard.press('Control+t')
+  await page.keyboard.press('ControlOrMeta+t')
   await expect(page.locator('.launcher')).toBeVisible()
   await page.keyboard.press('Escape')
 
@@ -155,7 +155,7 @@ test('a recent project can be removed from the launcher (trash button on hover)'
   const { page } = hub
   const repo = createRepo(work)
   await openProject(page, repo)
-  await page.keyboard.press('Control+t')
+  await page.keyboard.press('ControlOrMeta+t')
   const row = page.locator('.launcher-row', { hasText: 'demo-repo' })
   await expect(row).toBeVisible()
   // Only recent projects have one ("Open project…" does not).
@@ -166,7 +166,7 @@ test('a recent project can be removed from the launcher (trash button on hover)'
   await expect(row).toHaveCount(0)
   // Gone for good (the open tab stays).
   await page.keyboard.press('Escape')
-  await page.keyboard.press('Control+t')
+  await page.keyboard.press('ControlOrMeta+t')
   await expect(page.locator('.launcher')).toBeVisible()
   await expect(page.locator('.launcher-row', { hasText: 'demo-repo' })).toHaveCount(0)
   await expect(page.locator('.tab', { hasText: 'demo-repo' })).toHaveCount(1)

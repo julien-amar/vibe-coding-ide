@@ -119,7 +119,13 @@ test('after closing the last tab, the next start shows the welcome screen', asyn
   const exited = hub.app.waitForEvent('close')
   const windowClosed = page.waitForEvent('close')
   await page.locator('.tab').first().hover()
-  await page.locator('.tab').first().locator('.tab-close').click()
+  // The window closes during the click: Playwright may report the page gone, which is the point.
+  await page
+    .locator('.tab')
+    .first()
+    .locator('.tab-close')
+    .click()
+    .catch(() => undefined)
   await windowClosed
   if (process.platform === 'darwin') await hub.app.close()
   await exited

@@ -148,6 +148,8 @@ test('Shift+click selects a range of changed lines, staged at once', async () =>
   const changes = gitPanel(page).locator('.changes-view')
   await changes.locator('.file-row', { hasText: 'range.txt' }).click()
   const diff = changes.locator('.changes-diff')
+  // Once the diff is the tracked file's (its hunk has Stage / Discard): lines can be selected.
+  await expect(diff.locator('.diff-line.hunk button', { hasText: 'Stage' })).toBeVisible()
   await diff.locator('.diff-line.add', { hasText: '+one' }).click()
   await diff.locator('.diff-line.add', { hasText: '+three' }).click({ modifiers: ['Shift'] })
   await expect(diff.locator('.diff-selection-bar')).toContainText('3 lines selected')
