@@ -10,7 +10,9 @@ export function handleAppShortcut(e: KeyboardEvent): boolean {
   const store = useTabs.getState()
   const key = e.key.toLowerCase()
 
-  if (mod && e.shiftKey && (key === 't' || key === ' ')) {
+  // New tab: Ctrl+T (as in browsers; taken from the terminal, where it would swap two characters),
+  // Ctrl+Shift+T, Ctrl+Shift+Space.
+  if (mod && !e.altKey && (key === 't' || (e.shiftKey && key === ' '))) {
     store.setLauncherOpen(true)
     return true
   }

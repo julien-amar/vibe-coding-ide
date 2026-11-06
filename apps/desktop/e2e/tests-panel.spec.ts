@@ -155,3 +155,33 @@ test('"Fix with agent" opens an AI agent panel when none is running, and waits f
   await expect.poll(() => readLog(hub.agentLog), { timeout: 30_000 }).toContain('This Jest test fails. Please fix it.')
   expect(readLog(hub.agentLog)).toContain(`npx jest 'jest/strings.check.js' -t '^strings fails on purpose$'`)
 })
+
+test('the Details / Output section opens above its bar and can be resized by its top edge', async () => {
+  const { page } = hub
+  await page.setViewportSize({ width: 1200, height: 900 })
+  await openProject(page, FIXTURE)
+  await page.locator('.tab-panel.visible .side-rail .rail-item.tests').click()
+  const panel = page.locator('.tab-panel.visible .tests-panel')
+  await expect(panel.locator('.test-row').first()).toBeVisible({ timeout: 90_000 })
+  await panel.locator('.tests-bottom-bar button', { hasText: 'Details' }).click()
+  const section = panel.locator('.tests-bottom')
+  const height = async () => (await section.boundingBox())!.height
+  const before = await height()
+
+  // Drag the top edge up by 40 px: the section grows by as much (the test list keeps 120 px).
+  const edge = (await panel.locator('.tests-bottom-resizer').boundingBox())!
+  await page.mouse.move(edge.x + edge.width / 2, edge.y + edge.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(edge.x + edge.width / 2, edge.y + edge.height / 2 - 20, { steps: 4 })
+  await page.mouse.move(edge.x + edge.width / 2, edge.y + edge.height / 2 - 40, { steps: 4 })
+  await page.mouse.up()
+  await expect.poll(height).toBeGreaterThan(before + 30)
+
+  // Double-click: back to the default height. The hide button sits in its top right corner.
+  await panel.locator('.tests-bottom-resizer').dblclick()
+  await expect.poll(async () => Math.abs((await height()) - before)).toBeLessThan(3)
+  const hide = (await panel.locator('.tests-bottom-hide').boundingBox())!
+  const box = (await section.boundingBox())!
+  expect(hide.y - box.y).toBeLessThan(12)
+  expect(box.x + box.width - (hide.x + hide.width)).toBeLessThan(12)
+})

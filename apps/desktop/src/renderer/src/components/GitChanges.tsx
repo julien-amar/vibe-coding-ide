@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { GitStatus, GitStatusFile } from '@shared/types'
 import { confirmDialog } from './Dialogs'
 import { DiffView, STATUS_LABEL, type DiffLineActions } from './GitDiff'
@@ -46,6 +46,18 @@ function FileRow({
 export function ChangesView({ root, status, run, refreshKey }: { root: string; status: GitStatus | null; run: Run; refreshKey: string }): React.JSX.Element {
   const [message, setMessage] = useState('')
   const [amend, setAmend] = useState(false)
+  /** The last commit's message, put in the box when amending (to edit it). */
+  const lastMessage = useRef<string | undefined>(undefined)
+
+  const toggleAmend = async (on: boolean): Promise<void> => {
+    setAmend(on)
+    if (on) {
+      const r = await window.ide.git.op(root, { op: 'lastMessage' })
+      lastMessage.current = r.ok ? r.text : undefined
+      // Keep a message being written; otherwise start from the commit's own message.
+      if (r.ok && r.text && !message.trim()) setMessage(r.text)
+    } else if (message === lastMessage.current) setMessage('')
+  }
   const [selected, setSelected] = useState<Selection>()
   const [diff, setDiff] = useState({ text: '', loading: false })
 
@@ -135,7 +147,7 @@ export function ChangesView({ root, status, run, refreshKey }: { root: string; s
           />
           <div className="commit-row">
             <label className="dialog-check" title="Replace the last commit with the staged changes (and the new message, if any)">
-              <input type="checkbox" checked={amend} onChange={(e) => setAmend(e.target.checked)} />
+              <input type="checkbox" checked={amend} onChange={(e) => void toggleAmend(e.target.checked)} />
               Amend last commit
             </label>
             <button className="primary" disabled={!canCommit} onClick={() => void commit()}>

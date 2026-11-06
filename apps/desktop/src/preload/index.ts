@@ -49,7 +49,8 @@ const api: IdeApi = {
   project: {
     pickFolder: (defaultPath) => ipcRenderer.invoke('project:pickFolder', defaultPath),
     recent: () => ipcRenderer.invoke('project:recent'),
-    touch: (root) => ipcRenderer.send('project:touch', root)
+    touch: (root) => ipcRenderer.send('project:touch', root),
+    forget: (root) => ipcRenderer.invoke('project:forget', root)
   },
   git: {
     log: (root) => ipcRenderer.invoke('git:log', root),
@@ -88,6 +89,7 @@ const api: IdeApi = {
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
     set: (patch) => ipcRenderer.invoke('settings:set', patch),
+    reset: () => ipcRenderer.invoke('settings:reset'),
     onChanged: (cb) => {
       const listener = (_e: IpcRendererEvent, s: AppSettings): void => cb(s)
       ipcRenderer.on('settings:changed', listener)
@@ -105,6 +107,7 @@ const api: IdeApi = {
     install: () => ipcRenderer.send('update:install')
   },
   app: {
+    version: () => ipcRenderer.invoke('app:version'),
     openExternal: (url) => ipcRenderer.send('app:openExternal', url),
     openInEditor: (root, file, line, column, base) => ipcRenderer.invoke('app:openInEditor', root, file, line, column, base)
   }

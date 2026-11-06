@@ -17,12 +17,6 @@ import { HarnessDialog } from './HarnessDialog'
 const PANE_ICON: Record<PaneNode['type'], string> = { git: '⎇', terminal: '>_', agent: 'AI', tests: '✓' }
 const PANE_MIME = 'application/x-vibe-coding-ide-pane'
 
-/** Project folder for display: WSL folders as "<distro>: /linux/path". */
-function displayPath(root: string): string {
-  const wsl = parseWslPath(root)
-  return wsl ? `${wsl.distro}: ${wsl.path}` : root
-}
-
 /** Human label for a pane (used in the side rail). */
 function paneLabel(pane: PaneNode, profiles: Profile[]): string {
   if (pane.type === 'git') return 'Git'
@@ -191,10 +185,6 @@ function TerminalPane({ tab, pane, visible, autoFocus }: { tab: Tab; pane: PaneN
             title={isAgent ? 'Switch AI agent (restarts the pane)' : 'Switch shell (restarts the pane)'}
             onChange={(id) => void restartPane(tab.id, pane.id, id)}
           />
-          <span className="pane-path" title={tab.project?.root}>
-            {/* LRM marks keep slashes in place despite the rtl trick that ellipsizes from the left. */}
-            {'\u200E' + displayPath(tab.project?.root ?? '') + '\u200E'}
-          </span>
         </>
       }
       actions={
@@ -218,7 +208,14 @@ function TerminalPane({ tab, pane, visible, autoFocus }: { tab: Tab; pane: PaneN
       }
     >
       {pane.sessionId ? (
-        <TerminalView key={pane.sessionId} sessionId={pane.sessionId} restoredScrollback={pane.scrollback} visible={visible} autoFocus={autoFocus} />
+        <TerminalView
+          key={pane.sessionId}
+          sessionId={pane.sessionId}
+          restoredScrollback={pane.scrollback}
+          visible={visible}
+          autoFocus={autoFocus}
+          packageUpdates={false}
+        />
       ) : (
         <div className="pane-message">{isAgent ? <p>No AI agent CLI found on PATH (claude, codex, gemini, opencode, pi).</p> : <p>No shell available.</p>}</div>
       )}

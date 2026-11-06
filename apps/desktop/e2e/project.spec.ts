@@ -34,8 +34,11 @@ test('a project shows the git history with the branch graph and a terminal in th
   await expect(gitPanel(page).locator('.git-row')).toHaveCount(5)
   await expect(gitPanel(page).locator('.git-row').first()).toContainText('Rename login to auth')
   await expect(gitPanel(page).locator('.git-toolbar .ref-badge').first()).toHaveText('main')
-  // The terminal panel runs in the project folder.
-  await expect(panel(page).locator('.pane-path').first()).toContainText('demo-repo')
+  // Terminal and agent panel headers show the shell / agent, not the folder (it is the project's).
+  await expect(panel(page).locator('.pane-header').filter({ hasText: 'demo-repo' })).toHaveCount(0)
+  // No package updates bar in a project's terminal panel (terminal tabs only); the check is not even run.
+  await page.waitForTimeout(3000)
+  await expect(panel(page).locator('.update-bar')).toHaveCount(0)
 })
 
 test('clicking a commit shows its files and the diff of the selected file', async () => {
@@ -76,8 +79,16 @@ test('changes can be staged and committed from the Changes view', async () => {
   await changes.locator('.commit-row button.primary').click()
   await expect(page.locator('.toast', { hasText: 'Committed' })).toBeVisible()
 
+  // Amend: the last commit's message comes into the box, to edit it; unchecked, it goes away.
+  const box = changes.locator('.commit-box textarea')
+  await changes.getByLabel('Amend last commit').check()
+  await expect(box).toHaveValue('Commit from the e2e test')
+  await box.fill('Commit from the e2e test, amended')
+  await changes.locator('.commit-row button.primary').click()
+  await expect(page.locator('.toast', { hasText: 'Commit amended' })).toBeVisible()
+
   await view(page, 'History')
-  await expect(gitPanel(page).locator('.git-row').first()).toContainText('Commit from the e2e test')
+  await expect(gitPanel(page).locator('.git-row').first()).toContainText('Commit from the e2e test, amended')
 })
 
 test('hunks and single lines can be staged, unstaged and discarded (in a small window)', async () => {
@@ -123,6 +134,26 @@ test('hunks and single lines can be staged, unstaged and discarded (in a small w
   await diff.locator('.diff-line.add', { hasText: '+added' }).click()
   await diff.locator('.diff-selection-bar button', { hasText: 'Unstage' }).click()
   await expect.poll(() => git('show', ':list.txt')).toBe(original.replace('line 11\n', ''))
+})
+
+test('Shift+click selects a range of changed lines, staged at once', async () => {
+  const { page } = hub
+  const git = (...args: string[]): string => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' })
+  writeFileSync(join(repo, 'range.txt'), 'top\nbottom\n')
+  git('add', 'range.txt')
+  git('commit', '-q', '-m', 'Add range')
+  writeFileSync(join(repo, 'range.txt'), 'top\none\ntwo\nthree\nfour\nbottom\n')
+
+  await view(page, 'Changes')
+  const changes = gitPanel(page).locator('.changes-view')
+  await changes.locator('.file-row', { hasText: 'range.txt' }).click()
+  const diff = changes.locator('.changes-diff')
+  await diff.locator('.diff-line.add', { hasText: '+one' }).click()
+  await diff.locator('.diff-line.add', { hasText: '+three' }).click({ modifiers: ['Shift'] })
+  await expect(diff.locator('.diff-selection-bar')).toContainText('3 lines selected')
+  await expect(diff.locator('.diff-line.line-selected')).toHaveText(['+one', '+two', '+three'])
+  await diff.locator('.diff-selection-bar button', { hasText: 'Stage' }).click()
+  await expect.poll(() => git('show', ':range.txt')).toBe('top\none\ntwo\nthree\nbottom\n')
 })
 
 test('a pull request is created with gh (branch pushed first), then opened', async () => {

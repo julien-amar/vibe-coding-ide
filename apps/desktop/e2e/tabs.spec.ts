@@ -37,13 +37,15 @@ test('the + launcher lists projects, shells and AI agents (with their logos), an
   for (const agent of ['claude', 'codex', 'gemini', 'opencode', 'pi']) await expect(agents.locator(`.agent-logo.${agent} svg`)).toHaveCount(1)
   // The keyboard moves the selection.
   await page.keyboard.press('ArrowDown')
-  await expect(launcher.locator('.launcher-item.selected .launcher-item-name')).not.toHaveText('Open folder…')
+  await expect(launcher.locator('.launcher-item.selected .launcher-item-name')).not.toHaveText('Open project…')
   await page.keyboard.press('ArrowUp')
 
   // Search narrows the list; Enter opens the selected entry.
-  await launcher.locator('input').fill('open folder…')
+  await launcher.locator('input').fill('open project…')
   await expect(launcher.locator('.launcher-item:not(.disabled)')).toHaveCount(1)
-  await expect(launcher.locator('.launcher-item-name').first()).toHaveText('Open folder…')
+  await expect(launcher.locator('.launcher-item-name').first()).toHaveText('Open project…')
+  // Shells, distributions and agents show their name only (no path).
+  await expect(launcher.locator('.launcher-group', { hasText: 'Shells' }).locator('.launcher-item-source')).toHaveCount(0)
   await launcher.locator('input').fill('')
   await launcher.locator('.launcher-group', { hasText: 'Shells' }).locator('.launcher-item').first().click()
   await expect(launcher).toBeHidden()
@@ -108,4 +110,22 @@ test('the layout and tab names are restored after a restart', async () => {
   // Previous output is shown above the restore marker.
   await expect.poll(() => terminalText(page)).toContain('restored from previous session')
   expect(await terminalText(page)).toContain('before-restart')
+})
+
+test('after closing the last tab, the next start shows the welcome screen', async () => {
+  let { page } = hub
+  await expect(page.locator('.tab')).toHaveCount(1)
+  // Closing the last tab closes the window (and, without other windows, the app on Windows / Linux).
+  const exited = hub.app.waitForEvent('close')
+  const windowClosed = page.waitForEvent('close')
+  await page.locator('.tab').first().hover()
+  await page.locator('.tab').first().locator('.tab-close').click()
+  await windowClosed
+  if (process.platform === 'darwin') await hub.app.close()
+  await exited
+
+  hub = await launch(profile)
+  page = hub.page
+  await expect(page.locator('.welcome')).toBeVisible()
+  await expect(page.locator('.tab')).toHaveCount(0)
 })

@@ -66,9 +66,11 @@ export interface TerminalViewProps {
   /** Take keyboard focus when `visible` becomes true. */
   autoFocus?: boolean
   onTitle?: (title: string) => void
+  /** Show the package updates status bar (terminal tabs; not a project's panels). */
+  packageUpdates?: boolean
 }
 
-export function TerminalView({ sessionId, restoredScrollback, visible, autoFocus = true, onTitle }: TerminalViewProps): React.JSX.Element {
+export function TerminalView({ sessionId, restoredScrollback, visible, autoFocus = true, onTitle, packageUpdates }: TerminalViewProps): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -206,7 +208,7 @@ export function TerminalView({ sessionId, restoredScrollback, visible, autoFocus
   return (
     <div className="terminal-view">
       <div ref={hostRef} className="terminal-host" />
-      <UpdateBar sessionId={sessionId} onAccept={() => termRef.current?.focus()} />
+      {packageUpdates !== false && <UpdateBar sessionId={sessionId} onAccept={() => termRef.current?.focus()} />}
     </div>
   )
 }

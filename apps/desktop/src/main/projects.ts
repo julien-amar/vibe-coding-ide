@@ -37,6 +37,11 @@ export function recentProjects(): RecentProject[] {
     .sort((a, b) => b.lastOpened - a.lastOpened)
 }
 
+/** Removes a project from the recent list (an open tab of it stays open; nothing else is kept per project). */
+export function forgetProject(root: string): void {
+  save(load().filter((p) => p.root.toLowerCase() !== root.toLowerCase()))
+}
+
 export function touchProject(root: string): void {
   if (!root || !existsSync(root)) return
   const rest = load().filter((p) => p.root.toLowerCase() !== root.toLowerCase())

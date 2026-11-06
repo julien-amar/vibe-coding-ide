@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Profile, RecentProject, TabKind } from '@shared/types'
 import { loadProfiles } from '../profiles'
 import { useTabs } from '../store'
@@ -15,6 +15,8 @@ interface Entry {
   /** Launch profile (shows the shell/distro/agent icon instead of the kind badge). */
   profile?: Profile
   run: () => void
+  /** Recent projects: remove from the list (trash button on hover, or the Delete key). */
+  remove?: () => void
 }
 
 const GROUP_ORDER = ['Projects', 'Shells', 'WSL distributions', 'AI agents']
@@ -45,12 +47,18 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
     return () => window.removeEventListener('mousedown', onDown)
   }, [onClose])
 
+  /** A recent project removed from the list (an open tab of it stays open). */
+  const forget = useCallback(async (root: string): Promise<void> => {
+    await window.ide.project.forget(root)
+    setRecent((list) => list.filter((p) => p.root !== root))
+  }, [])
+
   const entries = useMemo<Entry[]>(() => {
     const list: Entry[] = [
       {
         key: 'project:open',
         group: 'Projects',
-        label: 'Open folder…',
+        label: 'Open project…',
         detail: 'git log, terminal and AI agent side by side',
         badge: 'project',
         run: () => {
@@ -66,7 +74,7 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
         .map((p) => ({
           key: `project:wsl:${p.wslDistro}`,
           group: 'Projects',
-          label: `Open folder in ${p.wslDistro}…`,
+          label: `Open project in ${p.wslDistro}…`,
           detail: 'git, terminal and agent run inside the distribution',
           badge: 'project' as const,
           profile: p,
@@ -83,7 +91,8 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
         label: p.name,
         detail: p.root,
         badge: 'project' as const,
-        run: () => void openProject(p.root)
+        run: () => void openProject(p.root),
+        remove: () => void forget(p.root)
       })),
       ...(profiles ?? [])
         .filter((p) => !(p.kind === 'agent' && p.wslDistro))
@@ -91,7 +100,6 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
           key: p.id,
           group: PROFILE_GROUP[p.kind],
           label: p.name,
-          detail: p.source,
           badge: p.kind,
           profile: p,
           run: () => void openProfile(p)
@@ -100,7 +108,7 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
     const q = query.trim().toLowerCase()
     const filtered = q ? list.filter((e) => `${e.label} ${e.group} ${e.detail ?? ''}`.toLowerCase().includes(q)) : list
     return GROUP_ORDER.flatMap((g) => filtered.filter((e) => e.group === g))
-  }, [profiles, recent, query, openProfile, openProject, onClose])
+  }, [profiles, recent, query, openProfile, openProject, onClose, forget])
 
   useEffect(() => setCursor(0), [query])
 
@@ -127,6 +135,9 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
       setCursor((c) => Math.max(c - 1, 0))
     } else if (e.key === 'Enter' && entries[cursor]) {
       entries[cursor].run()
+    } else if (e.key === 'Delete' && entries[cursor]?.remove) {
+      e.preventDefault()
+      entries[cursor].remove!()
     }
   }
 
@@ -178,24 +189,44 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
               {items.map((item) => {
                 const idx = entries.indexOf(item)
                 return (
-                  <button
-                    key={item.key}
-                    ref={idx === cursor ? selectedRef : undefined}
-                    role="option"
-                    aria-selected={idx === cursor}
-                    className={`launcher-item${idx === cursor ? ' selected' : ''}`}
-                    onMouseMove={() => setCursor(idx)}
-                    onClick={item.run}
-                    title={item.detail}
-                  >
-                    <span className="launcher-item-icon">
-                      {item.profile && item.badge !== 'project' ? <ProfileIcon profile={item.profile} size={20} /> : <FolderIcon wsl={!!item.profile} />}
-                    </span>
-                    <span className="launcher-item-text">
-                      <span className="launcher-item-name">{item.label}</span>
-                      {item.detail && <span className="launcher-item-source">{`‎${item.detail}‎`}</span>}
-                    </span>
-                  </button>
+                  <div key={item.key} className="launcher-row">
+                    <button
+                      ref={idx === cursor ? selectedRef : undefined}
+                      role="option"
+                      aria-selected={idx === cursor}
+                      className={`launcher-item${idx === cursor ? ' selected' : ''}`}
+                      onMouseMove={() => setCursor(idx)}
+                      onClick={item.run}
+                      title={item.detail}
+                    >
+                      <span className="launcher-item-icon">
+                        {item.profile && item.badge !== 'project' ? <ProfileIcon profile={item.profile} size={20} /> : <FolderIcon wsl={!!item.profile} />}
+                      </span>
+                      <span className="launcher-item-text">
+                        <span className="launcher-item-name">{item.label}</span>
+                        {item.detail && <span className="launcher-item-source">{`‎${item.detail}‎`}</span>}
+                      </span>
+                    </button>
+                    {item.remove && (
+                      <button
+                        className="launcher-remove"
+                        title={`Remove ${item.label} from the recent projects (Delete)`}
+                        aria-label={`Remove ${item.label}`}
+                        onClick={item.remove}
+                      >
+                        <svg viewBox="0 0 16 16" aria-hidden>
+                          <path
+                            d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.6a1 1 0 001 .9h3.8a1 1 0 001-.9l.6-8.6M7 7v4.5M9 7v4.5"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.3"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                 )
               })}
             </div>

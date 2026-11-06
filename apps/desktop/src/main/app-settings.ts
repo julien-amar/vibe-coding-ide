@@ -18,7 +18,10 @@ export function sanitizeSettings(input: unknown, base: AppSettings = DEFAULTS): 
   return {
     theme: s.theme === 'light' || s.theme === 'dark' || s.theme === 'system' ? s.theme : base.theme,
     wsl: typeof s.wsl === 'boolean' ? s.wsl : base.wsl,
-    hiddenProfiles: Array.isArray(s.hiddenProfiles) ? [...new Set(s.hiddenProfiles.filter((x): x is string => typeof x === 'string'))] : base.hiddenProfiles
+    hiddenProfiles: Array.isArray(s.hiddenProfiles) ? [...new Set(s.hiddenProfiles.filter((x): x is string => typeof x === 'string'))] : base.hiddenProfiles,
+    // A profile id, or null / '' for "the first found".
+    defaultShell: 'defaultShell' in s ? (typeof s.defaultShell === 'string' && s.defaultShell ? s.defaultShell : undefined) : base.defaultShell,
+    defaultAgent: 'defaultAgent' in s ? (typeof s.defaultAgent === 'string' && s.defaultAgent ? s.defaultAgent : undefined) : base.defaultAgent
   }
 }
 
@@ -44,8 +47,11 @@ export function applySettings(): void {
   apply(getSettings())
 }
 
-export function updateSettings(patch: unknown): AppSettings {
-  const next = sanitizeSettings(patch, getSettings())
+/** Every setting back to its default. */
+export const resetSettings = (): AppSettings => updateSettings(DEFAULTS, DEFAULTS)
+
+export function updateSettings(patch: unknown, base: AppSettings = getSettings()): AppSettings {
+  const next = sanitizeSettings(patch, base)
   current = next
   try {
     mkdirSync(dirname(file()), { recursive: true })

@@ -24,6 +24,8 @@ export interface PtyCreateRequest {
   harness?: Harness
   /** Folder that relative skill paths of `harness` start from (the project). */
   harnessRoot?: string
+  /** A project's panel (not a tab of its own): no package update check. */
+  panel?: boolean
 }
 
 /** An MCP server of a harness. */
@@ -109,6 +111,9 @@ export interface AppSettings {
   wsl: boolean
   /** Profiles (shells, distributions, agents) not offered in the launcher or as defaults. */
   hiddenProfiles: string[]
+  /** Profile of new projects' terminal / AI agent panels (none: the first found). */
+  defaultShell?: string
+  defaultAgent?: string
 }
 
 export interface UpdateStatus {
@@ -326,6 +331,7 @@ export type GitOp =
   | 'commitFiles'
   | 'commitDiff'
   | 'applyLines'
+  | 'lastMessage'
   | 'prInfo'
   | 'createPr'
 
@@ -432,6 +438,11 @@ export interface WindowInit {
   windowId: number
   tabs: TabSnapshot[]
   activeIndex: number
+  /**
+   * The window comes from the saved layout: without tabs to restore (its last tab was closed), it
+   * shows the welcome screen. A first window (nothing saved) opens a shell.
+   */
+  restored?: boolean
 }
 
 /** Tab state a window reports to the main process (for layout persistence). */
@@ -493,6 +504,8 @@ export interface IdeApi {
     pickFolder(defaultPath?: string): Promise<string | null>
     recent(): Promise<RecentProject[]>
     touch(root: string): void
+    /** Removes a project from the recent list. */
+    forget(root: string): Promise<void>
   }
   git: {
     log(root: string): Promise<GitLog>
@@ -532,6 +545,8 @@ export interface IdeApi {
     /** Changes some settings; every window gets the result through onChanged. */
     set(patch: Partial<AppSettings>): Promise<AppSettings>
     onChanged(cb: (s: AppSettings) => void): () => void
+    /** Every setting back to its default. */
+    reset(): Promise<AppSettings>
   }
   update: {
     /** The current state (the window asks at start; changes arrive through onStatus). */
@@ -542,6 +557,8 @@ export interface IdeApi {
     install(): void
   }
   app: {
+    /** The application's version (package.json). */
+    version(): Promise<string>
     openExternal(url: string): void
     /**
      * Open a file of the project at a line in the user's code editor (VS Code, Cursor, Zed…;

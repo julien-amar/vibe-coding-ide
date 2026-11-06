@@ -57,12 +57,17 @@ export function SettingsDialog(): React.JSX.Element | null {
   const { open, setOpen } = useSettingsUi()
   const [settings, setSettings] = useState<AppSettings>()
   const [all, setAll] = useState<Profile[] | null>(null)
+  const [version, setVersion] = useState('')
+  /** "Reset to defaults" asks for a confirmation in place (a dialog would open under this one). */
+  const [confirmReset, setConfirmReset] = useState(false)
 
   useEffect(() => {
     if (!open) return
     let alive = true
+    setConfirmReset(false)
     void window.ide.settings.get().then((s) => alive && setSettings(s))
     void window.ide.profiles.all().then((p) => alive && setAll(p))
+    void window.ide.app.version().then((v) => alive && setVersion(v))
     const off = window.ide.settings.onChanged((s) => alive && setSettings(s))
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
@@ -80,15 +85,27 @@ export function SettingsDialog(): React.JSX.Element | null {
 
   if (!open) return null
 
-  const save = async (patch: Partial<AppSettings>): Promise<void> => {
-    const next = await window.ide.settings.set(patch)
-    setSettings(next)
-    if ('wsl' in patch) {
+  const refreshProfiles = async (wslChanged: boolean): Promise<void> => {
+    if (wslChanged) {
       // Distributions appear / disappear: look again.
       setAll(null)
       setAll(await window.ide.profiles.all())
     }
     void loadProfiles(true)
+  }
+
+  const save = async (patch: Partial<AppSettings>): Promise<void> => {
+    const before = settings
+    setSettings(await window.ide.settings.set(patch))
+    await refreshProfiles('wsl' in patch && patch.wsl !== before?.wsl)
+  }
+
+  const reset = async (): Promise<void> => {
+    const before = settings
+    const next = await window.ide.settings.reset()
+    setSettings(next)
+    setConfirmReset(false)
+    await refreshProfiles(next.wsl !== before?.wsl)
   }
 
   const hidden = new Set(settings?.hiddenProfiles ?? [])
@@ -101,12 +118,7 @@ export function SettingsDialog(): React.JSX.Element | null {
 
   const section = (title: string, list: Profile[], empty: string, disabled = false): React.JSX.Element => (
     <section className={`settings-section${disabled ? ' disabled' : ''}`}>
-      <h3>
-        {title}
-        <span className="settings-count">
-          {list.filter((p) => !hidden.has(p.id)).length} / {list.length} shown
-        </span>
-      </h3>
+      <h3>{title}</h3>
       {all === null ? (
         <p className="muted">Looking…</p>
       ) : list.length === 0 ? (
@@ -114,11 +126,10 @@ export function SettingsDialog(): React.JSX.Element | null {
       ) : (
         <div className="settings-list">
           {list.map((p) => (
-            <label key={p.id} className="settings-row" title={p.source}>
+            <label key={p.id} className="settings-row">
               <ProfileIcon profile={p} size={20} />
               <span className="settings-row-text">
                 <span className="settings-row-name">{p.name}</span>
-                {p.source && <span className="settings-row-source">{`‎${p.source}‎`}</span>}
               </span>
               <Switch checked={!hidden.has(p.id)} disabled={disabled} onChange={(on) => toggle(p.id, on)} label={`Show ${p.name}`} />
             </label>
@@ -129,14 +140,30 @@ export function SettingsDialog(): React.JSX.Element | null {
   )
 
   const profiles = all ?? []
+  // Defaults of new projects: among the profiles offered (not hidden; agents of this machine).
+  const shells = profiles.filter((p) => (p.kind === 'shell' || (p.kind === 'wsl' && settings?.wsl)) && !hidden.has(p.id))
+  const agents = profiles.filter((p) => p.kind === 'agent' && !p.wslDistro && !hidden.has(p.id))
+  const select = (label: string, key: 'defaultShell' | 'defaultAgent', list: Profile[]): React.JSX.Element => (
+    <label className="settings-default">
+      <span>{label}</span>
+      <select aria-label={label} value={settings?.[key] ?? ''} onChange={(e) => void save({ [key]: e.target.value || undefined })}>
+        <option value="">Automatic (the first found)</option>
+        {list.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+
   return createPortal(
     <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setOpen(false)}>
       <div className="settings-dialog" role="dialog" aria-modal="true" aria-label="Settings">
         <header className="settings-head">
           <h2>Settings</h2>
-          <span className="muted">Saved automatically</span>
           <span className="spacer" />
-          <button className="icon-button" title="Close (Esc)" onClick={() => setOpen(false)}>
+          <button className="icon-button" title="Close (Esc)" aria-label="Close" onClick={() => setOpen(false)}>
             ✕
           </button>
         </header>
@@ -158,6 +185,15 @@ export function SettingsDialog(): React.JSX.Element | null {
                   </button>
                 ))}
               </div>
+            </section>
+
+            <section className="settings-section">
+              <h3>New projects</h3>
+              <div className="settings-defaults">
+                {select('Default shell', 'defaultShell', shells)}
+                {select('Default AI agent', 'defaultAgent', agents)}
+              </div>
+              <p className="muted settings-note">Projects inside a WSL distribution use the distribution's own shell and agent when it has one.</p>
             </section>
 
             <section className="settings-section">
@@ -193,6 +229,32 @@ export function SettingsDialog(): React.JSX.Element | null {
             </p>
           </div>
         )}
+        <footer className="settings-foot">
+          {confirmReset ? (
+            <>
+              <span>Reset every setting to its default?</span>
+              <span className="spacer" />
+              <button className="tool-button" onClick={() => setConfirmReset(false)}>
+                Cancel
+              </button>
+              <button className="tool-button danger" onClick={() => void reset()}>
+                Reset
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="tool-button" onClick={() => setConfirmReset(true)}>
+                Reset to defaults
+              </button>
+              <span className="spacer" />
+              {version && (
+                <span className="settings-version" title="vibe-coding-ide version">
+                  vibe-coding-ide v{version}
+                </span>
+              )}
+            </>
+          )}
+        </footer>
       </div>
     </div>,
     document.body

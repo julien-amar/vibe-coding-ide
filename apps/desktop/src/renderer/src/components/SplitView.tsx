@@ -24,6 +24,9 @@ export function SplitView({
   const ref = useRef<HTMLDivElement>(null)
   const horizontal = node.dir === 'row'
   const shown = node.children.map((_, i) => i).filter((i) => visible[i])
+  // Shares of the visible children, scaled to fill the space: CSS leaves room empty when the
+  // flex-grow values add up to less than 1 (a collapsed child's share would stay empty).
+  const visibleSum = shown.reduce((acc, i) => acc + node.sizes[i], 0) || 1
 
   /** Drag the divider between visible children `a` and `b`. */
   const startDrag = (a: number, b: number) => (e: React.PointerEvent<HTMLDivElement>) => {
@@ -36,8 +39,7 @@ export function SplitView({
     const total = horizontal ? rect.width : rect.height
     const startPos = horizontal ? e.clientX : e.clientY
     const startSizes = [...node.sizes]
-    // Fractions are relative to the visible children only.
-    const visibleSum = shown.reduce((acc, i) => acc + startSizes[i], 0)
+    // Fractions are relative to the visible children only (visibleSum, above).
     const pair = startSizes[a] + startSizes[b]
     document.body.classList.add(horizontal ? 'resizing-col' : 'resizing-row')
 
@@ -68,7 +70,7 @@ export function SplitView({
           {k > 0 && (
             <div className="splitter" role="separator" aria-orientation={horizontal ? 'vertical' : 'horizontal'} onPointerDown={startDrag(shown[k - 1], i)} />
           )}
-          <div className="split-child" style={{ flexGrow: node.sizes[i], flexBasis: 0 }}>
+          <div className="split-child" style={{ flexGrow: node.sizes[i] / visibleSum, flexBasis: 0 }}>
             {renderChild(i)}
           </div>
         </Fragment>

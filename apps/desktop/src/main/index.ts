@@ -12,7 +12,8 @@ import type {
   WindowInit,
   WindowTabsState
 } from '@shared/types'
-import { applySettings, getSettings, offeredProfiles, updateSettings } from './app-settings'
+import pkg from '../../package.json'
+import { applySettings, getSettings, offeredProfiles, resetSettings, updateSettings } from './app-settings'
 import { openInEditor } from './editor'
 import { gitLog, gitOp, GitWatcher } from './git'
 import { checkMcpServer, HARNESS_SUPPORT, listSkills, readProjectMcpJson, readSkillFile, sanitizeHarness } from './harness'
@@ -22,7 +23,7 @@ import { sanitizeTab } from './layout-sanitize'
 import { loadLayout, saveLayout, visibleBounds, type SavedWindow } from './layout-store'
 import { checkUpdates, forgetUpdates, type UpdateTarget } from './package-updates'
 import { findProfile, listProfiles, wslAgents } from './profiles'
-import { recentProjects, touchProject } from './projects'
+import { forgetProject, recentProjects, touchProject } from './projects'
 import { PtyManager } from './pty-manager'
 import { discoverTests, runTests, stopAllTests, stopTests } from './test-runner'
 import { checkForUpdates, installUpdate, startUpdates, updateStatus } from './updater'
@@ -45,6 +46,8 @@ interface WindowEntry {
   win: BrowserWindow
   /** Tabs handed to the renderer on first `window:init` (restored or detached tabs). */
   pendingInit?: { tabs: TabSnapshot[]; activeIndex: number }
+  /** Created from the saved layout (told to the renderer on its first `window:init`). */
+  restored?: boolean
   state: WindowTabsState
 }
 
@@ -111,6 +114,8 @@ interface CreateOptions {
   maximized?: boolean
   tabs?: TabSnapshot[]
   activeIndex?: number
+  /** From the saved layout (even without tabs: its last tab was closed). */
+  restored?: boolean
 }
 
 function createWindow(opts: CreateOptions = {}): BrowserWindow {
@@ -141,6 +146,7 @@ function createWindow(opts: CreateOptions = {}): BrowserWindow {
   const entry: WindowEntry = {
     win,
     pendingInit: tabs.length ? { tabs, activeIndex } : undefined,
+    restored: opts.restored,
     state: { tabs: tabs.map(({ scrollback: _s, ...t }) => t), activeIndex }
   }
   windows.set(win.id, entry)
@@ -195,7 +201,8 @@ function restoreOrCreate(): void {
       bounds: visibleBounds(w.bounds) ?? { width: w.bounds.width, height: w.bounds.height },
       maximized: w.maximized,
       tabs: w.tabs,
-      activeIndex: w.activeIndex
+      activeIndex: w.activeIndex,
+      restored: true
     })
   }
 }
@@ -232,6 +239,9 @@ function registerIpc(): void {
   ipcMain.handle('profiles:all', () => listProfiles())
   ipcMain.handle('settings:get', () => getSettings())
   ipcMain.handle('settings:set', (_e, patch: unknown) => updateSettings(patch))
+  ipcMain.handle('settings:reset', () => resetSettings())
+  // The app's own version (built in: app.getVersion() gives Electron's when the app is not packaged).
+  ipcMain.handle('app:version', () => pkg.version)
   ipcMain.handle('profiles:wslAgents', async (_e, distro: string) => offeredProfiles(await wslAgents(String(distro))))
   ipcMain.handle('profiles:icon', async (_e, id: string) => {
     const profile = await findProfile(String(id))
@@ -246,14 +256,17 @@ function registerIpc(): void {
     // An AI agent pane's own settings (generated files in app data, passed with flags).
     const launch = await withAgentSettings(start.launch, req, cwd, harnessRuns())
     const sessionId = ptys.create(launch, req.cols, req.rows, e.sender, cwd)
-    // A shell starting: check (once, in the background) whether its system has package updates —
-    // the WSL distribution for WSL shells, Windows (winget) for PowerShell / cmd / Git Bash…
+    // A shell tab starting: check (once, in the background) whether its system has package updates —
+    // the WSL distribution for WSL shells, Windows (winget) for PowerShell / cmd / Git Bash… Not for a
+    // project's terminal panels.
     const target: UpdateTarget | undefined =
-      profile.kind === 'wsl' && profile.wslDistro
-        ? { kind: 'wsl', distro: profile.wslDistro }
-        : profile.kind === 'shell' && process.platform === 'win32'
-          ? { kind: 'windows' }
-          : undefined
+      req.panel === true
+        ? undefined
+        : profile.kind === 'wsl' && profile.wslDistro
+          ? { kind: 'wsl', distro: profile.wslDistro }
+          : profile.kind === 'shell' && process.platform === 'win32'
+            ? { kind: 'windows' }
+            : undefined
     if (target) {
       void checkUpdates(target).then((info) => {
         if (!info || !ptys.has(sessionId)) return
@@ -281,8 +294,12 @@ function registerIpc(): void {
   ipcMain.handle('window:init', (e): WindowInit => {
     const entry = entryFor(e.sender)
     const init = entry?.pendingInit ?? { tabs: [], activeIndex: 0 }
-    if (entry) entry.pendingInit = undefined // a reload must not re-create restored tabs
-    return { windowId: entry?.win.id ?? -1, ...init }
+    const restored = entry?.restored === true
+    if (entry) {
+      entry.pendingInit = undefined // a reload must not re-create restored tabs
+      entry.restored = undefined
+    }
+    return { windowId: entry?.win.id ?? -1, ...init, restored }
   })
 
   ipcMain.on('window:state', (e, state: WindowTabsState) => {
@@ -328,6 +345,7 @@ function registerIpc(): void {
   })
   ipcMain.handle('project:recent', () => recentProjects())
   ipcMain.on('project:touch', (_e, root: string) => touchProject(String(root)))
+  ipcMain.handle('project:forget', (_e, root: string) => forgetProject(String(root)))
 
   ipcMain.handle('git:log', (_e, root: string) => (isDir(String(root)) ? gitLog(String(root)) : { isRepo: false, error: 'Folder not found', commits: [] }))
   ipcMain.handle('git:op', (_e, root: string, req: GitOpRequest) =>

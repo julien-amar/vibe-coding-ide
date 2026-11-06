@@ -5,7 +5,8 @@
   flex-direction: column;
   width: 640px;
   max-width: calc(100vw - 32px);
-  max-height: calc(100vh - 64px);
+  /* Dialogs start 12% down the window: the footer stays on screen. */
+  max-height: calc(88vh - 24px);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -55,13 +56,6 @@
   margin: 0 0 10px;
   font-size: 13px;
   font-weight: 600;
-}
-
-.settings-count {
-  margin-left: auto;
-  font-size: 11.5px;
-  font-weight: 400;
-  color: var(--text-muted);
 }
 
 .settings-theme {
@@ -128,16 +122,6 @@
   font-weight: 500;
 }
 
-.settings-row-source {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  direction: rtl;
-  text-align: left;
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
 .settings-row-help {
   margin-top: 2px;
   font-size: 12px;
@@ -148,6 +132,58 @@
 .settings-note {
   margin: 14px 0 0;
   font-size: 12px;
+}
+
+.settings-version {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Defaults of new projects */
+.settings-defaults {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px 16px;
+}
+
+.settings-default {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.settings-default select {
+  height: 30px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: none;
+}
+
+.settings-default select:focus {
+  border-color: var(--accent);
+}
+
+.settings-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 8px 20px;
+  font-size: 12.5px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.settings-foot .tool-button {
+  height: 28px;
 }
 
 /* Switch (role=switch) */

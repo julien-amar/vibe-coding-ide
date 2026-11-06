@@ -25,7 +25,7 @@ export function Welcome(): React.JSX.Element {
             Open a project…
           </button>
           <button onClick={() => useTabs.getState().setLauncherOpen(true)}>
-            New tab <kbd>Ctrl+Shift+T</kbd>
+            New tab <kbd>Ctrl+T</kbd>
           </button>
         </div>
         <div className="welcome-grid">

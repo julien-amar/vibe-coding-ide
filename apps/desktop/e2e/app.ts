@@ -52,8 +52,8 @@ export async function launch(userData: string): Promise<TestApp> {
   })
   const page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
-  // The app is ready when the first tab exists.
-  await expect(page.locator('.tab').first()).toBeVisible()
+  // The app is ready when the first tab exists (or the welcome screen: a window without tabs).
+  await expect(page.locator('.tab, .welcome').first()).toBeVisible()
   return { app, page, userData, agentLog, editorLog }
 }
 

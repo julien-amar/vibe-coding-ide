@@ -204,6 +204,10 @@
   visibility: visible;
 }
 
+.test-run:not(:disabled) {
+  cursor: pointer;
+}
+
 .test-run:hover:not(:disabled) {
   background: var(--hover);
 }
@@ -221,15 +225,51 @@
 }
 
 .tests-bottom {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
   border-top: 1px solid var(--border);
 }
 
+/* Room for the hide button in the top right corner. */
+.tests-bottom .tests-details-head,
+.tests-bottom .tests-output {
+  padding-right: 40px;
+}
+
+/* Hiding the opened section: its top right corner. */
+.tests-bottom-hide {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  z-index: 1;
+  width: 26px;
+  height: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
 .tests-bottom.open {
   height: 45%;
   min-height: 110px;
+  /* The test list above keeps some room, whatever height was dragged. */
+  max-height: calc(100% - 120px);
+}
+
+/* Its top edge: drag to resize (double-click: default height). */
+.tests-bottom-resizer {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  height: 6px;
+  cursor: row-resize;
+}
+
+.tests-bottom-resizer:hover {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 /* The bar stays at the bottom: open, the content sits above it, separated by the bar's top border. */

@@ -6,9 +6,9 @@ A tabbed development environment — see [PLAN.md](PLAN.md) for the full design.
 
 ### Tabs, shells & windows
 - Tab strip with rename (double-click / context menu), drag to reorder, close (×, middle-click, Ctrl+Shift+W); each tab shows the icon of its shell, distribution or agent.
-- `+` launcher (Ctrl+Shift+T): projects, shells found on PATH, Git Bash, WSL distributions, AI agent CLIs (claude, codex, gemini, opencode, pi) — in two columns, grouped under category logos, each entry with its path or source; search, ↑↓ and Enter.
-- **Settings** (⚙ in the launcher, saved in the app's data folder, applied to every window at once): theme (system, light or dark); **WSL integration** on or off (off: distributions, projects in them and their agents are not offered, and `wsl.exe` is not started to look for them); which shells, distributions and AI agents are offered (hidden ones are left out of the launcher, the defaults of new projects and the agent switcher; open tabs keep running).
-- A window without tabs shows a welcome screen (what the app does, open a project or a new tab).
+- `+` launcher (Ctrl+T): projects, shells found on PATH, Git Bash, WSL distributions, AI agent CLIs (claude, codex, gemini, opencode, pi) — in two columns, grouped under category logos (projects with their folder); search, ↑↓ and Enter.
+- **Settings** (⚙ in the launcher, saved in the app's data folder, applied to every window at once; the app's version next to ✕; **Reset to defaults**): theme (system, light or dark); **default shell and AI agent** of new projects (a project inside a WSL distribution still uses the distribution's own when it has one); **WSL integration** on or off (off: distributions, projects in them and their agents are not offered, and `wsl.exe` is not started to look for them); which shells, distributions and AI agents are offered (hidden ones are left out of the launcher, the defaults of new projects and the agent switcher; open tabs keep running).
+- A window without tabs shows a welcome screen (what the app does, open a project or a new tab) — also at the next start after closing the last tab.
 - Terminal tabs (xterm.js + node-pty), copy/paste (Ctrl+C with selection, Ctrl+V, right-click), clickable links, light/dark theme following the OS (or Settings).
 - Drag a tab out of the window to open it in a new window, or onto another vibe-coding-ide window to move it there (also: right-click → **Move to new window**). Processes keep running. A window closes when its last tab closes or moves away.
 - **Package updates:** when a shell starts, vibe-coding-ide checks once whether its system has pending package updates — **Windows via winget** for PowerShell, cmd, Git Bash and other Windows shells; the **distribution** for WSL shells (apt, dnf, pacman, apk or zypper, using the cached package lists). If so, a status bar under the terminal offers **Update now**, which types the update command (`winget upgrade --all`, `sudo apt update && sudo apt upgrade -y`, …) into that terminal, where you follow the progress and answer prompts (sudo password, UAC); **×** dismisses it.
@@ -19,13 +19,13 @@ A tabbed development environment — see [PLAN.md](PLAN.md) for the full design.
 - Each shell restarts **in the folder it was in** (PowerShell, cmd, Git Bash and bash in WSL report their working directory to vibe-coding-ide) and shows its previous output above a "restored from previous session" marker.
 
 ### Project tabs
-`+` → **Projects** → *Open folder…*, *Open folder in &lt;WSL distro&gt;…*, or a recent project.
+`+` → **Projects** → *Open project…*, *Open project in &lt;WSL distro&gt;…*, or a recent project (its trash button, on hover, or the Delete key removes it from the list).
 
 - **Panels:** Git, Terminal and AI agent to start with, plus Tests in the side rail. Every panel header can **split** it right/down, **collapse** it to the side rail (its process keeps running — click it in the rail to bring it back) or **close** it. The rail's **+** adds a Terminal, AI agent, Git or Tests panel. **Drag a panel by its header** onto another panel to dock it to that edge. Drag the dividers to resize.
 - **Terminal / AI agent panels** run in the project folder; switch the shell or agent from the header (with icons). A panel whose process exits shows a **Restart** button.
 - **Git panel:**
   - *History* — all branches with a commit graph, branch/tag badges, commit details on click.
-  - *Changes* — staged and unstaged files with diffs; stage / unstage / discard per file or all, **per hunk** (buttons on each `@@` line) or **per line** (click changed lines, Shift+click for a range, then Stage / Unstage / Discard); commit or amend (Ctrl+Enter).
+  - *Changes* — staged and unstaged files with diffs; stage / unstage / discard per file or all, **per hunk** (buttons on each `@@` line) or **per line** (click changed lines, Shift+click for a range, then Stage / Unstage / Discard); commit (Ctrl+Enter), or amend: *Amend last commit* puts the last commit's message in the box, to edit it.
   - *Branches* — switch, create, rename, merge into the current branch, delete (with a confirmation for unmerged branches), check out remote branches.
   - **New feature…** — creates `feature/<name>` in its own folder next to the repository (a git worktree) and opens it as a new project with its own terminal and agent, so you can work on it in parallel. Worktrees can be reopened or removed from the Branches view.
   - Fetch / Pull / Push (Publish for a branch without upstream), ahead/behind counts. Refreshes automatically when the repository changes.
@@ -60,7 +60,7 @@ A tabbed development environment — see [PLAN.md](PLAN.md) for the full design.
 
     Agents running **inside WSL** get the same, with paths written for Linux (`/mnt/c/…`, the project's Linux path), MCP server commands run in the distribution (as typed), and **Check** starting servers there too. Checked against Claude Code 2.1, Codex CLI 0.166, opencode 2.2 (and 1.19), pi 1.5 and Gemini CLI 0.67. Agents installed with npm on Windows are started directly (not through their `.cmd` shim), so arguments keep their quotes and line breaks. After a change, the running agent shows **Restart** to apply it.
 - **WSL projects** (`\\wsl.localhost\<distro>\...`): git runs inside the distribution, the terminal opens the distro's shell in the project folder, and the agent defaults to one installed inside the distro (e.g. `claude` in Ubuntu), falling back to the Windows one.
-- Project tabs move between windows like any other tab and are restored on start. Right-click → **Reset layout** puts back the default panels (Git, Tests in the rail, terminal, AI agent), keeping the first panel of each kind with its process and agent settings; extra panels close after a confirmation.
+- Project tabs move between windows like any other tab and are restored on start. Right-click → **Reset layout** rebuilds the tab as a new project tab for its folder (Git, Tests in the rail, terminal, AI agent), after a confirmation: its terminals and agent restart, and the agent's panel settings are cleared.
 
 **Known limits:** SSH and dev-container projects are not supported yet; closing one of several windows drops it from the saved layout — only the last window / app quit is saved (same as Windows Terminal). WSL's `/tmp` is not visible from Windows, so WSL projects must live elsewhere (e.g. under your home).
 
@@ -133,7 +133,7 @@ End-to-end tests put fake `claude` and `code` commands first on PATH (`e2e/fixtu
 ## Shortcuts
 | Keys | Action |
 |---|---|
-| Ctrl+Shift+T / Ctrl+Shift+Space | Open launcher |
+| Ctrl+T / Ctrl+Shift+T / Ctrl+Shift+Space | Open launcher (new tab) |
 | Ctrl+Shift+W | Close tab |
 | Ctrl+Tab / Ctrl+Shift+Tab | Next / previous tab |
 | Ctrl+Alt+1…9 | Go to tab N (9 = last) |

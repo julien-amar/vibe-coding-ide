@@ -558,16 +558,6 @@ body.resizing-row * {
   background: var(--surface);
 }
 
-.pane-path {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 11px;
-  color: var(--text-muted);
-  direction: rtl;
-  text-align: left;
-}
-
 .spacer {
   flex: 1;
 }

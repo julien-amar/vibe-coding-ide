@@ -66,12 +66,19 @@ export function HarnessDialog({
       <div ref={dialogRef} className="dialog harness-dialog" role="dialog" aria-modal="true" aria-label={`${agent} settings`} tabIndex={-1}>
         <div className="harness-dialog-head">
           <strong>{agent} settings</strong>
-          <span className="muted">— this panel only</span>
           <span className="spacer" />
           <button className="icon-button pane-action" title="Close (Esc)" aria-label="Close" onClick={onClose}>
             ✕
           </button>
         </div>
+        {stale && (
+          <div className="harness-stale" role="status">
+            <span>The agent runs with the previous settings. Restart it to apply the changes (the conversation starts over).</span>
+            <button className="tool-button primary" onClick={onRestart}>
+              Restart agent
+            </button>
+          </div>
+        )}
         <div className="pane-toolbar harness-toolbar">
           <div className="segmented" role="tablist">
             <button role="tab" aria-selected={view === 'mcp'} className={view === 'mcp' ? 'active' : ''} onClick={() => setView('mcp')}>
@@ -90,15 +97,6 @@ export function HarnessDialog({
             </button>
           </div>
         </div>
-        <AgentSupport agent={agent} current={current} />
-        {stale && (
-          <div className="harness-stale" role="status">
-            <span>The agent runs with the previous settings. Restart it to apply the changes (the conversation starts over).</span>
-            <button className="tool-button primary" onClick={onRestart}>
-              Restart agent
-            </button>
-          </div>
-        )}
         <div className="harness-body">
           {view === 'mcp' && <McpView root={root} harness={harness} save={save} support={current} />}
           {view === 'skills' && <SkillsView root={root} harness={harness} save={save} support={current} />}
@@ -107,34 +105,5 @@ export function HarnessDialog({
       </div>
     </div>,
     document.body
-  )
-}
-
-/**
- * What this panel's agent gets of the settings (each part ✓ / ✗, and how or why), so nothing is
- * silently left out.
- */
-function AgentSupport({ agent, current }: { agent: string; current?: AgentHarnessSupport }): React.JSX.Element {
-  if (!current) {
-    return (
-      <div className="harness-support-line none" role="note">
-        These settings are not given to {agent}: vibe-coding-ide does not know how to pass them to this agent.
-      </div>
-    )
-  }
-  const part = (label: string, ok: boolean): React.JSX.Element => (
-    <span className={ok ? 'ok' : 'no'} title={`${label}: ${ok ? 'given to the agent' : 'not given to the agent'}`}>
-      {ok ? '✓' : '✗'} {label}
-    </span>
-  )
-  const nothing = !current.mcp && !current.skills && !current.instructions
-  return (
-    <div className={`harness-support-line${nothing ? ' none' : ''}`} role="note">
-      <strong>{current.label}:</strong>
-      {part('MCP servers', current.mcp)}
-      {part('skills', current.skills)}
-      {part('instructions', current.instructions)}
-      {current.note && <span className="muted">— {current.note}</span>}
-    </div>
   )
 }

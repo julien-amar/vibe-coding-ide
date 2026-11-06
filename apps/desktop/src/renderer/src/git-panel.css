@@ -447,6 +447,36 @@ button:disabled {
   white-space: nowrap;
 }
 
+/* The date sits at the right edge of every row (aligned); the row's actions replace it on hover
+   (rows have different actions, which would otherwise push their dates to different places). */
+.branch-row {
+  position: relative;
+}
+
+.branch-row .git-date {
+  margin-left: auto;
+  min-width: 90px;
+  text-align: right;
+}
+
+.branch-row .file-actions {
+  position: absolute;
+  top: 0;
+  right: 8px;
+  bottom: 0;
+  margin-left: 0;
+}
+
+.branch-row:hover .git-date {
+  visibility: hidden;
+}
+
+/* Readable over a long subject: the row's hover tint over the panel background, faded in. */
+.branch-row:hover .file-actions {
+  padding-left: 20px;
+  background: linear-gradient(to right, transparent, var(--hover) 16px), linear-gradient(to right, transparent, var(--bg) 16px);
+}
+
 .branch-row.current .branch-name {
   font-weight: 700;
   color: var(--accent);

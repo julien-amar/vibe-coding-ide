@@ -75,7 +75,7 @@ test('settings: theme, shown agents and WSL integration, saved and applied at on
   await expect(page.locator('.launcher-group', { hasText: 'AI agents' }).locator('.launcher-item')).toHaveCount(5)
 })
 
-test('reset layout: a project gets its default panels back, keeping the first of each kind', async () => {
+test('reset layout: a project tab is rebuilt as a new one for its folder', async () => {
   const { page } = hub
   const repo = createRepo(work)
   await openProject(page, repo)
@@ -106,13 +106,68 @@ test('reset layout: a project gets its default panels back, keeping the first of
 
   await page.locator('.tab.active').click({ button: 'right' })
   await page.locator('.context-menu button', { hasText: 'Reset layout' }).click()
-  await expect(page.locator('.dialog')).toContainText('1 panel beyond the default ones will close')
+  await expect(page.locator('.dialog')).toContainText('gets the panels of a new project tab')
   await page.locator('.dialog button', { hasText: 'Reset' }).click()
 
   await expect.poll(async () => (await layoutOf()).map((p) => p.type).sort()).toEqual(['agent', 'git', 'terminal', 'tests'])
+  // New processes for the terminal and the agent; Tests back in the side rail.
+  await expect.poll(async () => (await layoutOf()).filter((p) => p.sessionId).length).toBe(2)
   const after = await layoutOf()
-  // The first terminal kept its process; Tests back in the side rail.
-  expect(after.find((p) => p.type === 'terminal')!.sessionId).toBe(terminalSession)
+  expect(after.find((p) => p.type === 'terminal')!.sessionId).not.toBe(terminalSession)
   expect(after.find((p) => p.type === 'tests')!.collapsed).toBe(true)
   expect(after.find((p) => p.type === 'git')!.collapsed).toBe(false)
+})
+
+test('settings: version, default AI agent of new projects, reset to defaults; Ctrl+T opens the launcher', async () => {
+  const { page } = hub
+  // Ctrl+T: the launcher (new tab).
+  await page.locator('.tab.active').click()
+  await page.keyboard.press('Control+t')
+  await expect(page.locator('.launcher')).toBeVisible()
+  await page.keyboard.press('Escape')
+
+  const dialog = await openSettings(page)
+  // The app's version: bottom right corner (the footer).
+  await expect(dialog.locator('.settings-foot .settings-version')).toHaveText(/v\d+\.\d+\.\d+$/)
+  // No path or counter on the entries.
+  await expect(dialog).not.toContainText('fake-tools')
+  await expect(dialog).not.toContainText(' shown')
+
+  // Default AI agent: new projects get it.
+  await dialog.getByLabel('Default AI agent').selectOption('agent:codex')
+  await expect.poll(() => savedSettings().defaultAgent).toBe('agent:codex')
+  await page.keyboard.press('Escape')
+  await openProject(page, createRepo(work))
+  const agentPane = page.locator('.tab-panel.visible .profile-select-button').last()
+  await expect(agentPane).toContainText('Codex CLI')
+
+  // Reset to defaults (confirmed in place).
+  const again = await openSettings(page)
+  await again.getByRole('radio', { name: 'Dark' }).click()
+  await again.getByRole('button', { name: 'Reset to defaults' }).click()
+  await again.getByRole('button', { name: 'Reset', exact: true }).click()
+  await expect(again.getByLabel('Default AI agent')).toHaveValue('')
+  await expect(again.getByRole('radio', { name: 'System' })).toHaveAttribute('aria-checked', 'true')
+  expect(savedSettings()).toEqual({ theme: 'system', wsl: true, hiddenProfiles: [] })
+})
+
+test('a recent project can be removed from the launcher (trash button on hover)', async () => {
+  const { page } = hub
+  const repo = createRepo(work)
+  await openProject(page, repo)
+  await page.keyboard.press('Control+t')
+  const row = page.locator('.launcher-row', { hasText: 'demo-repo' })
+  await expect(row).toBeVisible()
+  // Only recent projects have one ("Open project…" does not).
+  await expect(page.locator('.launcher-row', { hasText: 'Open project…' }).locator('.launcher-remove')).toHaveCount(0)
+  await row.hover()
+  await expect(row.locator('.launcher-remove')).toBeVisible()
+  await row.locator('.launcher-remove').click()
+  await expect(row).toHaveCount(0)
+  // Gone for good (the open tab stays).
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Control+t')
+  await expect(page.locator('.launcher')).toBeVisible()
+  await expect(page.locator('.launcher-row', { hasText: 'demo-repo' })).toHaveCount(0)
+  await expect(page.locator('.tab', { hasText: 'demo-repo' })).toHaveCount(1)
 })

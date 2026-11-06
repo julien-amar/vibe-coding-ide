@@ -51,9 +51,38 @@ Git panel (status, branches, commit details), agent registry & AI panel, test pa
 
 ---
 
+## 💡 Review panel (code review of a branch, a pull request or the agent's changes)
+
+### Problem
+Reviewing is where the time goes once an agent writes most of the code: a long diff across many files, read in a browser tab or a terminal, with no memory of what was already checked, and comments that have to be retyped to the agent to get them fixed. The changes an agent just made in the panel next door are the hardest to review: they are not a commit or a pull request yet.
+
+### Idea
+A **Review** panel for a project, comparing two points: the working tree vs `HEAD`, the branch vs its base (what a pull request would contain), a pull request from GitHub / GitLab (`gh pr diff`, `glab mr diff`), or **what the AI agent changed since a checkpoint** (a ref taken when its task started). The reviewer goes file by file, comments on lines, and sends comments to the agent to fix — or posts them on the pull request.
+
+### Possible flow
+1. **Choose what to review**: *Uncommitted changes*, *This branch vs main*, *Pull request #12*, *Agent changes since 10:42*. Files are listed with their size of change and grouped by folder; generated files and lockfiles folded by default.
+2. **Read**: side-by-side or unified diff per file, syntax highlighted; **Viewed** checkbox per file (remembered per review, cleared when the file changes again); a progress bar (*14 / 22 files viewed*).
+3. **Pre-review by the agent** (optional): a one-shot, read-only agent call summarises the change (what, why, risky parts) and leaves suggested comments anchored on lines — shown as suggestions the reviewer keeps or dismisses, never posted on their own.
+4. **Comment**: click a line (or Shift+click a range, as in the Changes view) → comment; kinds *question*, *must fix*, *nit*.
+5. **Act on comments**:
+   - **Fix with agent**: the comments (file, lines, text) go to the project's agent panel as one task — the same bridge as "Fix with agent" in the Tests panel; the next round of review shows only what changed since.
+   - **Post to the pull request**: as one review (`gh api` / `glab`), with an approve / request changes verdict.
+6. **Checks next to the diff**: the Tests panel's results for the reviewed files, and lint / type errors on changed lines, so the reviewer does not run them by hand.
+
+### Open questions
+- Where comments live before posting (app data per project, or `refs/notes/`?) and how they follow lines when the code changes.
+- One review at a time per project, or several (one per pull request)?
+- Checkpoints for agent changes: a hidden ref, a stash-like snapshot, or the agent's own session history?
+- How much of the pull request discussion (existing comments, CI results) to bring into the panel.
+
+### Builds on
+Git panel (diffs, partial staging, pull requests), Tests panel and "Fix with agent", AI agent panels and their settings, the project MCP server (planned: the agent could read the review comments itself).
+
+---
+
 ## Backlog (smaller ideas)
 
-- 💡 **"Send failure to agent"** from the test panel: failing test name, output and location sent to the project's agent.
-- 💡 **Partial staging**: stage / unstage individual hunks or lines in the Changes view.
+- ✅ **"Send failure to agent"** from the test panel: failing test name, output and location sent to the project's agent (*Fix with agent*).
+- ✅ **Partial staging**: stage / unstage individual hunks or lines in the Changes view.
 - 💡 **Commit message from AI**: draft a commit message from the staged diff with the project's agent.
-- 💡 **Installer & auto-update**: electron-builder packages for Windows / macOS / Linux.
+- ✅ **Installer & auto-update**: electron-builder packages for Windows / macOS / Linux, updates from GitHub Releases.

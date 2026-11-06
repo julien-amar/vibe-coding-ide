@@ -5,11 +5,11 @@ import { notify } from './Dialogs'
 
 /** Agent settings, Skills tab. */
 
-const SOURCE_LABEL: Record<SkillInfo['source'], string> = {
-  harness: 'harness',
-  project: 'repository (.claude/skills)',
-  user: 'your skills (~/.claude/skills)'
-}
+/** Skills the agent loads on its own, by where they are (a heading each, with the folder). */
+const NATIVE_GROUPS: { source: SkillInfo['source']; title: string; path: string }[] = [
+  { source: 'user', title: 'Global skills', path: '~/.claude/skills' },
+  { source: 'project', title: 'Repository skills', path: '.claude/skills' }
+]
 
 export function SkillsView({
   root,
@@ -103,26 +103,31 @@ export function SkillsView({
           )
         })}
       </ul>
-      {native.length > 0 && (
-        <>
-          <h4 className="harness-subtitle">Also loaded by Claude Code on its own</h4>
-          <ul className="harness-list">
-            {native.map((s) => (
-              <li key={s.path} className="harness-item">
-                <div className="harness-row">
-                  <button className="link-button harness-name" onClick={() => void openPreview(s.path, preview, setPreview)}>
-                    {s.name}
-                  </button>
-                  <span className="harness-detail">{s.description}</span>
-                  <span className="spacer" />
-                  <span className="harness-badge">{SOURCE_LABEL[s.source]}</span>
-                </div>
-                {preview?.path === s.path && <pre className="harness-preview">{preview.text}</pre>}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+      {NATIVE_GROUPS.map((g) => {
+        const list = native.filter((s) => s.source === g.source)
+        if (!list.length) return null
+        return (
+          <section key={g.source} className="harness-native">
+            <h4 className="harness-subtitle">
+              {g.title}
+              <code className="harness-subtitle-path">{g.path}</code>
+            </h4>
+            <ul className="harness-list">
+              {list.map((s) => (
+                <li key={s.path} className="harness-item">
+                  <div className="harness-row">
+                    <button className="link-button harness-name" onClick={() => void openPreview(s.path, preview, setPreview)}>
+                      {s.name}
+                    </button>
+                    <span className="harness-detail">{s.description}</span>
+                  </div>
+                  {preview?.path === s.path && <pre className="harness-preview">{preview.text}</pre>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      })}
     </div>
   )
 }

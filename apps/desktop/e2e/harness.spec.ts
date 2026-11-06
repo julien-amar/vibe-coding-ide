@@ -87,10 +87,6 @@ test('each AI agent panel has its own settings (⚙): MCP servers with a health 
 
   const first = agentPanes(page).first()
   let dialog = await openSettings(page, first)
-  await expect(dialog).toContainText('this panel only')
-  // What this panel's agent gets: everything, for Claude Code.
-  await expect(dialog.locator('.harness-support-line')).toContainText('Claude Code:')
-  await expect(dialog.locator('.harness-support-line .ok')).toHaveText(['✓ MCP servers', '✓ skills', '✓ instructions'])
 
   // Add a stdio server, check it: started, its tools listed.
   await addServer(dialog, 'fake', `"${FAKE_MCP}" --verbose`, 'FAKE_TOKEN=secret')
@@ -100,14 +96,17 @@ test('each AI agent panel has its own settings (⚙): MCP servers with a health 
   await expect(row.locator('.harness-status')).toHaveText('✓ 2 tools', { timeout: 30_000 })
   await expect(row.locator('.harness-tools')).toContainText('Adds two numbers')
 
-  // The running agent is out of date: the dialog and the pane offer to restart it.
-  await expect(dialog.locator('.harness-stale')).toContainText('previous settings')
+  // The running agent is out of date: the dialog (right under its title) and the pane offer to restart it.
+  await expect(dialog.locator('.harness-dialog-head + .harness-stale')).toContainText('previous settings')
 
   // Instructions (saved as typed); skills of the repository listed.
   await dialog.getByRole('tab', { name: /Instructions/ }).click()
   await dialog.getByLabel('Instructions').fill('Use pnpm.\nRun the tests before committing.')
   await dialog.getByRole('tab', { name: /Skills/ }).click()
-  await expect(dialog.locator('.harness-item', { hasText: 'lint' })).toContainText('repository (.claude/skills)')
+  // The repository's own skills, under a heading with their folder.
+  const repoSkills = dialog.locator('.harness-native', { has: page.locator('.harness-subtitle', { hasText: 'Repository skills' }) })
+  await expect(repoSkills.locator('.harness-subtitle-path')).toHaveText('.claude/skills')
+  await expect(repoSkills.locator('.harness-item', { hasText: 'lint' })).toBeVisible()
 
   // Close (Esc): the settings button shows how many settings are in use; the pane offers to restart.
   await page.keyboard.press('Escape')
@@ -278,10 +277,6 @@ test('other agents get the settings in their own format (Codex CLI, pi) or are s
 
   // Codex CLI: -c overrides; the quoted argument and the instructions arrive intact (no cmd.exe on the way).
   const codex = await useAgent('agent:codex')
-  dialog = await openSettings(page, pane)
-  await expect(dialog.locator('.harness-support-line')).toContainText('Codex CLI:')
-  await expect(dialog.locator('.harness-support-line .ok')).toHaveText(['✓ MCP servers', '✓ skills', '✓ instructions'])
-  await page.keyboard.press('Escape')
   expect(codex).toContain(`mcp_servers.demo-tools.args=[${JSON.stringify(FAKE_MCP)}, "an arg"]`)
   const instructions = codex.find((a) => a.startsWith('developer_instructions='))!
   expect(instructions).toContain('Use pnpm.\\nSay \\"hi\\" first.')
@@ -304,8 +299,6 @@ test('other agents get the settings in their own format (Codex CLI, pi) or are s
   expect(extension).toContain('pi.registerMcpServer(name, config)')
   expect(extension).toContain('"demo-tools"')
   dialog = await openSettings(page, pane)
-  await expect(dialog.locator('.harness-support-line .no')).toHaveCount(0)
-  await expect(dialog.locator('.harness-support-line')).toContainText('session-only extension')
   await expect(dialog.getByLabel('Only these servers')).toBeDisabled()
   await page.keyboard.press('Escape')
 
@@ -317,8 +310,7 @@ test('other agents get the settings in their own format (Codex CLI, pi) or are s
   const gemini = await useAgent('agent:gemini')
   expect(gemini).toEqual([])
   dialog = await openSettings(page, pane)
-  await expect(dialog.locator('.harness-support-line')).toHaveClass(/none/)
-  await expect(dialog.locator('.harness-support-line')).toContainText('only reads settings from ~/.gemini')
+  await expect(dialog).not.toContainText('~/.gemini')
   await dialog.getByRole('tab', { name: /Skills/ }).click()
   await expect(dialog.getByLabel('Only these skills')).toBeDisabled()
 })

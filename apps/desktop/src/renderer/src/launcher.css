@@ -297,3 +297,46 @@ body.platform-darwin .launcher {
   border-radius: 22%;
   box-shadow: 0 0 0 1px var(--border);
 }
+
+/* Recent projects: a trash button on hover (or on the selected entry) removes one from the list. */
+.launcher-row {
+  position: relative;
+}
+
+.launcher-row:has(.launcher-remove) .launcher-item {
+  padding-right: 44px;
+}
+
+.launcher-remove {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transform: translateY(-50%);
+  visibility: hidden;
+}
+
+.launcher-row:hover .launcher-remove,
+.launcher-row:has(.launcher-item.selected) .launcher-remove {
+  visibility: visible;
+}
+
+.launcher-remove:hover {
+  color: var(--danger);
+  background: var(--hover);
+}
+
+.launcher-remove svg {
+  width: 16px;
+  height: 16px;
+}

@@ -84,6 +84,11 @@ export async function gitOp(root: string, req: GitOpRequest): Promise<GitOpResul
         if (req.untracked) await git(root, ['clean', '-f', '-q', '--', ...pathList(req.paths)])
         else await git(root, ['restore', '--worktree', '--', ...pathList(req.paths)])
         return { ok: true }
+      case 'lastMessage': {
+        // The last commit's full message (to amend it); none in a repository without commits.
+        const text = await git(root, ['log', '-1', '--format=%B']).catch(() => '')
+        return { ok: true, text: text.replace(/\s+$/, '') }
+      }
       case 'commit': {
         const message = String(req.message ?? '')
         if (!message.trim() && !req.amend) throw new Error('Enter a commit message')

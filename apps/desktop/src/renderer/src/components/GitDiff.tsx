@@ -76,8 +76,10 @@ export function DiffView({ text, loading, actions }: { text: string; loading: bo
 
   const click = (i: number, e: React.MouseEvent): void => {
     if (!partial?.changed.has(i)) return
-    // Text selection (copying from the diff) is not a click on the line.
-    if (window.getSelection()?.toString()) return
+    // Text selection (copying from the diff) is not a click on the line; Shift+click is always a
+    // range of lines (the browser would also extend the text selection: dropped).
+    if (e.shiftKey) window.getSelection()?.removeAllRanges()
+    else if (window.getSelection()?.toString()) return
     const next = new Set(selected)
     if (e.shiftKey && anchor.current !== undefined) {
       const [a, b] = anchor.current < i ? [anchor.current, i] : [i, anchor.current]
@@ -152,6 +154,8 @@ export function DiffView({ text, loading, actions }: { text: string; loading: bo
               key={i}
               className={`diff-line ${cls}${changed ? ' selectable-line' : ''}${selected.has(i) ? ' line-selected' : ''}`}
               onClick={changed ? (e) => click(i, e) : undefined}
+              // Shift+click selects a range of lines, not text.
+              onMouseDown={changed ? (e) => e.shiftKey && e.preventDefault() : undefined}
               title={changed ? 'Click to select this line (Shift+click: a range), then stage or discard just the selection' : undefined}
             >
               {l || ' '}

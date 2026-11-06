@@ -51,6 +51,44 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
   const [view, setView] = useState<'details' | 'output'>('details')
   // The details / output area opens when there is something to show (a selected test, the output).
   const [bottomOpen, setBottomOpen] = useState(false)
+  /** Height of the opened Details / Output section, dragged by its top edge (remembered; default 45%). */
+  const [bottomHeight, setBottomHeight] = useState<number | undefined>(() => {
+    try {
+      return Number(localStorage.getItem('tests-bottom-height')) || undefined
+    } catch {
+      return undefined
+    }
+  })
+  const resizeBottom = (e: React.PointerEvent<HTMLDivElement>): void => {
+    e.preventDefault()
+    const section = e.currentTarget.parentElement!
+    const panel = section.parentElement!
+    const startY = e.clientY
+    const startHeight = section.getBoundingClientRect().height
+    const handle = e.currentTarget
+    handle.setPointerCapture(e.pointerId)
+    document.body.classList.add('resizing-row')
+    let height = startHeight
+    const onMove = (ev: PointerEvent): void => {
+      // At least 110 px; the test list keeps 120 px.
+      height = Math.round(Math.min(Math.max(startHeight - (ev.clientY - startY), 110), panel.getBoundingClientRect().height - 120))
+      setBottomHeight(height)
+    }
+    const onUp = (): void => {
+      handle.removeEventListener('pointermove', onMove)
+      handle.removeEventListener('pointerup', onUp)
+      handle.removeEventListener('pointercancel', onUp)
+      document.body.classList.remove('resizing-row')
+      try {
+        localStorage.setItem('tests-bottom-height', String(height))
+      } catch {
+        /* not remembered */
+      }
+    }
+    handle.addEventListener('pointermove', onMove)
+    handle.addEventListener('pointerup', onUp)
+    handle.addEventListener('pointercancel', onUp)
+  }
   const show = (v: 'details' | 'output'): void => {
     setView(v)
     setBottomOpen(true)
@@ -234,7 +272,34 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
       </div>
 
       {/* Details / Output: the bar stays at the bottom, the content opens above it. */}
-      <div className={`tests-bottom${bottomOpen ? ' open' : ''}`}>
+      <div className={`tests-bottom${bottomOpen ? ' open' : ''}`} style={bottomOpen && bottomHeight ? { height: bottomHeight } : undefined}>
+        {bottomOpen && (
+          <div
+            className="tests-bottom-resizer"
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="Resize details"
+            title="Drag to resize"
+            onPointerDown={resizeBottom}
+            onDoubleClick={() => {
+              setBottomHeight(undefined)
+              try {
+                localStorage.removeItem('tests-bottom-height')
+              } catch {
+                /* nothing to forget */
+              }
+            }}
+          />
+        )}
+        {bottomOpen && (
+          <button
+            className="icon-button pane-action tests-bottom-hide"
+            title={view === 'output' ? 'Hide the output' : 'Hide details'}
+            onClick={() => setBottomOpen(false)}
+          >
+            ▾
+          </button>
+        )}
         {!bottomOpen ? null : view === 'output' ? (
           <pre ref={outputRef} className="tests-output">
             {stripAnsi(st.output) || 'Run tests to see their output here.'}
@@ -260,11 +325,6 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
           {bottomOpen && view === 'output' && (
             <button className="tool-button" disabled={!st.output} onClick={() => clearOutput(root)}>
               Clear
-            </button>
-          )}
-          {bottomOpen && (
-            <button className="icon-button pane-action" title={view === 'output' ? 'Hide the output' : 'Hide details'} onClick={() => setBottomOpen(false)}>
-              ▾
             </button>
           )}
         </div>

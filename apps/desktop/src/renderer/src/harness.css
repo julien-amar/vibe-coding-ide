@@ -53,29 +53,6 @@
   padding-left: 14px;
 }
 
-/* What this panel's agent gets of the settings. */
-.harness-support-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 12px;
-  padding: 6px 16px;
-  border-bottom: 1px solid var(--border);
-  font-size: 11.5px;
-}
-
-.harness-support-line .ok {
-  color: var(--success);
-}
-
-.harness-support-line .no {
-  color: var(--text-muted);
-}
-
-.harness-support-line.none {
-  background: var(--hover);
-}
-
 .harness-support {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -118,7 +95,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  /* Separated from the list below. */
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
 }
 
 .harness-check {
@@ -224,11 +204,24 @@ button.harness-name {
   white-space: pre-wrap;
 }
 
+/* Skills the agent loads on its own: a heading per folder (title, then the folder). */
 .harness-subtitle {
-  margin: 16px 0 4px;
-  color: var(--text-muted);
-  font-size: 11.5px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 18px 0 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
   font-weight: 600;
+}
+
+.harness-subtitle-path {
+  font-family: 'Cascadia Mono', Consolas, Menlo, monospace;
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--text-muted);
 }
 
 /* Server editor */

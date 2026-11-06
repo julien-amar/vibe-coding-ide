@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { appendPane, insertPane, mapPanes, movePane, newPaneId, panesOf, removePane, sessionIdsOf, type DropSide, type PaneNode } from '@shared/layout'
 import { harnessIsEmpty } from '@shared/harness'
-import type { Harness, LayoutNode, PaneType, Profile, ProjectSnapshot, TabKind, TabSnapshot } from '@shared/types'
+import type { AppSettings, Harness, LayoutNode, PaneType, Profile, ProjectSnapshot, TabKind, TabSnapshot } from '@shared/types'
 import { parseWslPath } from '@shared/wsl-paths'
 import { loadProfiles } from './profiles'
 
@@ -78,8 +78,8 @@ interface State {
   setDrop(drop: DropTarget | undefined): void
   setLayout(tabId: string, layout: LayoutNode): void
   /**
-   * A project back to the default arrangement (Git, Tests, terminal, AI agent). The first panel of
-   * each kind is kept (its process, output and agent settings); the other panels close.
+   * A project tab rebuilt as a new one for its folder: the default panels (Git, Tests, terminal,
+   * AI agent) with new processes; the previous panels' processes stop and their agent settings go.
    */
   resetLayout(tabId: string): Promise<void>
   /** Collapse a project pane into the side rail, or bring it back. */
@@ -104,16 +104,33 @@ async function profiles(): Promise<Profile[]> {
   return window.ide.profiles.list()
 }
 
-/** Shell for a folder: the distro's own shell for folders inside WSL, else the first shell. */
+/** Default shell and AI agent chosen in Settings (kept current: loaded at start, updated on change). */
+let preferred: { shell?: string; agent?: string } = {}
+const setPreferred = (s: AppSettings): void => {
+  preferred = { shell: s.defaultShell, agent: s.defaultAgent }
+}
+void window.ide.settings.get().then(setPreferred)
+window.ide.settings.onChanged(setPreferred)
+
+/** Shell for a folder: the distro's own shell for folders inside WSL, else the default (Settings), else the first shell. */
 const defaultShell = (list: Profile[], root?: string): Profile | undefined => {
   const distro = root && parseWslPath(root)?.distro.toLowerCase()
-  return (distro && list.find((p) => p.kind === 'wsl' && p.wslDistro?.toLowerCase() === distro)) || list.find((p) => p.kind === 'shell') || list[0]
+  return (
+    (distro && list.find((p) => p.kind === 'wsl' && p.wslDistro?.toLowerCase() === distro)) ||
+    list.find((p) => p.id === preferred.shell && p.kind !== 'agent') ||
+    list.find((p) => p.kind === 'shell') ||
+    list[0]
+  )
 }
 
-/** Agent for a folder: one installed in the folder's WSL distro if any, else the first agent. */
+/** Agent for a folder: one installed in the folder's WSL distro if any, else the default (Settings), else the first agent. */
 const defaultAgent = (list: Profile[], root?: string): Profile | undefined => {
   const distro = root && parseWslPath(root)?.distro.toLowerCase()
-  return (distro && list.find((p) => p.kind === 'agent' && p.wslDistro?.toLowerCase() === distro)) || list.find((p) => p.kind === 'agent' && !p.wslDistro)
+  return (
+    (distro && list.find((p) => p.kind === 'agent' && p.wslDistro?.toLowerCase() === distro)) ||
+    list.find((p) => p.id === preferred.agent && p.kind === 'agent') ||
+    list.find((p) => p.kind === 'agent' && !p.wslDistro)
+  )
 }
 
 /** Profiles, including agents installed in the WSL distro of `root` (discovered on first use). */
@@ -134,7 +151,8 @@ async function createSession(
 ): Promise<{ sessionId: string; title: string } | undefined> {
   try {
     // harness: an AI agent pane's own settings (relative skill paths start from harnessRoot, the project).
-    return await window.ide.pty.create({ profileId, cols: 80, rows: 24, cwd, harnessRoot, harness })
+    // Panels of a project (they have its folder) get no package update check (a tab's business).
+    return await window.ide.pty.create({ profileId, cols: 80, rows: 24, cwd, harnessRoot, harness, panel: harnessRoot !== undefined })
   } catch {
     return undefined
   }
@@ -239,7 +257,9 @@ export const useTabs = create<State>((set, get) => ({
     }
     const active = tabs[Math.min(init.activeIndex, tabs.length - 1)]
     set({ tabs, activeId: active?.id, ready: true })
-    if (tabs.length === 0) await openDefaultShell()
+    // Nothing to restore: a window whose last tab was closed shows the welcome screen; a first
+    // window (nothing saved yet) opens a shell.
+    if (tabs.length === 0 && !init.restored) await openDefaultShell()
   },
 
   async openProfile(profile) {
@@ -284,7 +304,9 @@ export const useTabs = create<State>((set, get) => ({
     const nextActive = activeId === tabs[idx].id ? (rest[idx] ?? rest[idx - 1])?.id : activeId
     set({ tabs: rest, activeId: nextActive })
     // The last tab left this window: the window has nothing to show anymore.
-    if (rest.length === 0) window.ide.window.close()
+    // After the tab list is reported (queued as a microtask above): the saved layout has the window
+    // without tabs, so the next start shows the welcome screen instead of restoring a closed tab.
+    if (rest.length === 0) queueMicrotask(() => window.ide.window.close())
   },
 
   close(id) {
@@ -299,7 +321,9 @@ export const useTabs = create<State>((set, get) => ({
     const nextActive = activeId === id ? (rest[idx] ?? rest[idx - 1])?.id : activeId
     set({ tabs: rest, activeId: nextActive })
     // Like Windows Terminal: closing the last tab closes the window.
-    if (rest.length === 0) window.ide.window.close()
+    // After the tab list is reported (queued as a microtask above): the saved layout has the window
+    // without tabs, so the next start shows the welcome screen instead of restoring a closed tab.
+    if (rest.length === 0) queueMicrotask(() => window.ide.window.close())
   },
 
   closeOthers(id) {
@@ -369,20 +393,13 @@ export const useTabs = create<State>((set, get) => ({
     const tab = get().tabs.find((t) => t.id === tabId)
     if (!tab?.project) return
     const { root, layout } = tab.project
-    const panes = panesOf(layout)
-    const list = await profilesFor(root)
-    const kept = new Set<string>()
-    let fresh = mapPanes(defaultProjectLayout(defaultShell(list, root), defaultAgent(list, root)), (slot) => {
-      const old = panes.find((p) => p.type === slot.type && !kept.has(p.id))
-      if (!old) return { ...slot, id: newPaneId() }
-      kept.add(old.id)
-      return { ...old, collapsed: slot.collapsed }
-    })
-    // Panels that are not part of the default arrangement close: their processes stop.
+    // Every panel's process stops (its settings with it)...
     const { paneExit } = get()
-    for (const p of panes) if (!kept.has(p.id) && p.sessionId && paneExit[p.sessionId] === undefined) window.ide.pty.kill(p.sessionId)
-    fresh = await startPaneSessions(fresh, root)
-    get().setLayout(tabId, fresh)
+    for (const p of panesOf(layout)) if (p.sessionId && paneExit[p.sessionId] === undefined) window.ide.pty.kill(p.sessionId)
+    // ...and the tab gets what a new project tab for the folder gets (new panel ids: new views).
+    const list = await profilesFor(root)
+    const fresh = mapPanes(defaultProjectLayout(defaultShell(list, root), defaultAgent(list, root)), (p) => ({ ...p, id: newPaneId() }))
+    get().setLayout(tabId, await startPaneSessions(fresh, root))
   },
 
   setLayout(tabId, layout) {
