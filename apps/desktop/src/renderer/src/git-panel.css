@@ -522,6 +522,10 @@ button:disabled {
 
 .dialog {
   width: min(460px, calc(100vw - 32px));
+  /* Starts 12% down the window: scrolls rather than leaving its buttons off screen. */
+  max-height: calc(88vh - 16px);
+  overflow-y: auto;
+  box-sizing: border-box;
   padding: 18px 20px 16px;
   background: var(--surface);
   border: 1px solid var(--border);

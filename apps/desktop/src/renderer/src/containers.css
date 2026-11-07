@@ -587,6 +587,8 @@
 
 .ctr-pull {
   width: 560px;
+  /* Short; its suggestions overflow it. */
+  overflow: visible;
 }
 
 .ctr-combo {
