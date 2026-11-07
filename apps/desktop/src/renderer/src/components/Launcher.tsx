@@ -109,7 +109,7 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
         key: 'tool:containers',
         group: 'Tools',
         label: 'Containers',
-        detail: 'Docker, Podman, wslc: containers, images, volumes, networks, Compose',
+        detail: 'Docker, Podman, wslc: containers, images, volumes, networks',
         badge: 'containers' as const,
         run: () => {
           onClose()

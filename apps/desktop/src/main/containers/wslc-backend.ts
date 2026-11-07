@@ -5,13 +5,16 @@ import type {
   ContainerInfo,
   ContainerListKind,
   ContainerListResult,
+  ContainerSpec,
   ContainerPort,
   ContainerStats,
-  ContainerTarget
+  ContainerTarget,
+  CreateOptions
 } from '@shared/types'
 import { which } from '../profiles'
 import { killTree } from '../tests/core'
 import { composeOf, type ContainerBackend } from './backend'
+import { specOf } from './spec'
 
 /**
  * wslc (WSL containers, Windows) through its command line tool: `--format json` gives one JSON object
@@ -32,7 +35,7 @@ export class WslcBackend implements ContainerBackend {
   }
 
   async info(): Promise<ContainerBackendInfo> {
-    const base = { id: this.id, label: 'wslc', features: { pause: false, compose: false } } as const
+    const base = { id: this.id, label: 'wslc', features: { pause: false, compose: false, editSpec: false } } as const
     if (process.platform !== 'win32') return { ...base, available: false, error: 'wslc is a Windows tool (WSL containers).' }
     try {
       const v = (await this.run(['version'], 20_000)).trim().split(/\r?\n/)[0]
@@ -75,7 +78,8 @@ export class WslcBackend implements ContainerBackend {
         id: String(n.ID ?? ''),
         name: String(n.Name ?? ''),
         driver: String(n.Driver ?? ''),
-        scope: n.Scope ? String(n.Scope) : undefined
+        scope: n.Scope ? String(n.Scope) : undefined,
+        created: n.CreatedAt ? String(n.CreatedAt) : undefined
       }))
     }
   }
@@ -91,12 +95,27 @@ export class WslcBackend implements ContainerBackend {
   }
 
   async prune(target: ContainerTarget): Promise<string> {
-    const out = await this.run([target, 'prune', '--force'], 120_000)
+    // Every unused image / volume (--all), not only dangling images / anonymous volumes.
+    const all = target === 'image' || target === 'volume' ? ['--all'] : []
+    const out = await this.run([target, 'prune', ...all, '--force'], 120_000)
     return out.trim().split(/\r?\n/).pop() || 'Done'
   }
 
-  async create(target: 'volume' | 'network', name: string): Promise<void> {
-    await this.run([target, 'create', name])
+  async create(target: 'volume' | 'network', name: string, options: CreateOptions = {}): Promise<void> {
+    const pairs = (flag: string, m: Record<string, string> | undefined): string[] => Object.entries(m ?? {}).flatMap(([k, v]) => [flag, `${k}=${v}`])
+    await this.run([
+      target,
+      'create',
+      ...(options.driver ? ['--driver', options.driver] : []),
+      ...pairs('--opt', options.options),
+      ...pairs('--label', options.labels),
+      ...(name ? [name] : [])
+    ])
+  }
+
+  async spec(id: string): Promise<ContainerSpec> {
+    const raw = JSON.parse(await this.inspect('container', id)) as Record<string, unknown>[] | Record<string, unknown>
+    return specOf((Array.isArray(raw) ? raw[0] : raw) ?? {})
   }
 
   async inspect(target: ContainerTarget, id: string): Promise<string> {

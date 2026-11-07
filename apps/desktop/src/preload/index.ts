@@ -91,7 +91,7 @@ const api: IdeApi = {
     list: (backend, kind) => ipcRenderer.invoke('containers:list', backend, kind),
     action: (backend, target, id, action) => ipcRenderer.invoke('containers:action', backend, target, id, action),
     prune: (backend, target) => ipcRenderer.invoke('containers:prune', backend, target),
-    create: (backend, target, name) => ipcRenderer.invoke('containers:create', backend, target, name),
+    create: (backend, target, name, options) => ipcRenderer.invoke('containers:create', backend, target, name, options),
     inspect: (backend, target, id) => ipcRenderer.invoke('containers:inspect', backend, target, id),
     logs: (backend, id) => ipcRenderer.invoke('containers:logs', backend, id),
     stats: (backend, id) => ipcRenderer.invoke('containers:stats', backend, id),
@@ -103,7 +103,13 @@ const api: IdeApi = {
       return () => ipcRenderer.off('containers:stream', listener)
     },
     shellProfile: (backend, id, name) => ipcRenderer.invoke('containers:shellProfile', backend, id, name),
-    loginProfile: (backend, registry) => ipcRenderer.invoke('containers:loginProfile', backend, registry)
+    loginProfile: (backend, registry) => ipcRenderer.invoke('containers:loginProfile', backend, registry),
+    spec: (backend, id) => ipcRenderer.invoke('containers:spec', backend, id),
+    recreate: (backend, id, change) => ipcRenderer.invoke('containers:recreate', backend, id, change),
+    searchImages: (backend, input) => ipcRenderer.invoke('containers:searchImages', backend, input),
+    listFiles: (backend, id, path) => ipcRenderer.invoke('containers:listFiles', backend, id, path),
+    readFile: (backend, id, path) => ipcRenderer.invoke('containers:readFile', backend, id, path),
+    saveFile: (backend, id, path) => ipcRenderer.invoke('containers:saveFile', backend, id, path)
   },
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),

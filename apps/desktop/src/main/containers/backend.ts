@@ -6,8 +6,11 @@ import type {
   ContainerInfo,
   ContainerListKind,
   ContainerListResult,
+  ContainerSpec,
   ContainerStats,
-  ContainerTarget
+  ContainerTarget,
+  CreateOptions,
+  ImageSuggestion
 } from '@shared/types'
 
 /** What the Containers tab needs from an engine (Docker / Podman through the Engine API, wslc through its CLI). */
@@ -18,11 +21,20 @@ export interface ContainerBackend {
   list(kind: ContainerListKind): Promise<ContainerListResult>
   action(target: ContainerTarget, id: string, action: ContainerAction): Promise<void>
   prune(target: ContainerTarget): Promise<string>
-  create(target: 'volume' | 'network', name: string): Promise<void>
+  create(target: 'volume' | 'network', name: string, options?: CreateOptions): Promise<void>
   inspect(target: ContainerTarget, id: string): Promise<string>
   /** Streams; each returns the function that stops it. */
   logs(id: string, onText: (text: string) => void, onEnd: (error?: string) => void): Promise<() => void>
   stats(id: string, onStats: (s: ContainerStats) => void, onEnd: (error?: string) => void): Promise<() => void>
+  /** A container's editable settings: environment, mounts, published ports. */
+  spec(id: string): Promise<ContainerSpec>
+  /**
+   * Recreates a container with some settings changed (an engine cannot change them in place): the
+   * rest as it was (image, command, networks, restart policy…); started if it ran. The new id.
+   */
+  recreate?(id: string, change: Partial<Pick<ContainerSpec, 'env' | 'mounts' | 'ports'>>): Promise<string>
+  /** Repositories of the engine's registries matching `term` (Engine API: GET /images/search). */
+  searchImages?(term: string): Promise<ImageSuggestion[]>
   /** The engine's command line tool (build, compose, login, exec), and its environment. */
   cli(): { command: string; env?: Record<string, string> } | undefined
 }

@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { app, BrowserWindow, nativeTheme } from 'electron'
-import type { AppSettings, Profile } from '@shared/types'
+import type { AppSettings, ContainerBackendId, ContainersPrefs, Profile } from '@shared/types'
 import { setWslEnabled } from './profiles'
 
 /** Application-wide settings: <userData>/settings.json, applied at start and on each change. */
@@ -21,7 +21,22 @@ export function sanitizeSettings(input: unknown, base: AppSettings = DEFAULTS): 
     hiddenProfiles: Array.isArray(s.hiddenProfiles) ? [...new Set(s.hiddenProfiles.filter((x): x is string => typeof x === 'string'))] : base.hiddenProfiles,
     // A profile id, or null / '' for "the first found".
     defaultShell: 'defaultShell' in s ? (typeof s.defaultShell === 'string' && s.defaultShell ? s.defaultShell : undefined) : base.defaultShell,
-    defaultAgent: 'defaultAgent' in s ? (typeof s.defaultAgent === 'string' && s.defaultAgent ? s.defaultAgent : undefined) : base.defaultAgent
+    defaultAgent: 'defaultAgent' in s ? (typeof s.defaultAgent === 'string' && s.defaultAgent ? s.defaultAgent : undefined) : base.defaultAgent,
+    containers: 'containers' in s ? sanitizeContainers(s.containers) : base.containers
+  }
+}
+
+const ENGINES = ['docker', 'podman', 'wslc'] as const
+
+function sanitizeContainers(v: unknown): ContainersPrefs {
+  const c = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>
+  const engine = (x: unknown): x is ContainerBackendId => ENGINES.includes(x as ContainerBackendId)
+  const refresh = Number(c.refresh)
+  return {
+    hidden: Array.isArray(c.hidden) ? [...new Set(c.hidden.filter(engine))] : [],
+    defaultEngine: engine(c.defaultEngine) ? c.defaultEngine : undefined,
+    refresh: Number.isFinite(refresh) && refresh >= 0 && refresh <= 600 ? refresh : 3,
+    confirmRemove: c.confirmRemove !== false
   }
 }
 

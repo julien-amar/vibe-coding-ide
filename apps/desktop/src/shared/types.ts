@@ -114,6 +114,20 @@ export interface AppSettings {
   /** Profile of new projects' terminal / AI agent panels (none: the first found). */
   defaultShell?: string
   defaultAgent?: string
+  /** The Containers tab's options. */
+  containers?: ContainersPrefs
+}
+
+/** Containers tab options (its ⚙ dialog). */
+export interface ContainersPrefs {
+  /** Engines left out of the tab. */
+  hidden: ContainerBackendId[]
+  /** Engine of new pulls, builds, runs, volumes, networks and Compose projects (none: the first running). */
+  defaultEngine?: ContainerBackendId
+  /** Seconds between refreshes while the tab is shown (0: only on demand). */
+  refresh: number
+  /** Ask before removing a container, image, volume or network. */
+  confirmRemove: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -132,7 +146,7 @@ export interface ContainerBackendInfo {
   /** Why it is not available (not installed, not running…). */
   error?: string
   /** What it can do (wslc: no pause, no compose). */
-  features: { pause: boolean; compose: boolean }
+  features: { pause: boolean; compose: boolean; /** Environment, mounts and ports of a container can be changed (by recreating it). */ editSpec: boolean }
 }
 
 export interface ContainerPort {
@@ -181,6 +195,8 @@ export interface NetworkInfo {
   name: string
   driver: string
   scope?: string
+  /** ISO date. */
+  created?: string
 }
 
 /** A Docker Compose project (from its containers' labels). */
@@ -214,8 +230,64 @@ export type ContainerJob =
   | { kind: 'build'; context: string; dockerfile?: string; tag?: string; target?: string; buildArgs?: string[] }
   | { kind: 'run'; image: string; name?: string; ports?: string[]; env?: string[]; volumes?: string[]; network?: string; restart?: string }
   | { kind: 'compose'; project: string; action: 'up' | 'down' | 'restart' | 'pull' | 'stop'; configFiles: string[]; workingDir?: string }
+  | { kind: 'logout'; registry?: string }
 
 /** Live stats of a container (one sample). */
+/** A mount of a container: a volume, a folder of the engine's host (bind), or memory (tmpfs). */
+export interface ContainerMount {
+  type: 'volume' | 'bind' | 'tmpfs'
+  /** Volume name or host path (none for tmpfs). */
+  source: string
+  /** Absolute path in the container. */
+  target: string
+  readOnly: boolean
+}
+
+/** A published port: container port / protocol on a host port (empty: one the engine picks), on a host IP (empty: all). */
+export interface ContainerPortBinding {
+  container: number
+  protocol: string
+  hostPort: string
+  hostIp: string
+}
+
+/** What can be changed on a container (by recreating it). */
+export interface ContainerSpec {
+  env: string[]
+  mounts: ContainerMount[]
+  ports: ContainerPortBinding[]
+  /** Ports the image exposes that are not published ("80/tcp"). */
+  exposed: string[]
+}
+
+/** A suggestion of "Pull an image": a repository, or (after a colon) one of its tags. */
+export interface ImageSuggestion {
+  name: string
+  description?: string
+  stars?: number
+  official?: boolean
+  /** Bytes (tags). */
+  size?: number
+}
+
+/** Settings of a new volume or network. */
+export interface CreateOptions {
+  /** Volume: local (Docker, Podman), guest or vhd (wslc), or a plugin's. */
+  driver?: string
+  /** Driver options (volumes: e.g. type=nfs, o=addr=…, device=:/export). */
+  options?: Record<string, string>
+  labels?: Record<string, string>
+}
+
+/** An entry of a container's folder (the Files view). */
+export interface ContainerFileEntry {
+  name: string
+  type: 'dir' | 'file' | 'link' | 'dirlink' | 'other'
+  size?: number
+  /** Unix seconds. */
+  mtime?: number
+}
+
 export interface ContainerStats {
   cpu: number
   memUsed: number
@@ -536,7 +608,7 @@ export interface GitOpResult {
 /** Serializable description of a tab, used for moving tabs between windows and for layout restore. */
 export interface TabSnapshot {
   kind: TabKind
-  /** Terminal-like tabs: the profile to launch. Containers tabs: the engine (docker, podman, wslc). */
+  /** Terminal-like tabs: the profile to launch. */
   profileId?: string
   autoTitle: string
   customTitle?: string
@@ -664,7 +736,8 @@ export interface IdeApi {
     action(backend: ContainerBackendId, target: ContainerTarget, id: string, action: ContainerAction): Promise<{ ok: boolean; error?: string }>
     /** Removes the unused images / volumes / networks, or the stopped containers. */
     prune(backend: ContainerBackendId, target: ContainerTarget): Promise<{ ok: boolean; error?: string; text?: string }>
-    create(backend: ContainerBackendId, target: 'volume' | 'network', name: string): Promise<{ ok: boolean; error?: string }>
+    /** A volume or network; `name` empty: the engine names it (volumes). */
+    create(backend: ContainerBackendId, target: 'volume' | 'network', name: string, options?: CreateOptions): Promise<{ ok: boolean; error?: string }>
     inspect(backend: ContainerBackendId, target: ContainerTarget, id: string): Promise<{ ok: boolean; error?: string; text?: string }>
     /** Streams (a container's logs or stats, a job's output): events arrive through onStream. */
     logs(backend: ContainerBackendId, id: string): Promise<string>
@@ -675,6 +748,26 @@ export interface IdeApi {
     /** A terminal profile running a shell in a container, or the engine's registry login. */
     shellProfile(backend: ContainerBackendId, id: string, name?: string): Promise<Profile | null>
     loginProfile(backend: ContainerBackendId, registry: string): Promise<Profile | null>
+    /** A container's editable settings: environment, mounts, published ports. */
+    spec(backend: ContainerBackendId, id: string): Promise<{ ok: boolean; spec?: ContainerSpec; error?: string }>
+    /** Recreates a container with some settings changed (Docker, Podman); the new container's id. */
+    recreate(
+      backend: ContainerBackendId,
+      id: string,
+      change: Partial<Pick<ContainerSpec, 'env' | 'mounts' | 'ports'>>
+    ): Promise<{ ok: boolean; id?: string; error?: string }>
+    /** Suggestions for "Pull an image" (registry search; tags after a colon). */
+    searchImages(backend: ContainerBackendId, input: string): Promise<{ ok: boolean; items: ImageSuggestion[]; error?: string }>
+    /** A folder of a running container. */
+    listFiles(backend: ContainerBackendId, id: string, path: string): Promise<{ ok: boolean; path: string; entries?: ContainerFileEntry[]; error?: string }>
+    /** The beginning of a file of a running container (text), or `binary`. */
+    readFile(
+      backend: ContainerBackendId,
+      id: string,
+      path: string
+    ): Promise<{ ok: boolean; text?: string; truncated?: boolean; binary?: boolean; error?: string }>
+    /** Copies a file of a running container to this machine (asks where); null if cancelled. */
+    saveFile(backend: ContainerBackendId, id: string, path: string): Promise<{ ok: boolean; error?: string; savedTo?: string } | null>
   }
   settings: {
     get(): Promise<AppSettings>

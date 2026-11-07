@@ -1,12 +1,25 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import type { IpcMain, WebContents } from 'electron'
-import type { ContainerAction, ContainerBackendId, ContainerJob, ContainerListKind, ContainerStreamEvent, ContainerTarget, Profile } from '@shared/types'
+import { join, posix } from 'node:path'
+import { app, BrowserWindow, dialog, type IpcMain, type WebContents } from 'electron'
+import type {
+  ContainerAction,
+  ContainerBackendId,
+  CreateOptions,
+  ContainerJob,
+  ContainerListKind,
+  ContainerStreamEvent,
+  ContainerTarget,
+  Profile
+} from '@shared/types'
 import { directLaunch } from '../harness'
 import { launchSpec, registerProfile } from '../profiles'
 import { killTree } from '../tests/core'
 import type { ContainerBackend } from './backend'
 import { EngineBackend } from './engine-backend'
+import { containerPath, listFiles, readFilePreview, saveFile, type Cli } from './files'
+import { suggestImages } from './registry-search'
+import { mountList, portList } from './spec'
 import { WslcBackend } from './wslc-backend'
 
 /** The Containers tab's backends and their IPC (lists, actions, streams of logs / stats / job output). */
@@ -32,6 +45,33 @@ const safe = (v: unknown, what: string): string => {
   const s = String(v ?? '').trim()
   if (!s || s.startsWith('-') || /[\0\r\n]/.test(s)) throw new Error(`Invalid ${what}`)
   return s
+}
+
+/** Settings of a new volume or network from the renderer (exported for tests): no option injection. */
+export function createOptions(v: unknown): CreateOptions {
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>
+  const map = (m: unknown, what: string): Record<string, string> | undefined => {
+    if (!m || typeof m !== 'object') return undefined
+    const out: Record<string, string> = {}
+    for (const [k, val] of Object.entries(m as Record<string, unknown>)) {
+      if (!k || k.startsWith('-') || /[\s=\0]/.test(k) || /[\0\r\n]/.test(String(val))) throw new Error(`Invalid ${what}: ${k}`)
+      out[k] = String(val)
+    }
+    return out
+  }
+  const driver = typeof o.driver === 'string' && o.driver.trim() ? safe(o.driver, 'driver') : undefined
+  return { driver, options: map(o.options, 'driver option'), labels: map(o.labels, 'label') }
+}
+
+/** A KEY=VALUE list from the renderer (exported for tests): keys without '=' or spaces, no NUL. */
+export function envList(v: unknown): string[] {
+  if (!Array.isArray(v)) throw new Error('Invalid environment')
+  return v.map((e) => {
+    const s = String(e)
+    const key = s.split('=')[0]
+    if (!s.includes('=') || !key || /[\s\0]/.test(key) || s.includes('\0')) throw new Error(`Invalid variable: ${s.slice(0, 40)}`)
+    return s
+  })
 }
 
 /** The CLI arguments of a job (exported for tests). */
@@ -61,6 +101,8 @@ export function jobArgs(backend: ContainerBackendId, job: ContainerJob): string[
         ...(job.restart?.trim() ? ['--restart', safe(job.restart, 'restart policy')] : []),
         safe(job.image, 'image')
       ]
+    case 'logout':
+      return ['logout', ...(job.registry?.trim() ? [safe(job.registry, 'registry')] : [])]
     case 'compose': {
       if (backend === 'wslc') throw new Error('wslc has no Compose.')
       if (!['up', 'down', 'restart', 'pull', 'stop'].includes(job.action)) throw new Error('Invalid Compose action')
@@ -130,10 +172,12 @@ export function registerContainerIpc(ipcMain: IpcMain): void {
     }
   })
 
-  ipcMain.handle('containers:create', async (_e, backend: string, target: string, name: string) => {
+  ipcMain.handle('containers:create', async (_e, backend: string, target: string, name: string, options: unknown) => {
     try {
       if (target !== 'volume' && target !== 'network') throw new Error('Invalid target')
-      await backendOf(backend).create(target, safe(name, 'name'))
+      // Volumes may be named by the engine.
+      const n = target === 'volume' && !String(name ?? '').trim() ? '' : safe(name, 'name')
+      await backendOf(backend).create(target, n, createOptions(options))
       return { ok: true }
     } catch (e) {
       return { ok: false, error: (e as Error).message }
@@ -200,6 +244,70 @@ export function registerContainerIpc(ipcMain: IpcMain): void {
     registerProfile(profile)
     return profile
   }
+  // A container's environment; changing it recreates the container (Docker, Podman).
+  ipcMain.handle('containers:spec', async (_e, backend: string, id: string) => {
+    try {
+      return { ok: true, spec: await backendOf(backend).spec(safe(id, 'container')) }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
+  })
+  ipcMain.handle('containers:recreate', async (_e, backend: string, id: string, change: Record<string, unknown>) => {
+    try {
+      const b = backendOf(backend)
+      if (!b.recreate) throw new Error(`${b.id} cannot recreate a container: its settings are read-only here.`)
+      const c = change ?? {}
+      const valid = {
+        ...(c.env !== undefined ? { env: envList(c.env) } : {}),
+        ...(c.mounts !== undefined ? { mounts: mountList(c.mounts) } : {}),
+        ...(c.ports !== undefined ? { ports: portList(c.ports) } : {})
+      }
+      return { ok: true, id: await b.recreate(safe(id, 'container'), valid) }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
+  })
+
+  // "Pull an image" suggestions.
+  ipcMain.handle('containers:searchImages', (_e, backend: string, input: string) =>
+    suggestImages(backends[String(backend) as ContainerBackendId], String(input ?? '').slice(0, 200))
+  )
+
+  // Files of a running container (through `exec`).
+  const fileCli = (backend: string): Cli => {
+    const cli = backendOf(backend).cli()
+    if (!cli) throw new Error(`The ${backend} command line tool is not installed.`)
+    return cli
+  }
+  ipcMain.handle('containers:listFiles', async (_e, backend: string, id: string, path: string) => {
+    try {
+      return await listFiles(fileCli(backend), safe(id, 'container'), containerPath(path))
+    } catch (err) {
+      return { ok: false, path: String(path), error: (err as Error).message }
+    }
+  })
+  ipcMain.handle('containers:readFile', async (_e, backend: string, id: string, path: string) => {
+    try {
+      return await readFilePreview(fileCli(backend), safe(id, 'container'), containerPath(path))
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
+  })
+  ipcMain.handle('containers:saveFile', async (e, backend: string, id: string, path: string) => {
+    try {
+      const p = containerPath(path)
+      const cli = fileCli(backend)
+      const win = BrowserWindow.fromWebContents(e.sender)
+      const opts = { defaultPath: join(app.getPath('downloads'), posix.basename(p) || 'file') }
+      const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts)
+      if (r.canceled || !r.filePath) return null
+      const saved = await saveFile(cli, safe(id, 'container'), p, r.filePath)
+      return { ...saved, savedTo: r.filePath }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
+  })
+
   ipcMain.handle('containers:shellProfile', (_e, backend: string, id: string, name?: string) => {
     const c = safe(id, 'container')
     // The tab's title: the container's name (else its short id).

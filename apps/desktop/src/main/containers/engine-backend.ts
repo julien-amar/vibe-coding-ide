@@ -1,15 +1,19 @@
 import type {
   ContainerAction,
+  CreateOptions,
+  ImageSuggestion,
   ContainerBackendInfo,
   ContainerInfo,
   ContainerListKind,
   ContainerListResult,
+  ContainerSpec,
   ContainerStats,
   ContainerTarget
 } from '@shared/types'
 import { which } from '../profiles'
 import { composeOf, composeProjects, type ContainerBackend } from './backend'
 import { call, candidates, demux, json, statsSample, stream, type Endpoint } from './engine'
+import { recreateBody, specOf } from './spec'
 
 const LABELS = { docker: 'Docker', podman: 'Podman' } as const
 const enc = encodeURIComponent
@@ -49,7 +53,7 @@ export class EngineBackend implements ContainerBackend {
   }
 
   async info(): Promise<ContainerBackendInfo> {
-    const base = { id: this.id, label: LABELS[this.id], features: { pause: true, compose: this.id === 'docker' || !!which('podman') } }
+    const base = { id: this.id, label: LABELS[this.id], features: { pause: true, compose: this.id === 'docker' || !!which('podman'), editSpec: true } }
     try {
       const ep = await this.connect()
       const v = await json<{ Version?: string; Components?: { Name?: string }[] }>(ep, 'GET', '/version', undefined, 3000)
@@ -79,6 +83,13 @@ export class EngineBackend implements ContainerBackend {
     }
     if (kind === 'images') {
       const raw = await json<Record<string, any>[]>(ep, 'GET', '/images/json')
+      // Containers per image: the engine reports -1 (not computed) unless asked; counted from the containers.
+      const used = new Map<string, number>()
+      if (raw.some((i) => !(i.Containers >= 0))) {
+        for (const c of await json<{ ImageID?: string }[]>(ep, 'GET', '/containers/json?all=1')) {
+          if (c.ImageID) used.set(c.ImageID, (used.get(c.ImageID) ?? 0) + 1)
+        }
+      }
       return {
         ok: true,
         images: raw.map((i) => ({
@@ -86,7 +97,7 @@ export class EngineBackend implements ContainerBackend {
           tags: (i.RepoTags ?? []).filter((t: string) => t !== '<none>:<none>'),
           size: i.Size,
           created: i.Created,
-          containers: i.Containers >= 0 ? i.Containers : undefined
+          containers: i.Containers >= 0 ? i.Containers : (used.get(i.Id) ?? 0)
         }))
       }
     }
@@ -95,7 +106,7 @@ export class EngineBackend implements ContainerBackend {
       return { ok: true, volumes: (raw.Volumes ?? []).map((v) => ({ name: v.Name, driver: v.Driver, mountpoint: v.Mountpoint, created: v.CreatedAt })) }
     }
     const raw = await json<Record<string, any>[]>(ep, 'GET', '/networks')
-    return { ok: true, networks: raw.map((n) => ({ id: n.Id, name: n.Name, driver: n.Driver, scope: n.Scope })) }
+    return { ok: true, networks: raw.map((n) => ({ id: n.Id, name: n.Name, driver: n.Driver, scope: n.Scope, created: n.Created })) }
   }
 
   async action(target: ContainerTarget, id: string, action: ContainerAction): Promise<void> {
@@ -112,15 +123,94 @@ export class EngineBackend implements ContainerBackend {
 
   async prune(target: ContainerTarget): Promise<string> {
     const ep = await this.connect()
-    const r = await json<Record<string, any>>(ep, 'POST', `/${target}s/prune`, undefined, 120_000)
+    // Every unused image / volume, as the buttons say (by default: only dangling images, anonymous volumes).
+    const filters = { image: { dangling: ['false'] }, volume: { all: ['true'] } }[target as 'image' | 'volume']
+    const path = `/${target}s/prune`
+    let r: Record<string, any>
+    try {
+      r = await json<Record<string, any>>(ep, 'POST', filters ? `${path}?filters=${enc(JSON.stringify(filters))}` : path, undefined, 120_000)
+    } catch (err) {
+      // Engines before Docker 23 (API 1.42) do not know the volumes' "all" filter: all their unused volumes go anyway.
+      if (target !== 'volume') throw err
+      r = await json<Record<string, any>>(ep, 'POST', path, undefined, 120_000)
+    }
     const removed = r?.ContainersDeleted ?? r?.ImagesDeleted ?? r?.VolumesDeleted ?? r?.NetworksDeleted ?? []
     const space = r?.SpaceReclaimed ? `, ${formatBytes(r.SpaceReclaimed)} freed` : ''
     return `${removed.length} removed${space}`
   }
 
-  async create(target: 'volume' | 'network', name: string): Promise<void> {
+  async create(target: 'volume' | 'network', name: string, options: CreateOptions = {}): Promise<void> {
     const ep = await this.connect()
-    await json(ep, 'POST', target === 'volume' ? '/volumes/create' : '/networks/create', { Name: name })
+    const body = {
+      ...(name ? { Name: name } : {}),
+      ...(options.driver ? { Driver: options.driver } : {}),
+      ...(options.options && Object.keys(options.options).length ? { [target === 'volume' ? 'DriverOpts' : 'Options']: options.options } : {}),
+      ...(options.labels && Object.keys(options.labels).length ? { Labels: options.labels } : {})
+    }
+    await json(ep, 'POST', target === 'volume' ? '/volumes/create' : '/networks/create', body)
+  }
+
+  async spec(id: string): Promise<ContainerSpec> {
+    const ep = await this.connect()
+    return specOf(await json<Record<string, any>>(ep, 'GET', `/containers/${enc(id)}/json`))
+  }
+
+  async recreate(id: string, change: Partial<Pick<ContainerSpec, 'env' | 'mounts' | 'ports'>>): Promise<string> {
+    const ep = await this.connect()
+    const c = await json<Record<string, any>>(ep, 'GET', `/containers/${enc(id)}/json`)
+    const oldId = String(c.Id)
+    const name = String(c.Name ?? '').replace(/^\//, '')
+    const running = !!c.State?.Running || !!c.State?.Paused
+    const { config, host } = recreateBody(c, change)
+    // Networks: the first at creation, the others connected after.
+    const mode = String(host.NetworkMode ?? '')
+    const own = !['host', 'none'].includes(mode) && !mode.startsWith('container:')
+    const networks = own ? Object.entries((c.NetworkSettings?.Networks ?? {}) as Record<string, Record<string, any>>) : []
+    const endpoint = (n: Record<string, any>): Record<string, unknown> => ({
+      Aliases: ((n.Aliases ?? []) as string[]).filter((a) => !oldId.startsWith(a)),
+      IPAMConfig: n.IPAMConfig ?? undefined,
+      Links: n.Links ?? undefined
+    })
+    const [first, ...others] = networks
+    const networking = first ? { EndpointsConfig: { [first[0]]: endpoint(first[1]) } } : undefined
+
+    // The old container steps aside (renamed, stopped); put back if anything fails.
+    const aside = `${name}-old-${Date.now().toString(36)}`
+    await json(ep, 'POST', `/containers/${enc(oldId)}/rename?name=${enc(aside)}`)
+    let newId: string | undefined
+    try {
+      if (running) await json(ep, 'POST', `/containers/${enc(oldId)}/stop`, undefined, 60_000)
+      const created = await json<{ Id: string }>(ep, 'POST', `/containers/create?name=${enc(name)}`, {
+        ...config,
+        HostConfig: host,
+        NetworkingConfig: networking
+      })
+      newId = created.Id
+      for (const [net, n] of others) await json(ep, 'POST', `/networks/${enc(net)}/connect`, { Container: newId, EndpointConfig: endpoint(n) })
+      if (running) await json(ep, 'POST', `/containers/${enc(newId)}/start`, undefined, 60_000)
+    } catch (err) {
+      if (newId) await json(ep, 'DELETE', `/containers/${enc(newId)}?force=1`).catch(() => undefined)
+      await json(ep, 'POST', `/containers/${enc(oldId)}/rename?name=${enc(name)}`).catch(() => undefined)
+      if (running) await json(ep, 'POST', `/containers/${enc(oldId)}/start`, undefined, 60_000).catch(() => undefined)
+      throw err
+    }
+    // (Named and anonymous volumes stay: no v=1.)
+    await json(ep, 'DELETE', `/containers/${enc(oldId)}?force=1`)
+    return newId
+  }
+
+  async searchImages(term: string): Promise<ImageSuggestion[]> {
+    const ep = await this.connect()
+    const raw = await json<{ name?: string; description?: string; star_count?: number; is_official?: boolean }[]>(
+      ep,
+      'GET',
+      `/images/search?term=${encodeURIComponent(term)}&limit=25`,
+      undefined,
+      8000
+    )
+    return (raw ?? [])
+      .filter((r) => r.name)
+      .map((r) => ({ name: r.name!, description: r.description || undefined, stars: r.star_count, official: !!r.is_official }))
   }
 
   async inspect(target: ContainerTarget, id: string): Promise<string> {

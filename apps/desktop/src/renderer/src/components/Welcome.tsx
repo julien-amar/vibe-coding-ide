@@ -1,7 +1,7 @@
 import { useTabs } from '../store'
 
 /**
- * Shown when a window has no tab: what the app does, in six illustrated cards, and how to start.
+ * Shown when a window has no tab: what the app does, in eight illustrated cards, and how to start.
  * The illustrations are inline SVG drawn with the theme's colours (light / dark).
  */
 export function Welcome(): React.JSX.Element {
@@ -17,7 +17,7 @@ export function Welcome(): React.JSX.Element {
           <AppMark />
           <div>
             <h1>vibe-coding-ide</h1>
-            <p>Terminals, projects and AI agents — side by side, in tabs.</p>
+            <p>Terminals, projects, AI agents and containers — side by side, in tabs.</p>
           </div>
         </header>
         <div className="welcome-actions">
@@ -52,7 +52,7 @@ const FEATURES: { title: string; text: string; art: React.JSX.Element }[] = [
   },
   {
     title: 'Projects',
-    text: 'Git, terminals and an AI agent for a folder, in panels you arrange.',
+    text: 'Git, tests, terminals and an AI agent for a folder, in panels you arrange.',
     art: <ProjectArt />
   },
   {
@@ -69,6 +69,16 @@ const FEATURES: { title: string; text: string; art: React.JSX.Element }[] = [
     title: 'Tests',
     text: 'Vitest to Maven: live results, and a failing test sent to your agent in one click.',
     art: <TestsArt />
+  },
+  {
+    title: 'Containers',
+    text: 'Docker, Podman and wslc in one tab: logs, stats, a shell, files, volumes, ports, images.',
+    art: <ContainersArt />
+  },
+  {
+    title: 'Your way',
+    text: 'Light or dark, your default shell and agent, only the profiles you use.',
+    art: <SettingsArt />
   },
   {
     title: 'Always current',
@@ -236,6 +246,58 @@ function UpdatesArt(): React.JSX.Element {
         <circle className="w-ok" cx="38" cy="4" r="8" />
         <path d="M34 4l3 3 5-5" fill="none" stroke="var(--surface)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       </g>
+    </svg>
+  )
+}
+
+function ContainersArt(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 160 96">
+      {/* Containers, stacked */}
+      <rect className="w-ctr-soft w-ctr-stroke" x="22" y="50" width="34" height="28" rx="4" strokeWidth="1.5" />
+      <rect className="w-ctr-soft w-ctr-stroke" x="60" y="50" width="34" height="28" rx="4" strokeWidth="1.5" />
+      <rect className="w-ctr w-ctr-stroke" x="41" y="18" width="34" height="28" rx="4" strokeWidth="1.5" />
+      <path className="w-ctr-stroke" d="M29 56v16M36 56v16M43 56v16M49 56v16M67 56v16M74 56v16M81 56v16M87 56v16" strokeWidth="1.5" opacity="0.55" />
+      <path d="M48 24v16M55 24v16M62 24v16M68 24v16" stroke="var(--surface)" strokeWidth="1.5" opacity="0.7" />
+      {/* Engines: two running, one not */}
+      <g transform="translate(108 22)">
+        <rect className="w-surface w-stroke" width="42" height="52" rx="6" />
+        <circle className="w-ok" cx="10" cy="12" r="3.5" />
+        <rect className="w-muted" x="18" y="10" width="17" height="4" rx="2" />
+        <circle className="w-ok" cx="10" cy="26" r="3.5" />
+        <rect className="w-muted" x="18" y="24" width="14" height="4" rx="2" />
+        <circle className="w-muted" cx="10" cy="40" r="3.5" />
+        <rect className="w-muted" x="18" y="38" width="16" height="4" rx="2" opacity="0.6" />
+      </g>
+    </svg>
+  )
+}
+
+function SettingsArt(): React.JSX.Element {
+  const toggle = (y: number, on: boolean, w: number): React.JSX.Element => (
+    <g key={y}>
+      <rect className="w-muted" x="12" y={y - 2} width={w} height="5" rx="2.5" />
+      <rect className={on ? 'w-accent-fill' : 'w-muted'} x="70" y={y - 6} width="22" height="12" rx="6" opacity={on ? 1 : 0.6} />
+      <circle className="w-surface" cx={on ? 86 : 76} cy={y} r="4.2" />
+    </g>
+  )
+  return (
+    <svg viewBox="0 0 160 96">
+      <Window x={10} y={8} w={100} h={80}>
+        {toggle(28, true, 40)}
+        {toggle(44, false, 34)}
+        {toggle(60, true, 46)}
+      </Window>
+      {/* Light / dark */}
+      <circle className="w-accent-soft" cx="134" cy="30" r="14" />
+      <circle className="w-accent-fill" cx="134" cy="30" r="6" />
+      <path
+        className="w-accent-stroke"
+        d="M134 12v4M134 44v4M116 30h4M148 30h4M121 17l3 3M144 40l3 3M121 43l3-3M144 20l3-3"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path className="w-wsl" d="M140 58a13 13 0 1 0 8 22 11 11 0 0 1-8-22z" />
     </svg>
   )
 }

@@ -3,7 +3,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { composeProjects } from './backend'
 import { candidates, demux, parseHost, statsSample } from './engine'
 import { EngineBackend } from './engine-backend'
-import { jobArgs } from './index'
+import { containerPath, parseListing } from './files'
+import { createOptions, envList, jobArgs } from './index'
+import { splitReference, suggestImages } from './registry-search'
+import { mountList, portList, recreateBody, specOf } from './spec'
 import { jsonLines, parseLabels, parsePorts, parseSize, wslcContainer, wslcStats } from './wslc-backend'
 
 describe('engine endpoints', () => {
@@ -212,5 +215,130 @@ describe('Docker through the Engine API (a fake engine over TCP)', () => {
     process.env.DOCKER_HOST = saved
     expect(info.available).toBe(false)
     expect(info.error).toMatch(/not running/)
+  })
+})
+
+describe('container files', () => {
+  it('normalises container paths and rejects relative ones', () => {
+    expect(containerPath('/')).toBe('/')
+    expect(containerPath('/etc/../usr//lib/./x/')).toBe('/usr/lib/x')
+    expect(containerPath('/..')).toBe('/')
+    expect(() => containerPath('etc')).toThrow()
+    expect(() => containerPath('/a\nb')).toThrow()
+  })
+
+  it('parses a listing: folders first, sizes and times, links', () => {
+    const out = ['f\t12 1700000000\thosts', 'd\t4096 1700000001\tbin', 'L\t7 1700000002\tlib64', 'l\t\tbroken link', 'junk', 'f\t3 1\twith\ttab'].join('\n')
+    expect(parseListing(out)).toEqual([
+      { name: 'bin', type: 'dir', size: 4096, mtime: 1700000001 },
+      { name: 'lib64', type: 'dirlink', size: 7, mtime: 1700000002 },
+      { name: 'broken link', type: 'link', size: undefined, mtime: undefined },
+      { name: 'hosts', type: 'file', size: 12, mtime: 1700000000 },
+      { name: 'with\ttab', type: 'file', size: 3, mtime: 1 }
+    ])
+  })
+})
+
+describe('pull suggestions and environments', () => {
+  it('splits image references: registry, repository, tag prefix', () => {
+    expect(splitReference('redis')).toEqual({ repo: 'library/redis', tag: undefined, hub: true })
+    expect(splitReference('redis:7')).toEqual({ repo: 'library/redis', tag: '7', hub: true })
+    expect(splitReference('bitnami/redis:')).toEqual({ repo: 'bitnami/redis', tag: '', hub: true })
+    expect(splitReference('docker.io/library/nginx:1.2')).toEqual({ repo: 'library/nginx', tag: '1.2', hub: true })
+    expect(splitReference('ghcr.io/owner/app:v1')).toEqual({ repo: 'owner/app', tag: 'v1', hub: false })
+    expect(splitReference('localhost:5000/app')).toEqual({ repo: 'app', tag: undefined, hub: false })
+  })
+
+  it('suggests nothing for short or spaced input', async () => {
+    expect(await suggestImages(undefined, 'r')).toEqual({ ok: true, items: [] })
+    expect(await suggestImages(undefined, 'red is')).toEqual({ ok: true, items: [] })
+  })
+
+  it('accepts KEY=VALUE environments only', () => {
+    expect(envList(['A=1', 'B=', 'C=x=y'])).toEqual(['A=1', 'B=', 'C=x=y'])
+    expect(() => envList(['NOVALUE'])).toThrow()
+    expect(() => envList(['=1'])).toThrow()
+    expect(() => envList(['BAD KEY=1'])).toThrow()
+    expect(() => envList('A=1')).toThrow()
+  })
+})
+
+describe('new volume settings', () => {
+  it('keeps the driver, options and labels; refuses option injection', () => {
+    expect(createOptions({ driver: 'local', options: { type: 'nfs', o: 'addr=10.0.0.5,rw' }, labels: { a: 'b' } })).toEqual({
+      driver: 'local',
+      options: { type: 'nfs', o: 'addr=10.0.0.5,rw' },
+      labels: { a: 'b' }
+    })
+    expect(createOptions(undefined)).toEqual({ driver: undefined, options: undefined, labels: undefined })
+    expect(() => createOptions({ driver: '--privileged' })).toThrow()
+    expect(() => createOptions({ options: { '-o': 'x' } })).toThrow()
+    expect(() => createOptions({ labels: { 'a b': 'x' } })).toThrow()
+    expect(() => createOptions({ labels: { a: 'x\ny' } })).toThrow()
+  })
+})
+
+describe('container settings (volumes, ports) and their recreation', () => {
+  const inspect = {
+    Id: 'abc123def456789',
+    Config: { Hostname: 'abc123def456', Env: ['A=1'], ExposedPorts: { '80/tcp': {}, '443/tcp': {} } },
+    HostConfig: { Binds: ['/srv/html:/html:ro'], PortBindings: { '80/tcp': [{ HostIp: '', HostPort: '8080' }] }, Tmpfs: { '/run': '' } },
+    Mounts: [
+      { Type: 'bind', Source: '/srv/html', Destination: '/html', RW: false },
+      { Type: 'volume', Name: 'anon1', Destination: '/cache', RW: true }
+    ]
+  }
+
+  it('reads mounts, published and exposed ports', () => {
+    expect(specOf(inspect)).toEqual({
+      env: ['A=1'],
+      mounts: [
+        { type: 'bind', source: '/srv/html', target: '/html', readOnly: true },
+        { type: 'volume', source: 'anon1', target: '/cache', readOnly: false },
+        { type: 'tmpfs', source: '', target: '/run', readOnly: false }
+      ],
+      ports: [{ container: 80, protocol: 'tcp', hostPort: '8080', hostIp: '' }],
+      exposed: ['443/tcp']
+    })
+  })
+
+  it('validates mounts and ports from the window', () => {
+    expect(mountList([{ type: 'tmpfs', source: 'x', target: '/t' }])).toEqual([{ type: 'tmpfs', source: '', target: '/t', readOnly: false }])
+    expect(() => mountList([{ type: 'volume', source: 'v', target: 'rel' }])).toThrow()
+    expect(() => mountList([{ type: 'bind', source: '', target: '/a' }])).toThrow()
+    expect(() =>
+      mountList([
+        { type: 'volume', source: 'v', target: '/a' },
+        { type: 'volume', source: 'w', target: '/a' }
+      ])
+    ).toThrow()
+    expect(portList([{ container: '80', protocol: 'tcp', hostPort: '8000-8010' }])).toEqual([
+      { container: 80, protocol: 'tcp', hostPort: '8000-8010', hostIp: '' }
+    ])
+    expect(() => portList([{ container: 70000 }])).toThrow()
+    expect(() => portList([{ container: 80, hostPort: 'abc' }])).toThrow()
+    expect(() => portList([{ container: 80, protocol: 'icmp' }])).toThrow()
+    expect(() =>
+      portList([
+        { container: 80, hostPort: '8080' },
+        { container: 81, hostPort: '8080' }
+      ])
+    ).not.toThrow() // different container ports
+  })
+
+  it('builds the new container: given mounts (structured), ports published and exposed; the rest kept', () => {
+    const { config, host } = recreateBody(inspect, {
+      mounts: [{ type: 'volume', source: 'data', target: '/data', readOnly: false }],
+      ports: [{ container: 443, protocol: 'tcp', hostPort: '8443', hostIp: '127.0.0.1' }]
+    })
+    expect(config.Hostname).toBeUndefined()
+    expect(config.Env).toEqual(['A=1'])
+    expect(host.Binds).toEqual([])
+    expect(host.Tmpfs).toBeUndefined()
+    expect(host.Mounts).toEqual([{ Type: 'volume', Source: 'data', Target: '/data', ReadOnly: false }])
+    expect(host.PortBindings).toEqual({ '443/tcp': [{ HostIp: '127.0.0.1', HostPort: '8443' }] })
+    expect(Object.keys(config.ExposedPorts)).toEqual(['80/tcp', '443/tcp'])
+    // Nothing about mounts given: binds kept, anonymous volumes kept by name.
+    expect(recreateBody(inspect, { env: ['B=2'] }).host.Binds).toEqual(['/srv/html:/html:ro', 'anon1:/cache'])
   })
 })

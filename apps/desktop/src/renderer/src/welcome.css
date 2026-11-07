@@ -8,7 +8,7 @@
 }
 
 .welcome-inner {
-  max-width: 920px;
+  max-width: 1000px;
   margin: 0 auto;
   padding: 40px 24px 32px;
 }
@@ -86,7 +86,7 @@
 
 .welcome-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
   gap: 14px;
 }
 
@@ -204,4 +204,17 @@
 }
 .w-fail-stroke {
   stroke: var(--danger);
+}
+
+/* Containers (the Containers tab's blue) */
+.w-ctr {
+  fill: #2496ed;
+}
+
+.w-ctr-soft {
+  fill: color-mix(in srgb, #2496ed 18%, var(--surface));
+}
+
+.w-ctr-stroke {
+  stroke: #2496ed;
 }

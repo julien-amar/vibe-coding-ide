@@ -63,8 +63,6 @@ interface State {
   openProfile(profile: Profile): Promise<void>
   /** The Containers tab (one per window: focused when already open). */
   openContainers(): void
-  /** The engine a Containers tab shows (kept with the tab). */
-  setContainersBackend(tabId: string, backend: string): void
   openProject(root: string): Promise<void>
   /** Add a tab whose sessions already exist (moved from another window). */
   insertExisting(snapshot: TabSnapshot, index?: number): void
@@ -276,10 +274,6 @@ export const useTabs = create<State>((set, get) => ({
     if (existing) return set({ activeId: existing.id })
     const tab: Tab = { id: newTabId(), kind: 'containers', autoTitle: 'Containers' }
     set((st) => ({ tabs: [...st.tabs, tab], activeId: tab.id }))
-  },
-
-  setContainersBackend(tabId, backend) {
-    set((st) => ({ tabs: st.tabs.map((t) => (t.id === tabId ? { ...t, profileId: backend } : t)) }))
   },
 
   async openProfile(profile) {
