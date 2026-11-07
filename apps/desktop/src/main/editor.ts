@@ -3,7 +3,7 @@ import { statSync } from 'node:fs'
 import { join, normalize } from 'node:path'
 import { shell } from 'electron'
 import { parseWslPath } from '@shared/wsl-paths'
-import { launchSpec, which } from './profiles'
+import { spawnSpec, which } from './profiles'
 
 /**
  * "Open in editor" for file references in test results and stack traces: the
@@ -80,20 +80,23 @@ export async function openInEditor(root: string, file: string, line?: number, co
   const { path } = ref
   const l = Math.max(1, Math.floor(Number(line) || 1))
   const c = Math.max(1, Math.floor(Number(column) || 1))
+  let lastError: string | undefined
   for (const editor of EDITORS) {
     const exe = which(editor.cmd)
     if (!exe) continue
-    const spec = launchSpec(exe, editor.args(path, l, c))
     try {
-      spawn(spec.command, spec.args, { detached: true, stdio: 'ignore', windowsHide: true }).unref()
+      // (A .cmd editor, as code.cmd: a quoted command line, so a file name cannot run commands.)
+      const spec = spawnSpec(exe, editor.args(path, l, c))
+      spawn(spec.command, spec.args, { detached: true, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: spec.verbatim }).unref()
       return { ok: true }
-    } catch {
-      /* try the next editor */
+    } catch (err) {
+      lastError = (err as Error).message
     }
   }
-  // No code editor found: the system's default app for the file (without the line). Only for the
-  // project's own files: "opening" an arbitrary file with its default app could run a program.
+  if (lastError) return { ok: false, error: lastError }
+  // No code editor found: the file is shown in its folder. Not opened with its default app: for a
+  // script (.js, .py, .ps1, .bat…) that would run it.
   if (!ref.inProject) return { ok: false, error: `No code editor found on PATH (VS Code, Cursor, Zed…) to open ${path}.` }
-  const err = await shell.openPath(path)
-  return err ? { ok: false, error: err } : { ok: true }
+  shell.showItemInFolder(path)
+  return { ok: true }
 }

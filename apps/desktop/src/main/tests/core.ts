@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, extname, join, relative } from 'node:path'
 import type { TestCase, TestFramework, TestResult, TestRunRequest, TestRunResult } from '@shared/types'
 import { parseWslPath } from '@shared/wsl-paths'
-import { launchSpec, which } from '../profiles'
+import { spawnSpec, which } from '../profiles'
 import { wslenvWith, wslExe, wslLogin } from '../wsl'
 
 /**
@@ -182,6 +182,8 @@ export interface Command {
   file: string
   args: string[]
   env: Record<string, string>
+  /** A cmd.exe command line given as is (see spawnSpec). */
+  verbatim?: boolean
 }
 
 /**
@@ -197,9 +199,9 @@ export function programCommand(dir: string, program: string, args: string[], env
       env: { ...env, WSLENV: wslenvWith(...Object.keys(env)) }
     }
   }
-  // Windows .cmd / .bat scripts (mvn, gradlew.bat…) run through cmd.exe.
-  const spec = launchSpec(program, args)
-  return { file: spec.command, args: spec.args, env }
+  // Windows .cmd / .bat scripts (mvn, gradlew.bat…) run through cmd.exe, arguments quoted (test names…).
+  const spec = spawnSpec(program, args)
+  return { file: spec.command, args: spec.args, env, verbatim: spec.verbatim }
 }
 
 /** A tool for a local or WSL project: the full path when found on PATH (or in `extra` places), else its name. */
@@ -259,6 +261,7 @@ export function exec(
   const child = spawn(cmd.file, cmd.args, {
     cwd: parseWslPath(cwd) ? undefined : cwd,
     windowsHide: true,
+    windowsVerbatimArguments: !!cmd.verbatim,
     detached: process.platform !== 'win32',
     env: { ...process.env, ...cmd.env }
   })

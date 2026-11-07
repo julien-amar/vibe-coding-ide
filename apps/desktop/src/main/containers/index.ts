@@ -40,6 +40,20 @@ const TARGETS = new Set<ContainerTarget>(['container', 'image', 'volume', 'netwo
 const ACTIONS = new Set<ContainerAction>(['start', 'stop', 'restart', 'pause', 'unpause', 'kill', 'remove'])
 const KINDS = new Set<ContainerListKind>(['containers', 'images', 'volumes', 'networks', 'compose'])
 
+/** A container id or name, as the engines make them (it reaches a terminal's command line). */
+const containerRef = (v: unknown): string => {
+  const s = safe(v, 'container')
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(s)) throw new Error('Invalid container')
+  return s
+}
+
+/** A registry host (and port, path): ghcr.io, localhost:5000, registry.example.com/team. */
+const registryRef = (v: unknown): string => {
+  const s = safe(v, 'registry')
+  if (!/^[A-Za-z0-9.-]+(:\d+)?(\/[A-Za-z0-9._-]+)*$/.test(s)) throw new Error('Invalid registry')
+  return s
+}
+
 /** Ids, names and references from the renderer: no option injection into CLI commands. */
 const safe = (v: unknown, what: string): string => {
   const s = String(v ?? '').trim()
@@ -309,7 +323,7 @@ export function registerContainerIpc(ipcMain: IpcMain): void {
   })
 
   ipcMain.handle('containers:shellProfile', (_e, backend: string, id: string, name?: string) => {
-    const c = safe(id, 'container')
+    const c = containerRef(id)
     // The tab's title: the container's name (else its short id).
     const label = typeof name === 'string' && name.trim() ? name.trim().slice(0, 80) : c.slice(0, 12)
     return cliProfile(backend, `container:${backend}:${c}`, `${label} (shell)`, [
@@ -323,9 +337,6 @@ export function registerContainerIpc(ipcMain: IpcMain): void {
   })
   ipcMain.handle('containers:loginProfile', (_e, backend: string, registry: string) => {
     const r = String(registry ?? '').trim()
-    return cliProfile(backend, `container-login:${backend}:${r || 'default'}`, `${backend} login${r ? ` ${r}` : ''}`, [
-      'login',
-      ...(r ? [safe(r, 'registry')] : [])
-    ])
+    return cliProfile(backend, `container-login:${backend}:${r || 'default'}`, `${backend} login${r ? ` ${r}` : ''}`, ['login', ...(r ? [registryRef(r)] : [])])
   })
 }

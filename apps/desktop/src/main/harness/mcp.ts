@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import type { McpCheckResult, McpServer } from '@shared/types'
 import { parseWslPath } from '@shared/wsl-paths'
-import { launchSpec, which } from '../profiles'
+import { spawnSpec, which } from '../profiles'
 import { killTree, LineReader, programCommand } from '../tests/core'
 import { sanitizeHarness } from './model'
 
@@ -55,12 +55,13 @@ function checkStdio(root: string, s: McpServer, timeout: number): Promise<McpChe
   const wsl = process.platform === 'win32' && parseWslPath(root) !== undefined
   const exe = wsl || isAbsolute(s.command) ? s.command : (which(s.command) ?? s.command)
   const inWsl = wsl ? programCommand(root, s.command, s.args ?? [], s.env ?? {}) : undefined
-  const spec = inWsl ? { command: inWsl.file, args: inWsl.args } : launchSpec(exe, s.args ?? [])
+  const spec = inWsl ? { command: inWsl.file, args: inWsl.args, verbatim: false } : spawnSpec(exe, s.args ?? [])
   return new Promise((done) => {
     let stderr = ''
     let server: McpCheckResult['server']
     let finished = false
     const child = spawn(spec.command, spec.args, {
+      windowsVerbatimArguments: spec.verbatim,
       cwd: existsSync(root) && !root.startsWith('\\\\') ? root : undefined,
       env: { ...process.env, ...(s.env ?? {}), ...(inWsl?.env ?? {}) },
       windowsHide: true,

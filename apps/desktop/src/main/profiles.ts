@@ -54,7 +54,41 @@ export function which(name: string): string | undefined {
   return whichAll(name)[0]
 }
 
-/** On Windows, .cmd/.bat shims must be started through cmd.exe. */
+/**
+ * A .cmd / .bat program and its arguments as one cmd.exe command line (exported for tests).
+ * cmd.exe reads its command line again: "&", "|", "<", ">", "^", "(", ")"… outside quotes would run
+ * other commands (a file named "x&calc&.js" given to code.cmd). Every argument with one of them (or a
+ * space) is quoted, where they are plain text. Refused, as no quoting makes them safe: '"', "%", line
+ * breaks.
+ */
+export function cmdCommandLine(exe: string, args: string[]): string {
+  const quote = (a: string, always = false): string => {
+    if (/["%\r\n\0]/.test(a))
+      throw new Error(`Cannot pass ${JSON.stringify(a.slice(0, 80))} to ${exe.split(/[\\/]/).pop()} safely: cmd.exe would read it as commands.`)
+    if (!always && a && !/[\s&|<>^(),;=!]/.test(a)) return a
+    // A trailing backslash would escape the closing quote for the program reading the arguments.
+    return `"${a.replace(/(\\+)$/, '$1$1')}"`
+  }
+  return [quote(exe, true), ...args.map((a) => quote(a))].join(' ')
+}
+
+/**
+ * How to start a program directly (not in a terminal: tests, the editor, an MCP server check). On
+ * Windows, .cmd / .bat through cmd.exe with a quoted command line given as is (`verbatim`: pass
+ * windowsVerbatimArguments to spawn) — see cmdCommandLine.
+ */
+export function spawnSpec(exe: string, args: string[] = []): { command: string; args: string[]; verbatim: boolean } {
+  if (isWin && ['.cmd', '.bat'].includes(extname(exe).toLowerCase())) {
+    return { command: process.env.ComSpec ?? 'cmd.exe', args: ['/d', '/v:off', '/s', '/c', `"${cmdCommandLine(exe, args)}"`], verbatim: true }
+  }
+  return { command: exe, args, verbatim: false }
+}
+
+/**
+ * On Windows, .cmd/.bat shims must be started through cmd.exe. For terminal profiles, whose
+ * arguments are the app's own (or checked, as a container's id): programs started directly use
+ * spawnSpec.
+ */
 export function launchSpec(exe: string, args: string[] = []): { command: string; args: string[] } {
   if (isWin && ['.cmd', '.bat'].includes(extname(exe).toLowerCase())) {
     return { command: process.env.ComSpec ?? 'cmd.exe', args: ['/d', '/c', exe, ...args] }
