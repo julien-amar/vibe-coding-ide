@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { app, BrowserWindow } from 'electron'
 import type { UpdateStatus } from '@shared/types'
 import { updateMode, type UpdateMode } from './update-mode'
+import { emit } from './ipc'
 
 const RELEASES = 'https://github.com/julien-amar/vibe-coding-ide/releases'
 const FIRST_CHECK = 15_000
@@ -16,7 +17,7 @@ export const updateStatus = (): UpdateStatus => status
 
 function set(s: UpdateStatus): void {
   status = s
-  for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('update:status', s)
+  for (const w of BrowserWindow.getAllWindows()) emit(w.webContents, 'update:status', s)
 }
 
 /** Build information written by the release workflow into package.json (signed macOS build…). */

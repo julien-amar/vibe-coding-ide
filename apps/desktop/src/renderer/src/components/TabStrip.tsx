@@ -43,7 +43,7 @@ function TabItem({
       setDraft(tabTitle(tab))
       requestAnimationFrame(() => inputRef.current?.select())
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the draft starts from the title when editing starts, not on each title change
   }, [editing])
 
   const commit = (): void => {

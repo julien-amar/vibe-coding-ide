@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react'
-import { ContainersView } from './components/ContainersView'
+import { ContainersView } from './components/containers/ContainersView'
 import { DialogHost } from './components/Dialogs'
 import { Launcher } from './components/Launcher'
 import { ProjectView } from './components/ProjectView'

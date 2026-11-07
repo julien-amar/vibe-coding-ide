@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client'
 import '@xterm/xterm/css/xterm.css'
 import './styles.css'
+import './dialogs.css'
 import './git-panel.css'
 import './panes.css'
 import './tests-panel.css'

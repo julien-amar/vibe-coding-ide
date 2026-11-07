@@ -2,7 +2,9 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { app, BrowserWindow, nativeTheme } from 'electron'
 import type { AppSettings, ContainerBackendId, ContainersPrefs, Profile } from '@shared/types'
+import { DEFAULT_CONTAINERS_PREFS } from '@shared/settings-defaults'
 import { setWslEnabled } from './profiles'
+import { emit } from './ipc'
 
 /** Application-wide settings: <userData>/settings.json, applied at start and on each change. */
 
@@ -33,10 +35,10 @@ function sanitizeContainers(v: unknown): ContainersPrefs {
   const engine = (x: unknown): x is ContainerBackendId => ENGINES.includes(x as ContainerBackendId)
   const refresh = Number(c.refresh)
   return {
-    hidden: Array.isArray(c.hidden) ? [...new Set(c.hidden.filter(engine))] : [],
+    hidden: Array.isArray(c.hidden) ? [...new Set(c.hidden.filter(engine))] : [...DEFAULT_CONTAINERS_PREFS.hidden],
     defaultEngine: engine(c.defaultEngine) ? c.defaultEngine : undefined,
-    refresh: Number.isFinite(refresh) && refresh >= 0 && refresh <= 600 ? refresh : 3,
-    confirmRemove: c.confirmRemove !== false
+    refresh: Number.isFinite(refresh) && refresh >= 0 && refresh <= 600 ? refresh : DEFAULT_CONTAINERS_PREFS.refresh,
+    confirmRemove: typeof c.confirmRemove === 'boolean' ? c.confirmRemove : DEFAULT_CONTAINERS_PREFS.confirmRemove
   }
 }
 
@@ -75,7 +77,7 @@ export function updateSettings(patch: unknown, base: AppSettings = getSettings()
     /* kept for this run */
   }
   apply(next)
-  for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('settings:changed', next)
+  for (const w of BrowserWindow.getAllWindows()) emit(w.webContents, 'settings:changed', next)
   return next
 }
 

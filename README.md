@@ -96,6 +96,7 @@ Everything lives in `apps/desktop/src`:
 | Folder | What |
 |---|---|
 | `main/index.ts` | Electron entry: windows, layout saving, IPC handlers (thin: they call the modules below) |
+| `shared/ipc.ts`, `main/ipc.ts`, `preload/` | The window ↔ main process contract: every channel and event, typed from the `IdeApi` (a misspelt channel or a wrong argument does not compile); `handle` / `listen` / `emit` in the main process, `invoke` / `send` / `on` in the preload script |
 | `main/launch.ts`, `main/layout-sanitize.ts` | How a panel's process starts (folder, an agent's settings); validation of tabs and layouts from the renderer |
 | `main/git/` | Git panel backend: `run` (git / gh / glab, also inside WSL), `repo` (log, status, branches), `ops` (every action), `pull-requests`, `hosting`, `watcher` |
 | `main/harness/` | AI agent panel settings: `model`, `support` (what each agent gets), `compile` (into each agent's flags and files), `skills`, `mcp` (health check), `launch` (npm shims, versions), `target` (host or WSL paths) |
@@ -103,8 +104,8 @@ Everything lives in `apps/desktop/src`:
 | `main/wsl.ts`, `main/profiles.ts` | Running programs in WSL distributions; shells, distributions and agents found on the machine |
 | `main/containers/` | Containers tab backend: `engine` (Docker Engine API client: endpoints, streams), `engine-backend` (Docker, Podman), `wslc-backend` (wslc CLI), `index` (IPC, CLI jobs, shell / login terminals) |
 | `main/updater.ts`, `main/package-updates.ts` | The app's own updates; package updates of the systems shells run on |
-| `shared/` | Types and pure helpers used by both sides (layout tree, WSL paths, partial staging patches, agent settings) |
-| `renderer/src/` | React UI: `store.ts` (tabs, layouts), `components/` (one file per panel or view: `GitPanel` + `GitChanges` / `GitBranches` / `GitPullRequest`, `HarnessDialog` + `HarnessMcp` / `HarnessSkills` / `HarnessInstructions`, `TestPanel`…) |
+| `shared/` | Types by area in `shared/types/` (profiles, layout, git, tests, harness, containers, settings, the `IdeApi`; imported as `@shared/types`), settings defaults, and pure helpers used by both sides (layout tree, WSL paths, partial staging patches, agent settings) |
+| `renderer/src/` | React UI: `store.ts` (tabs, layouts), `components/` (one file per panel or view: `GitPanel` + `GitChanges` / `GitBranches` / `GitPullRequest`, `HarnessDialog` + `HarnessMcp` / `HarnessSkills` / `HarnessInstructions`, `TestPanel`…), `components/containers/` (the Containers tab: `ContainersView`, `lists` on the sortable `table`, the details — logs, stats, terminal, files, `SpecViews` for volumes / ports / environment — and dialogs; pure logic in `model`, `spec-rows`, `volume-settings`), `Modal` (every dialog's frame: backdrop, Escape for the top dialog only) |
 
 ## Tests
 ```sh
@@ -115,6 +116,8 @@ pnpm test        # unit tests (Vitest): layout tree, git / winget / shell parser
 pnpm build
 pnpm test:e2e    # end-to-end tests (Playwright): launches the built app with throwaway profiles and repos
 ```
+
+Lint: `react-hooks/exhaustive-deps` is an error; each suppression in the code says why. Off: the rules made for the React Compiler (`react/immutability`, `react/preserve-manual-memoization`, `react/set-state-in-effect`, `react/exhaustive-effect-dependencies`), which the app does not use — they flag dependencies used on purpose as triggers (`[reload]`, `[attempt]`).
 Unit tests live next to the code (`src/**/*.test.ts`), end-to-end tests in `apps/desktop/e2e/`.
 The Tests panel is tested on two sample projects in `apps/desktop/e2e/fixtures/`: `sample-tests` (Vitest, Jest, Playwright, pytest) and `polyglot-tests` (Go, Rust, .NET, Java with Maven). Each framework's tests run with its real tool and are skipped when the tool is not installed (CI installs them all). The pytest tests need a virtualenv in `sample-tests`:
 ```sh

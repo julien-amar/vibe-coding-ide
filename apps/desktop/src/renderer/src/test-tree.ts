@@ -117,7 +117,7 @@ export function filterTestTree(node: TestTreeNode, keep: (t: TestCase) => boolea
 
 /** Remove terminal escape sequences (colors, cursor moves) from command output. */
 export const stripAnsi = (s: string): string =>
-  // eslint-disable-next-line no-control-regex
+  // eslint-disable-next-line no-control-regex -- terminal escape sequences (ESC, BEL) are what is removed
   s.replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[@-Z\\-_]/g, '')
 
 /** A file location in test output ("src/a.ts:12:5", "C:\x\a.py:3", "file:///…/a.js:1:2"). */

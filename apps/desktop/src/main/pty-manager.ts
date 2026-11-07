@@ -2,8 +2,9 @@ import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import type { WebContents } from 'electron'
 import * as pty from 'node-pty'
-import type { Profile } from '@shared/types'
+import type { PackageUpdateInfo, Profile } from '@shared/types'
 import { lastReportedCwd } from './shell-integration'
+import { emit } from './ipc'
 
 /** Max bytes of output kept per session, replayed when a window (re)attaches. */
 const MAX_BUFFER = 1024 * 1024
@@ -48,11 +49,11 @@ export class PtyManager {
       while (session.size > MAX_BUFFER && session.chunks.length > 1) {
         session.size -= session.chunks.shift()!.length
       }
-      for (const wc of session.subscribers) wc.send('pty:data', id, data)
+      for (const wc of session.subscribers) emit(wc, 'pty:data', id, data)
     })
     proc.onExit(({ exitCode }) => {
       session.exitCode = exitCode
-      for (const wc of session.subscribers) wc.send('pty:exit', id, exitCode)
+      for (const wc of session.subscribers) emit(wc, 'pty:exit', id, exitCode)
       this.sessions.delete(id)
     })
     return id
@@ -79,9 +80,9 @@ export class PtyManager {
     return true
   }
 
-  /** Send an event to the windows showing a session. */
-  notify(id: string, channel: string, ...args: unknown[]): void {
-    for (const wc of this.sessions.get(id)?.subscribers ?? []) if (!wc.isDestroyed()) wc.send(channel, id, ...args)
+  /** A session's pending package updates, to the windows showing it. */
+  notifyUpdates(id: string, info: PackageUpdateInfo): void {
+    for (const wc of this.sessions.get(id)?.subscribers ?? []) emit(wc, 'pty:updates', id, info)
   }
 
   /** Whether a window may act on a session (it shows it). */

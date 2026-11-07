@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { create } from 'zustand'
 import type { AppSettings, Profile } from '@shared/types'
 import { loadProfiles } from '../profiles'
+import { Modal } from './Modal'
+import { Switch } from './Switch'
 import { ProfileIcon } from './ProfileIcon'
 
 /** Whether the Settings screen is open (opened from the launcher). */
@@ -69,17 +70,9 @@ export function SettingsDialog(): React.JSX.Element | null {
     void window.ide.profiles.all().then((p) => alive && setAll(p))
     void window.ide.app.version().then((v) => alive && setVersion(v))
     const off = window.ide.settings.onChanged((s) => alive && setSettings(s))
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        e.stopPropagation()
-        setOpen(false)
-      }
-    }
-    window.addEventListener('keydown', onKey, true)
     return () => {
       alive = false
       off()
-      window.removeEventListener('keydown', onKey, true)
     }
   }, [open, setOpen])
 
@@ -157,135 +150,103 @@ export function SettingsDialog(): React.JSX.Element | null {
     </label>
   )
 
-  return createPortal(
-    <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setOpen(false)}>
-      <div className="settings-dialog" role="dialog" aria-modal="true" aria-label="Settings">
-        <header className="settings-head">
-          <h2>Settings</h2>
-          <span className="spacer" />
-          <button className="icon-button" title="Close (Esc)" aria-label="Close" onClick={() => setOpen(false)}>
-            ✕
-          </button>
-        </header>
-        {settings && (
-          <div className="settings-body">
-            <section className="settings-section">
-              <h3>Appearance</h3>
-              <div className="segmented settings-theme" role="radiogroup" aria-label="Theme">
-                {THEMES.map((t) => (
-                  <button
-                    key={t.value}
-                    role="radio"
-                    aria-checked={settings.theme === t.value}
-                    className={settings.theme === t.value ? 'active' : ''}
-                    onClick={() => void save({ theme: t.value })}
-                  >
-                    {t.icon}
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <section className="settings-section">
-              <h3>New projects</h3>
-              <div className="settings-defaults">
-                {select('Default shell', 'defaultShell', shells)}
-                {select('Default AI agent', 'defaultAgent', agents)}
-              </div>
-              <p className="muted settings-note">Projects inside a WSL distribution use the distribution's own shell and agent when it has one.</p>
-            </section>
-
-            <section className="settings-section">
-              <label className="settings-row settings-toggle">
-                <span className="settings-row-text">
-                  <span className="settings-row-name">WSL integration</span>
-                  <span className="settings-row-help">
-                    Offer WSL distributions, projects inside them and the AI agents installed there. Off: wsl.exe is not started to look for them.
-                  </span>
-                </span>
-                <Switch checked={settings.wsl} onChange={(on) => void save({ wsl: on })} label="WSL integration" />
-              </label>
-            </section>
-
-            {section(
-              'Shells',
-              profiles.filter((p) => p.kind === 'shell'),
-              'No shell found.'
-            )}
-            {section(
-              'WSL distributions',
-              profiles.filter((p) => p.kind === 'wsl'),
-              settings.wsl ? 'No distribution installed.' : 'Turn WSL integration on to list them.',
-              !settings.wsl
-            )}
-            {section(
-              'AI agents',
-              profiles.filter((p) => p.kind === 'agent'),
-              'No AI agent CLI found on PATH (claude, codex, gemini, opencode, pi).'
-            )}
-            <p className="muted settings-note">
-              Hidden entries are not offered in the launcher, as defaults of new projects or in the agent switcher; open tabs keep running.
-            </p>
-          </div>
-        )}
-        <footer className="settings-foot">
-          {confirmReset ? (
-            <>
-              <span>Reset every setting to its default?</span>
-              <span className="spacer" />
-              <button className="tool-button" onClick={() => setConfirmReset(false)}>
-                Cancel
-              </button>
-              <button className="tool-button danger" onClick={() => void reset()}>
-                Reset
-              </button>
-            </>
-          ) : (
-            <>
-              <button className="tool-button" onClick={() => setConfirmReset(true)}>
-                Reset to defaults
-              </button>
-              <span className="spacer" />
-              {version && (
-                <span className="settings-version" title="vibe-coding-ide version">
-                  vibe-coding-ide v{version}
-                </span>
-              )}
-            </>
-          )}
-        </footer>
-      </div>
-    </div>,
-    document.body
-  )
-}
-
-function Switch({
-  checked,
-  onChange,
-  disabled,
-  label
-}: {
-  checked: boolean
-  onChange: (on: boolean) => void
-  disabled?: boolean
-  label: string
-}): React.JSX.Element {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      disabled={disabled}
-      className={`switch${checked ? ' on' : ''}`}
-      onClick={(e) => {
-        e.preventDefault()
-        onChange(!checked)
-      }}
-    >
-      <span className="switch-knob" />
-    </button>
+    <Modal label="Settings" className="settings-dialog" onClose={() => setOpen(false)}>
+      <header className="settings-head">
+        <h2>Settings</h2>
+        <span className="spacer" />
+        <button className="icon-button" title="Close (Esc)" aria-label="Close" onClick={() => setOpen(false)}>
+          ✕
+        </button>
+      </header>
+      {settings && (
+        <div className="settings-body">
+          <section className="settings-section">
+            <h3>Appearance</h3>
+            <div className="segmented settings-theme" role="radiogroup" aria-label="Theme">
+              {THEMES.map((t) => (
+                <button
+                  key={t.value}
+                  role="radio"
+                  aria-checked={settings.theme === t.value}
+                  className={settings.theme === t.value ? 'active' : ''}
+                  onClick={() => void save({ theme: t.value })}
+                >
+                  {t.icon}
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="settings-section">
+            <h3>New projects</h3>
+            <div className="settings-defaults">
+              {select('Default shell', 'defaultShell', shells)}
+              {select('Default AI agent', 'defaultAgent', agents)}
+            </div>
+            <p className="muted settings-note">Projects inside a WSL distribution use the distribution's own shell and agent when it has one.</p>
+          </section>
+
+          <section className="settings-section">
+            <label className="settings-row settings-toggle">
+              <span className="settings-row-text">
+                <span className="settings-row-name">WSL integration</span>
+                <span className="settings-row-help">
+                  Offer WSL distributions, projects inside them and the AI agents installed there. Off: wsl.exe is not started to look for them.
+                </span>
+              </span>
+              <Switch checked={settings.wsl} onChange={(on) => void save({ wsl: on })} label="WSL integration" />
+            </label>
+          </section>
+
+          {section(
+            'Shells',
+            profiles.filter((p) => p.kind === 'shell'),
+            'No shell found.'
+          )}
+          {section(
+            'WSL distributions',
+            profiles.filter((p) => p.kind === 'wsl'),
+            settings.wsl ? 'No distribution installed.' : 'Turn WSL integration on to list them.',
+            !settings.wsl
+          )}
+          {section(
+            'AI agents',
+            profiles.filter((p) => p.kind === 'agent'),
+            'No AI agent CLI found on PATH (claude, codex, gemini, opencode, pi).'
+          )}
+          <p className="muted settings-note">
+            Hidden entries are not offered in the launcher, as defaults of new projects or in the agent switcher; open tabs keep running.
+          </p>
+        </div>
+      )}
+      <footer className="settings-foot">
+        {confirmReset ? (
+          <>
+            <span>Reset every setting to its default?</span>
+            <span className="spacer" />
+            <button className="tool-button" onClick={() => setConfirmReset(false)}>
+              Cancel
+            </button>
+            <button className="tool-button danger" onClick={() => void reset()}>
+              Reset
+            </button>
+          </>
+        ) : (
+          <>
+            <button className="tool-button" onClick={() => setConfirmReset(true)}>
+              Reset to defaults
+            </button>
+            <span className="spacer" />
+            {version && (
+              <span className="settings-version" title="vibe-coding-ide version">
+                vibe-coding-ide v{version}
+              </span>
+            )}
+          </>
+        )}
+      </footer>
+    </Modal>
   )
 }

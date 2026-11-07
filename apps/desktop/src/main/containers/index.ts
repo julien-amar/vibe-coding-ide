@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join, posix } from 'node:path'
-import { app, BrowserWindow, dialog, type IpcMain, type WebContents } from 'electron'
+import { app, BrowserWindow, dialog, type WebContents } from 'electron'
 import type {
   ContainerAction,
   ContainerBackendId,
@@ -21,6 +21,7 @@ import { containerPath, listFiles, readFilePreview, saveFile, type Cli } from '.
 import { suggestImages } from './registry-search'
 import { mountList, portList } from './spec'
 import { WslcBackend } from './wslc-backend'
+import { emit, handle, listen } from '../ipc'
 
 /** The Containers tab's backends and their IPC (lists, actions, streams of logs / stats / job output). */
 
@@ -125,7 +126,7 @@ export function jobArgs(backend: ContainerBackendId, job: ContainerJob): string[
   }
 }
 
-export function registerContainerIpc(ipcMain: IpcMain): void {
+export function registerContainerIpc(): void {
   /** Running streams: id → stop. */
   const streams = new Map<string, () => void>()
   let next = 1
@@ -136,7 +137,7 @@ export function registerContainerIpc(ipcMain: IpcMain): void {
   ): string => {
     const id = `cs-${next++}`
     const send = (e: ContainerStreamEvent): void => {
-      if (!wc.isDestroyed()) wc.send('containers:stream', e)
+      emit(wc, 'containers:stream', e)
     }
     let done = false
     const end = (code?: number, error?: string): void => {
@@ -156,9 +157,9 @@ export function registerContainerIpc(ipcMain: IpcMain): void {
     return id
   }
 
-  ipcMain.handle('containers:backends', () => Promise.all(Object.values(backends).map((b) => b.info())))
+  handle('containers:backends', () => Promise.all(Object.values(backends).map((b) => b.info())))
 
-  ipcMain.handle('containers:list', async (_e, backend: string, kind: string) => {
+  handle('containers:list', async (_e, backend: string, kind: string) => {
     try {
       if (!KINDS.has(kind as ContainerListKind)) throw new Error('Invalid list')
       return await backendOf(backend).list(kind as ContainerListKind)
@@ -167,7 +168,7 @@ export function registerContainerIpc(ipcMain: IpcMain): void {
     }
   })
 
-  ipcMain.handle('containers:action', async (_e, backend: string, target: string, id: string, action: string) => {
+  handle('containers:action', async (_e, backend: string, target: string, id: string, action: string) => {
     try {
       if (!TARGETS.has(target as ContainerTarget) || !ACTIONS.has(action as ContainerAction)) throw new Error('Invalid action')
       await backendOf(backend).action(target as ContainerTarget, safe(id, 'id'), action as ContainerAction)
@@ -177,7 +178,7 @@ export function registerContainerIpc(ipcMain: IpcMain): void {
     }
   })
 
-  ipcMain.handle('containers:prune', async (_e, backend: string, target: string) => {
+  handle('containers:prune', async (_e, backend: string, target: string) => {
     try {
       if (!TARGETS.has(target as ContainerTarget)) throw new Error('Invalid target')
       return { ok: true, text: await backendOf(backend).prune(target as ContainerTarget) }
@@ -186,7 +187,7 @@ export function registerContainerIpc(ipcMain: IpcMain): void {
     }
   })
 
-  ipcMain.handle('containers:create', async (_e, backend: string, target: string, name: string, options: unknown) => {
+  handle('containers:create', async (_e, backend: string, target: string, name: string, options: unknown) => {
     try {
       if (target !== 'volume' && target !== 'network') throw new Error('Invalid target')
       // Volumes may be named by the engine.
@@ -198,7 +199,7 @@ export function registerContainerIpc(ipcMain: IpcMain): void {
     }
   })
 
-  ipcMain.handle('containers:inspect', async (_e, backend: string, target: string, id: string) => {
+  handle('containers:inspect', async (_e, backend: string, target: string, id: string) => {
     try {
       if (!TARGETS.has(target as ContainerTarget)) throw new Error('Invalid target')
       return { ok: true, text: await backendOf(backend).inspect(target as ContainerTarget, safe(id, 'id')) }
@@ -207,7 +208,7 @@ export function registerContainerIpc(ipcMain: IpcMain): void {
     }
   })
 
-  ipcMain.handle('containers:logs', (e, backend: string, id: string) =>
+  handle('containers:logs', (e, backend: string, id: string) =>
     startStream(e.sender, async (sid, send, end) => {
       return backendOf(backend).logs(
         safe(id, 'id'),
@@ -217,7 +218,7 @@ export function registerContainerIpc(ipcMain: IpcMain): void {
     })
   )
 
-  ipcMain.handle('containers:stats', (e, backend: string, id: string) =>
+  handle('containers:stats', (e, backend: string, id: string) =>
     startStream(e.sender, async (sid, send, end) => {
       return backendOf(backend).stats(
         safe(id, 'id'),
@@ -227,7 +228,7 @@ export function registerContainerIpc(ipcMain: IpcMain): void {
     })
   )
 
-  ipcMain.handle('containers:job', (e, backend: string, job: ContainerJob) =>
+  handle('containers:job', (e, backend: string, job: ContainerJob) =>
     startStream(e.sender, async (sid, send, end) => {
       const b = backendOf(backend)
       const cli = b.cli()
@@ -246,7 +247,7 @@ export function registerContainerIpc(ipcMain: IpcMain): void {
     })
   )
 
-  ipcMain.on('containers:stopStream', (_e, id: string) => streams.get(String(id))?.())
+  listen('containers:stopStream', (_e, id: string) => streams.get(String(id))?.())
 
   /** Terminal profiles (opened as tabs): a shell inside a container, the engine's registry login. */
   const cliProfile = (backend: string, id: string, name: string, args: string[]): Profile | null => {
@@ -259,14 +260,14 @@ export function registerContainerIpc(ipcMain: IpcMain): void {
     return profile
   }
   // A container's environment; changing it recreates the container (Docker, Podman).
-  ipcMain.handle('containers:spec', async (_e, backend: string, id: string) => {
+  handle('containers:spec', async (_e, backend: string, id: string) => {
     try {
       return { ok: true, spec: await backendOf(backend).spec(safe(id, 'container')) }
     } catch (err) {
       return { ok: false, error: (err as Error).message }
     }
   })
-  ipcMain.handle('containers:recreate', async (_e, backend: string, id: string, change: Record<string, unknown>) => {
+  handle('containers:recreate', async (_e, backend: string, id: string, change: Record<string, unknown>) => {
     try {
       const b = backendOf(backend)
       if (!b.recreate) throw new Error(`${b.id} cannot recreate a container: its settings are read-only here.`)
@@ -283,7 +284,7 @@ export function registerContainerIpc(ipcMain: IpcMain): void {
   })
 
   // "Pull an image" suggestions.
-  ipcMain.handle('containers:searchImages', (_e, backend: string, input: string) =>
+  handle('containers:searchImages', (_e, backend: string, input: string) =>
     suggestImages(backends[String(backend) as ContainerBackendId], String(input ?? '').slice(0, 200))
   )
 
@@ -293,21 +294,21 @@ export function registerContainerIpc(ipcMain: IpcMain): void {
     if (!cli) throw new Error(`The ${backend} command line tool is not installed.`)
     return cli
   }
-  ipcMain.handle('containers:listFiles', async (_e, backend: string, id: string, path: string) => {
+  handle('containers:listFiles', async (_e, backend: string, id: string, path: string) => {
     try {
       return await listFiles(fileCli(backend), safe(id, 'container'), containerPath(path))
     } catch (err) {
       return { ok: false, path: String(path), error: (err as Error).message }
     }
   })
-  ipcMain.handle('containers:readFile', async (_e, backend: string, id: string, path: string) => {
+  handle('containers:readFile', async (_e, backend: string, id: string, path: string) => {
     try {
       return await readFilePreview(fileCli(backend), safe(id, 'container'), containerPath(path))
     } catch (err) {
       return { ok: false, error: (err as Error).message }
     }
   })
-  ipcMain.handle('containers:saveFile', async (e, backend: string, id: string, path: string) => {
+  handle('containers:saveFile', async (e, backend: string, id: string, path: string) => {
     try {
       const p = containerPath(path)
       const cli = fileCli(backend)
@@ -322,7 +323,7 @@ export function registerContainerIpc(ipcMain: IpcMain): void {
     }
   })
 
-  ipcMain.handle('containers:shellProfile', (_e, backend: string, id: string, name?: string) => {
+  handle('containers:shellProfile', (_e, backend: string, id: string, name?: string) => {
     const c = containerRef(id)
     // The tab's title: the container's name (else its short id).
     const label = typeof name === 'string' && name.trim() ? name.trim().slice(0, 80) : c.slice(0, 12)
@@ -335,7 +336,7 @@ export function registerContainerIpc(ipcMain: IpcMain): void {
       'if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi'
     ])
   })
-  ipcMain.handle('containers:loginProfile', (_e, backend: string, registry: string) => {
+  handle('containers:loginProfile', (_e, backend: string, registry: string) => {
     const r = String(registry ?? '').trim()
     return cliProfile(backend, `container-login:${backend}:${r || 'default'}`, `${backend} login${r ? ` ${r}` : ''}`, ['login', ...(r ? [registryRef(r)] : [])])
   })

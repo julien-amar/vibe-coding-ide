@@ -6,6 +6,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import type { PackageUpdateInfo } from '@shared/types'
 import { onSessionData, onSessionExit } from '../pty-bus'
 import { handleAppShortcut } from '../shortcuts'
+import { useLatest } from '../use-latest'
 
 /**
  * The WebGL renderer (faster with heavy output). Off: with Electron 45.2.3 (its Chromium security
@@ -82,8 +83,7 @@ export function TerminalView({ sessionId, restoredScrollback, visible, autoFocus
   const hostRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
-  const onTitleRef = useRef(onTitle)
-  onTitleRef.current = onTitle
+  const onTitleRef = useLatest(onTitle)
 
   useEffect(() => {
     const host = hostRef.current!
@@ -195,7 +195,7 @@ export function TerminalView({ sessionId, restoredScrollback, visible, autoFocus
       term.dispose()
       termRef.current = null
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one terminal per session; the callbacks are read through refs
   }, [sessionId])
 
   useEffect(() => {

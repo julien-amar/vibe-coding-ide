@@ -1,0 +1,103 @@
+/* Dialogs (Modal): the backdrop, form dialogs (fields, buttons). */
+
+.dialog .dialog-field textarea {
+  height: auto;
+  padding: 6px 8px;
+  resize: vertical;
+  min-height: 90px;
+}
+
+/* ---------- Dialogs & toasts ---------- */
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.dialog {
+  width: min(460px, calc(100vw - 32px));
+  /* Starts 12% down the window: scrolls rather than leaving its buttons off screen. */
+  max-height: calc(88vh - 16px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 18px 20px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  user-select: text;
+}
+
+.dialog h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.dialog-message {
+  margin: 0 0 12px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.dialog-field span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.dialog-field input,
+.dialog-field select,
+.dialog-field textarea {
+  height: 30px;
+  padding: 0 8px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  outline: none;
+}
+
+.dialog-field input:focus,
+.dialog-field select:focus,
+.dialog-field textarea:focus {
+  border-color: var(--accent);
+}
+
+.dialog-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.dialog .dialog-check {
+  margin-bottom: 12px;
+}
+
+.dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.dialog-buttons button {
+  height: 30px;
+  padding: 0 16px;
+  font-size: 13px;
+}

@@ -73,7 +73,7 @@ export function ChangesView({ root, status, run, refreshKey }: { root: string; s
     if (!file) setSelected(undefined)
     // An untracked file that got committed / added since (or the reverse): show its real diff.
     else if (!selected.staged && (file.worktree === '?') !== selected.untracked) setSelected({ ...selected, untracked: file.worktree === '?' })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the selection is checked again when the status changes, not when it is changed here
   }, [status])
 
   useEffect(() => {

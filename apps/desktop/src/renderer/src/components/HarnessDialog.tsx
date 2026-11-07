@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useEffect, useState } from 'react'
 import type { AgentHarnessSupport, Harness } from '@shared/types'
 import { InstructionsView } from './HarnessInstructions'
 import { McpView } from './HarnessMcp'
+import { Modal } from './Modal'
 import { SkillsView } from './HarnessSkills'
 
 type View = 'mcp' | 'skills' | 'instructions'
@@ -40,70 +40,59 @@ export function HarnessDialog({
   useEffect(() => {
     void window.ide.harness.support().then(setSupport)
   }, [])
-  // Keyboard focus starts in the dialog. Esc closes it wherever the focus is (a button that went
-  // away, a terminal behind): caught before anything else, except inside an open server form,
-  // where Esc only closes the form.
-  const dialogRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!dialogRef.current?.contains(document.activeElement)) dialogRef.current?.focus()
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape' || (e.target instanceof Element && e.target.closest('.harness-editor'))) return
-      e.preventDefault()
-      e.stopPropagation()
-      onClose()
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [onClose])
 
   const save = async (next: Harness): Promise<void> => onChange(next)
   const current = support.find((s) => s.agent === agentId)
   const enabledServers = harness.mcpServers.filter((s) => s.enabled).length
   const enabledSkills = harness.skills.filter((s) => s.enabled).length
 
-  return createPortal(
-    <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={dialogRef} className="dialog harness-dialog" role="dialog" aria-modal="true" aria-label={`${agent} settings`} tabIndex={-1}>
-        <div className="harness-dialog-head">
-          <strong>{agent} settings</strong>
-          <span className="spacer" />
-          <button className="icon-button pane-action" title="Close (Esc)" aria-label="Close" onClick={onClose}>
-            ✕
+  // Keyboard focus starts in the dialog; Esc closes it, except inside an open server form (Esc closes the form).
+  return (
+    <Modal
+      label={`${agent} settings`}
+      className="dialog harness-dialog"
+      onClose={onClose}
+      focusDialog
+      onEscape={(e) => e.target instanceof Element && !!e.target.closest('.harness-editor')}
+    >
+      <div className="harness-dialog-head">
+        <strong>{agent} settings</strong>
+        <span className="spacer" />
+        <button className="icon-button pane-action" title="Close (Esc)" aria-label="Close" onClick={onClose}>
+          ✕
+        </button>
+      </div>
+      {stale && (
+        <div className="harness-stale" role="status">
+          <span>The agent runs with the previous settings. Restart it to apply the changes (the conversation starts over).</span>
+          <button className="tool-button primary" onClick={onRestart}>
+            Restart agent
           </button>
         </div>
-        {stale && (
-          <div className="harness-stale" role="status">
-            <span>The agent runs with the previous settings. Restart it to apply the changes (the conversation starts over).</span>
-            <button className="tool-button primary" onClick={onRestart}>
-              Restart agent
-            </button>
-          </div>
-        )}
-        <div className="pane-toolbar harness-toolbar">
-          <div className="segmented" role="tablist">
-            <button role="tab" aria-selected={view === 'mcp'} className={view === 'mcp' ? 'active' : ''} onClick={() => setView('mcp')}>
-              MCP servers <span className="count">{enabledServers}</span>
-            </button>
-            <button role="tab" aria-selected={view === 'skills'} className={view === 'skills' ? 'active' : ''} onClick={() => setView('skills')}>
-              Skills <span className="count">{enabledSkills}</span>
-            </button>
-            <button
-              role="tab"
-              aria-selected={view === 'instructions'}
-              className={view === 'instructions' ? 'active' : ''}
-              onClick={() => setView('instructions')}
-            >
-              Instructions {harness.instructions.trim() ? <span className="harness-dot" aria-label="set" /> : null}
-            </button>
-          </div>
-        </div>
-        <div className="harness-body">
-          {view === 'mcp' && <McpView root={root} harness={harness} save={save} support={current} />}
-          {view === 'skills' && <SkillsView root={root} harness={harness} save={save} support={current} />}
-          {view === 'instructions' && <InstructionsView harness={harness} save={save} />}
+      )}
+      <div className="pane-toolbar harness-toolbar">
+        <div className="segmented" role="tablist">
+          <button role="tab" aria-selected={view === 'mcp'} className={view === 'mcp' ? 'active' : ''} onClick={() => setView('mcp')}>
+            MCP servers <span className="count">{enabledServers}</span>
+          </button>
+          <button role="tab" aria-selected={view === 'skills'} className={view === 'skills' ? 'active' : ''} onClick={() => setView('skills')}>
+            Skills <span className="count">{enabledSkills}</span>
+          </button>
+          <button
+            role="tab"
+            aria-selected={view === 'instructions'}
+            className={view === 'instructions' ? 'active' : ''}
+            onClick={() => setView('instructions')}
+          >
+            Instructions {harness.instructions.trim() ? <span className="harness-dot" aria-label="set" /> : null}
+          </button>
         </div>
       </div>
-    </div>,
-    document.body
+      <div className="harness-body">
+        {view === 'mcp' && <McpView root={root} harness={harness} save={save} support={current} />}
+        {view === 'skills' && <SkillsView root={root} harness={harness} save={save} support={current} />}
+        {view === 'instructions' && <InstructionsView harness={harness} save={save} />}
+      </div>
+    </Modal>
   )
 }

@@ -64,8 +64,8 @@ export async function gitOp(root: string, req: GitOpRequest): Promise<GitOpResul
         return { ok: true }
       }
       case 'prInfo': {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { remote, web, ...pr } = await prInfo(root)
+        // (The remote and web URL are the main process's business.)
+        const { remote: _remote, web: _web, ...pr } = await prInfo(root)
         return { ok: true, pr }
       }
       case 'createPr':

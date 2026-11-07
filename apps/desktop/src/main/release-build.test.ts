@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- the release script is plain CommonJS (run by node in CI)
 const { signingPlan } = require('../../scripts/release-build.cjs') as {
   signingPlan(env: Record<string, string | undefined>, platform: string): { args: string[]; env: Record<string, string>; signed: string; macSigned: boolean }
 }

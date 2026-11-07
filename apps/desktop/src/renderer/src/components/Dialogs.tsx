@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { create } from 'zustand'
+import { Modal } from './Modal'
 
 /** In-app dialogs (Electron has no window.prompt) and toast notifications. */
 
@@ -74,82 +75,68 @@ function DialogBox({ req }: { req: NonNullable<DialogState['current']> }): React
   }
 
   return (
-    <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && close(null)}>
-      <form
-        className="dialog"
-        role="dialog"
-        aria-label={req.title}
-        onSubmit={(e) => {
-          e.preventDefault()
-          close(values)
-        }}
-        onKeyDown={(e) => {
-          e.stopPropagation()
-          if (e.key === 'Escape') close(null)
-        }}
-      >
-        <h2>{req.title}</h2>
-        {req.message && <p className="dialog-message">{req.message}</p>}
-        {(req.fields ?? []).map((f, i) =>
-          f.kind === 'checkbox' ? (
-            <label key={f.name} className="dialog-check">
-              <input type="checkbox" checked={Boolean(values[f.name])} onChange={(e) => setValues({ ...values, [f.name]: e.target.checked })} />
-              {f.label}
-            </label>
-          ) : (
-            <label key={f.name} className="dialog-field">
-              <span>{f.label}</span>
-              {f.options ? (
-                <select
-                  ref={(el) => {
-                    if (i === 0) firstInput.current = el
-                  }}
-                  value={String(values[f.name])}
-                  onChange={(e) => setValues({ ...values, [f.name]: e.target.value })}
-                >
-                  {f.options.map((o) => (
-                    <option key={o}>{o}</option>
-                  ))}
-                </select>
-              ) : f.kind === 'textarea' ? (
-                <textarea
-                  className="selectable"
-                  rows={6}
-                  value={String(values[f.name])}
-                  placeholder={f.placeholder}
-                  onChange={(e) => setValues({ ...values, [f.name]: e.target.value })}
-                  onKeyDown={(e) => {
-                    // Enter is a new line here; Ctrl+Enter confirms.
-                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                      e.preventDefault()
-                      close(values)
-                    }
-                  }}
-                />
-              ) : (
-                <input
-                  ref={(el) => {
-                    if (i === 0) firstInput.current = el
-                  }}
-                  value={String(values[f.name])}
-                  placeholder={f.placeholder}
-                  spellCheck={false}
-                  onChange={(e) => setValues({ ...values, [f.name]: e.target.value })}
-                />
-              )}
-            </label>
-          )
-        )}
-        <div className="dialog-buttons">
-          <button type="button" onClick={() => close(null)}>
-            Cancel
-          </button>
-          <button type="submit" className={req.danger ? 'danger' : 'primary'}>
-            {req.confirmLabel ?? 'OK'}
-          </button>
-        </div>
-      </form>
-    </div>
+    <Modal label={req.title} className="dialog" onClose={() => close(null)} onSubmit={() => close(values)}>
+      <h2>{req.title}</h2>
+      {req.message && <p className="dialog-message">{req.message}</p>}
+      {(req.fields ?? []).map((f, i) =>
+        f.kind === 'checkbox' ? (
+          <label key={f.name} className="dialog-check">
+            <input type="checkbox" checked={Boolean(values[f.name])} onChange={(e) => setValues({ ...values, [f.name]: e.target.checked })} />
+            {f.label}
+          </label>
+        ) : (
+          <label key={f.name} className="dialog-field">
+            <span>{f.label}</span>
+            {f.options ? (
+              <select
+                ref={(el) => {
+                  if (i === 0) firstInput.current = el
+                }}
+                value={String(values[f.name])}
+                onChange={(e) => setValues({ ...values, [f.name]: e.target.value })}
+              >
+                {f.options.map((o) => (
+                  <option key={o}>{o}</option>
+                ))}
+              </select>
+            ) : f.kind === 'textarea' ? (
+              <textarea
+                className="selectable"
+                rows={6}
+                value={String(values[f.name])}
+                placeholder={f.placeholder}
+                onChange={(e) => setValues({ ...values, [f.name]: e.target.value })}
+                onKeyDown={(e) => {
+                  // Enter is a new line here; Ctrl+Enter confirms.
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault()
+                    close(values)
+                  }
+                }}
+              />
+            ) : (
+              <input
+                ref={(el) => {
+                  if (i === 0) firstInput.current = el
+                }}
+                value={String(values[f.name])}
+                placeholder={f.placeholder}
+                spellCheck={false}
+                onChange={(e) => setValues({ ...values, [f.name]: e.target.value })}
+              />
+            )}
+          </label>
+        )
+      )}
+      <div className="dialog-buttons">
+        <button type="button" onClick={() => close(null)}>
+          Cancel
+        </button>
+        <button type="submit" className={req.danger ? 'danger' : 'primary'}>
+          {req.confirmLabel ?? 'OK'}
+        </button>
+      </div>
+    </Modal>
   )
 }
 

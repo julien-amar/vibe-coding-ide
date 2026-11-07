@@ -14,7 +14,7 @@ export function InstructionsView({ harness, save }: { harness: Harness; save: (h
     if (t !== h.instructions) void save({ ...h, instructions: t })
   }
   // Save when leaving the view (flush reads the latest values through a ref).
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- on unmount only: flush reads the latest values through a ref
   useEffect(() => () => flush(), [])
 
   return (

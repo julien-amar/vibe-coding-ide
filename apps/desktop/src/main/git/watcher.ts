@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import type { WebContents } from 'electron'
 import { parseWslPath } from '@shared/wsl-paths'
 import { git } from './run'
+import { emit } from '../ipc'
 
 /**
  * Notifies subscribed windows when a repository's refs change (commit,
@@ -16,7 +17,7 @@ export class GitWatcher {
     const e = this.watchers.get(root)
     if (!e) return
     clearTimeout(e.timer)
-    e.timer = setTimeout(() => e.subscribers.forEach((s) => !s.isDestroyed() && s.send('git:changed', root)), 300)
+    e.timer = setTimeout(() => e.subscribers.forEach((s) => emit(s, 'git:changed', root)), 300)
   }
 
   private start(root: string): (() => void) | undefined {

@@ -41,8 +41,7 @@ interface Row {
  */
 export function TestPanel({ root, tabId, visible }: { root: string; tabId: string; visible: boolean }): React.JSX.Element {
   const st = useProjectTests(root)
-  // The store's actions (getState is a plain method of the zustand store, not a hook).
-  // eslint-disable-next-line react/hooks
+  // eslint-disable-next-line react/hooks -- getState is a plain method of the zustand store, not a hook
   const { discover, run, stop, clearOutput } = useTestsStore.getState()
   const [filter, setFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')

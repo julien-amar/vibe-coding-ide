@@ -10,6 +10,7 @@ import { goAdapter } from './tests/go'
 import { jestAdapter, jsLiveResult, jsRunArgs, playwrightAdapter, vitestAdapter, type RunFiles } from './tests/js'
 import { gradleAdapter, mavenAdapter } from './tests/jvm'
 import { pytestAdapter, pytestResult, pytestRunArgs } from './tests/pytest'
+import { emit } from './ipc'
 
 /**
  * Tests panel backend: finds test frameworks in a project (also in monorepo
@@ -83,12 +84,12 @@ export async function runTests(root: string, req: TestRunRequest, sender: WebCon
   running.set(root, state)
   const work = workDir()
   const send = (text: string): void => {
-    if (!sender.isDestroyed()) sender.send('tests:output', root, text)
+    emit(sender, 'tests:output', root, text)
   }
   const ctx: RunContext = {
     send,
     result: (r: TestResult) => {
-      if (!sender.isDestroyed()) sender.send('tests:progress', root, req.projectId, r)
+      emit(sender, 'tests:progress', root, req.projectId, r)
     },
     async exec(cmd, out) {
       if (state.cancelled) return null

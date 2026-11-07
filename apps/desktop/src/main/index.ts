@@ -1,6 +1,6 @@
 import { appendFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, type Rectangle, type WebContents } from 'electron'
+import { app, BrowserWindow, dialog, nativeTheme, shell, type Rectangle, type WebContents } from 'electron'
 import { mapPanes, sessionIdsOf } from '@shared/layout'
 import type {
   GitOpRequest,
@@ -28,6 +28,7 @@ import { forgetProject, recentProjects, touchProject } from './projects'
 import { PtyManager } from './pty-manager'
 import { discoverTests, runTests, stopAllTests, stopTests } from './test-runner'
 import { checkForUpdates, installUpdate, startUpdates, updateStatus } from './updater'
+import { emit, handle, listen } from './ipc'
 
 app.setName('vibe-coding-ide')
 // VIBE_CODING_IDE_USER_DATA: run with a separate profile (layout, recent projects), e.g. for automated tests.
@@ -236,21 +237,21 @@ function transferAll(ids: string[], from: WebContents, to: WebContents): boolean
 // ---------- IPC ----------
 
 function registerIpc(): void {
-  registerContainerIpc(ipcMain)
-  ipcMain.handle('profiles:list', async (_e, refresh?: boolean) => offeredProfiles(await listProfiles(Boolean(refresh))))
-  ipcMain.handle('profiles:all', () => listProfiles())
-  ipcMain.handle('settings:get', () => getSettings())
-  ipcMain.handle('settings:set', (_e, patch: unknown) => updateSettings(patch))
-  ipcMain.handle('settings:reset', () => resetSettings())
+  registerContainerIpc()
+  handle('profiles:list', async (_e, refresh?: boolean) => offeredProfiles(await listProfiles(Boolean(refresh))))
+  handle('profiles:all', () => listProfiles())
+  handle('settings:get', () => getSettings())
+  handle('settings:set', (_e, patch: unknown) => updateSettings(patch))
+  handle('settings:reset', () => resetSettings())
   // The app's own version (built in: app.getVersion() gives Electron's when the app is not packaged).
-  ipcMain.handle('app:version', () => pkg.version)
-  ipcMain.handle('profiles:wslAgents', async (_e, distro: string) => offeredProfiles(await wslAgents(String(distro))))
-  ipcMain.handle('profiles:icon', async (_e, id: string) => {
+  handle('app:version', () => pkg.version)
+  handle('profiles:wslAgents', async (_e, distro: string) => offeredProfiles(await wslAgents(String(distro))))
+  handle('profiles:icon', async (_e, id: string) => {
     const profile = await findProfile(String(id))
     return profile ? profileIcon(profile) : null
   })
 
-  ipcMain.handle('pty:create', async (e, req: PtyCreateRequest): Promise<PtyCreateResult> => {
+  handle('pty:create', async (e, req: PtyCreateRequest): Promise<PtyCreateResult> => {
     const profile = await findProfile(req.profileId)
     if (!profile) throw new Error(`Unknown profile: ${req.profileId}`)
     const start = startIn(profile, req.cwd)
@@ -273,27 +274,27 @@ function registerIpc(): void {
       void checkUpdates(target).then((info) => {
         if (!info || !ptys.has(sessionId)) return
         sessionUpdates.set(sessionId, { info, target })
-        ptys.notify(sessionId, 'pty:updates', info)
+        ptys.notifyUpdates(sessionId, info)
       })
     }
     return { sessionId, title: profile.name }
   })
-  ipcMain.handle('pty:attach', (e, id: string) => ptys.attach(id, e.sender))
-  ipcMain.on('pty:write', (e, id: string, data: string) => ptys.write(id, data, e.sender))
-  ipcMain.on('pty:resize', (e, id: string, cols: number, rows: number) => ptys.resize(id, cols, rows, e.sender))
-  ipcMain.on('pty:kill', (e, id: string) => {
+  handle('pty:attach', (e, id: string) => ptys.attach(id, e.sender))
+  listen('pty:write', (e, id: string, data: string) => ptys.write(id, data, e.sender))
+  listen('pty:resize', (e, id: string, cols: number, rows: number) => ptys.resize(id, cols, rows, e.sender))
+  listen('pty:kill', (e, id: string) => {
     ptys.kill(id, e.sender)
     sessionUpdates.delete(id)
   })
-  ipcMain.handle('pty:updates', (e, id: string) => (ptys.isSubscribed(id, e.sender) ? (sessionUpdates.get(id)?.info ?? null) : null))
-  ipcMain.on('pty:dismissUpdates', (e, id: string, accepted: boolean) => {
+  handle('pty:updates', (e, id: string) => (ptys.isSubscribed(id, e.sender) ? (sessionUpdates.get(id)?.info ?? null) : null))
+  listen('pty:dismissUpdates', (e, id: string, accepted: boolean) => {
     const entry = sessionUpdates.get(id)
     if (!entry || !ptys.isSubscribed(id, e.sender)) return
     sessionUpdates.delete(id)
     if (accepted) forgetUpdates(entry.target)
   })
 
-  ipcMain.handle('window:init', (e): WindowInit => {
+  handle('window:init', (e): WindowInit => {
     const entry = entryFor(e.sender)
     const init = entry?.pendingInit ?? { tabs: [], activeIndex: 0 }
     const restored = entry?.restored === true
@@ -304,14 +305,14 @@ function registerIpc(): void {
     return { windowId: entry?.win.id ?? -1, ...init, restored }
   })
 
-  ipcMain.on('window:state', (e, state: WindowTabsState) => {
+  listen('window:state', (e, state: WindowTabsState) => {
     const entry = entryFor(e.sender)
     if (!entry || !Array.isArray(state?.tabs)) return
     entry.state = { tabs: state.tabs.map(sanitizeTab), activeIndex: Number(state.activeIndex) || 0 }
     scheduleSave()
   })
 
-  ipcMain.handle('window:detach', (e, rawTab: TabSnapshot, screenX: number, screenY: number) => {
+  handle('window:detach', (e, rawTab: TabSnapshot, screenX: number, screenY: number) => {
     const source = entryFor(e.sender)
     const tab = sanitizeTab(rawTab)
     const ids = liveSessions(tab)
@@ -322,84 +323,84 @@ function registerIpc(): void {
       win.destroy()
       return false
     }
-    e.sender.send('window:tabTransferred', tabKey(tab))
+    emit(e.sender, 'window:tabTransferred', tabKey(tab))
     return true
   })
 
-  ipcMain.handle('window:adopt', (e, rawTab: TabSnapshot, fromWindowId: number) => {
+  handle('window:adopt', (e, rawTab: TabSnapshot, fromWindowId: number) => {
     const tab = sanitizeTab(rawTab)
     const source = windows.get(Number(fromWindowId))
     const ids = liveSessions(tab)
     if (!source || !ids || source.win.webContents === e.sender) return false
     if (!transferAll(ids, source.win.webContents, e.sender)) return false
-    source.win.webContents.send('window:tabTransferred', tabKey(tab))
+    emit(source.win.webContents, 'window:tabTransferred', tabKey(tab))
     return true
   })
 
-  ipcMain.on('window:close', (e) => BrowserWindow.fromWebContents(e.sender)?.close())
+  listen('window:close', (e) => BrowserWindow.fromWebContents(e.sender)?.close())
 
-  ipcMain.handle('project:pickFolder', async (e, defaultPath?: string) => {
+  handle('project:pickFolder', async (e, defaultPath?: string) => {
     const win = BrowserWindow.fromWebContents(e.sender)
     const start = typeof defaultPath === 'string' && isDir(defaultPath) ? defaultPath : undefined
     const opts = { title: 'Open project folder', defaultPath: start, properties: ['openDirectory' as const] }
     const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
     return res.canceled || !res.filePaths[0] ? null : res.filePaths[0]
   })
-  ipcMain.handle('project:recent', () => recentProjects())
-  ipcMain.on('project:touch', (_e, root: string) => touchProject(String(root)))
-  ipcMain.handle('project:forget', (_e, root: string) => forgetProject(String(root)))
+  handle('project:recent', () => recentProjects())
+  listen('project:touch', (_e, root: string) => touchProject(String(root)))
+  handle('project:forget', (_e, root: string) => forgetProject(String(root)))
 
-  ipcMain.handle('git:log', (_e, root: string) => (isDir(String(root)) ? gitLog(String(root)) : { isRepo: false, error: 'Folder not found', commits: [] }))
-  ipcMain.handle('git:op', (_e, root: string, req: GitOpRequest) =>
+  handle('git:log', (_e, root: string) => (isDir(String(root)) ? gitLog(String(root)) : { isRepo: false, error: 'Folder not found', commits: [] }))
+  handle('git:op', (_e, root: string, req: GitOpRequest) =>
     isDir(String(root)) ? gitOp(String(root), req ?? { op: 'status' }) : { ok: false, error: 'Folder not found' }
   )
-  ipcMain.on('git:watch', (e, root: string) => {
+  listen('git:watch', (e, root: string) => {
     if (isDir(String(root))) gitWatcher.watch(String(root), e.sender)
   })
-  ipcMain.on('git:unwatch', (e, root: string) => gitWatcher.unwatch(String(root), e.sender))
+  listen('git:unwatch', (e, root: string) => gitWatcher.unwatch(String(root), e.sender))
 
-  ipcMain.handle('tests:discover', (_e, root: string) => (isDir(String(root)) ? discoverTests(String(root)) : []))
-  ipcMain.handle('tests:run', (e, root: string, req: TestRunRequest) =>
+  handle('tests:discover', (_e, root: string) => (isDir(String(root)) ? discoverTests(String(root)) : []))
+  handle('tests:run', (e, root: string, req: TestRunRequest) =>
     isDir(String(root))
       ? runTests(String(root), { ...req, projectId: String(req?.projectId ?? '') }, e.sender)
       : { ok: false, error: 'Folder not found', results: [], fileErrors: [] }
   )
-  ipcMain.on('tests:stop', (_e, root: string) => stopTests(String(root)))
+  listen('tests:stop', (_e, root: string) => stopTests(String(root)))
 
-  ipcMain.handle('harness:check', (_e, root: string, server: unknown) => checkMcpServer(String(root), server))
-  ipcMain.handle('harness:skills', (_e, root: string, harness: unknown) => (isDir(String(root)) ? listSkills(String(root), sanitizeHarness(harness)) : []))
-  ipcMain.handle('harness:readSkill', (_e, path: string) => {
+  handle('harness:check', (_e, root: string, server: unknown) => checkMcpServer(String(root), server))
+  handle('harness:skills', (_e, root: string, harness: unknown) => (isDir(String(root)) ? listSkills(String(root), sanitizeHarness(harness)) : []))
+  handle('harness:readSkill', (_e, path: string) => {
     try {
       return readSkillFile(String(path))
     } catch {
       return ''
     }
   })
-  ipcMain.handle('harness:pickSkillFolder', async (e, root: string) => {
+  handle('harness:pickSkillFolder', async (e, root: string) => {
     const win = BrowserWindow.fromWebContents(e.sender)
     const opts = { title: 'Choose a skill folder (with a SKILL.md), or a folder of skills', defaultPath: String(root), properties: ['openDirectory' as const] }
     const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
     return res.canceled || !res.filePaths[0] ? null : res.filePaths[0]
   })
-  ipcMain.handle('harness:projectMcp', (_e, root: string) => (isDir(String(root)) ? readProjectMcpJson(String(root)) : []))
-  ipcMain.handle('harness:support', () => HARNESS_SUPPORT)
+  handle('harness:projectMcp', (_e, root: string) => (isDir(String(root)) ? readProjectMcpJson(String(root)) : []))
+  handle('harness:support', () => HARNESS_SUPPORT)
 
-  ipcMain.handle('app:openInEditor', (_e, root: string, file: string, line?: number, column?: number, base?: string) =>
+  handle('app:openInEditor', (_e, root: string, file: string, line?: number, column?: number, base?: string) =>
     isDir(String(root))
       ? openInEditor(String(root), String(file ?? ''), line, column, base ? String(base) : undefined)
       : { ok: false, error: 'Folder not found' }
   )
 
-  ipcMain.handle('update:status', () => updateStatus())
-  ipcMain.on('update:check', () => checkForUpdates())
-  ipcMain.on('update:install', () => {
+  handle('update:status', () => updateStatus())
+  listen('update:check', () => checkForUpdates())
+  listen('update:install', () => {
     // quitAndInstall closes the windows one by one: save them all first (like an explicit quit).
     saveNow(true)
     quitting = true
     installUpdate()
   })
 
-  ipcMain.on('app:openExternal', (_e, url: string) => {
+  listen('app:openExternal', (_e, url: string) => {
     try {
       const { protocol } = new URL(url)
       if (protocol !== 'http:' && protocol !== 'https:') return

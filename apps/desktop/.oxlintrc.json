@@ -12,17 +12,22 @@
   },
   "rules": {
     "react-hooks/rules-of-hooks": "error",
-    "react-hooks/exhaustive-deps": "warn",
+    "react-hooks/exhaustive-deps": "error",
     "react/react-in-jsx-scope": "off",
     "import/no-unassigned-import": "off",
     "eslint/no-underscore-dangle": "off",
     "promise/always-return": "off",
-    "react/exhaustive-effect-dependencies": "off",
     "react/set-state-in-effect": "off",
-    "react/refs": "off",
     "import/default": "off",
     "react/immutability": "off",
-    "react/preserve-manual-memoization": "off"
+    "react/preserve-manual-memoization": "off",
+    "react/no-unstable-nested-components": [
+      "warn",
+      {
+        "allowAsProps": true
+      }
+    ],
+    "react/exhaustive-effect-dependencies": "off"
   },
   "env": {
     "browser": true,
