@@ -7,6 +7,14 @@ import type { PackageUpdateInfo } from '@shared/types'
 import { onSessionData, onSessionExit } from '../pty-bus'
 import { handleAppShortcut } from '../shortcuts'
 
+/**
+ * The WebGL renderer (faster with heavy output). Off: with Electron 45.2.3 (its Chromium security
+ * backports) it draws the glyphs at the wrong size (tiny letters, wide gaps; xterm 6.0 and the
+ * 6.1 beta alike), and Electron 45.2.2 draws them right. xterm's DOM renderer is correct. Turn
+ * it back on with an Electron that fixes it (check: a terminal's text, at 125 % display scale).
+ */
+const USE_WEBGL = false
+
 const darkTheme: ITheme = {
   background: '#0c0c0c',
   foreground: '#cccccc',
@@ -91,12 +99,14 @@ export function TerminalView({ sessionId, restoredScrollback, visible, autoFocus
     term.loadAddon(fit)
     term.loadAddon(new WebLinksAddon((_e, uri) => window.ide.app.openExternal(uri)))
     term.open(host)
-    try {
-      const webgl = new WebglAddon()
-      webgl.onContextLoss(() => webgl.dispose())
-      term.loadAddon(webgl)
-    } catch {
-      /* fall back to the DOM renderer */
+    if (USE_WEBGL) {
+      try {
+        const webgl = new WebglAddon()
+        webgl.onContextLoss(() => webgl.dispose())
+        term.loadAddon(webgl)
+      } catch {
+        /* fall back to the DOM renderer */
+      }
     }
     termRef.current = term
     if (window.ide.debug) (host as unknown as { __xterm: Terminal }).__xterm = term // debugging aid (DevTools checks)
