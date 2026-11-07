@@ -1,6 +1,6 @@
 {
   "name": "@vibe-coding-ide/desktop",
-  "version": "0.1.0",
+  "version": "0.0.2",
   "private": true,
   "description": "vibe-coding-ide - a tabbed development environment",
   "license": "MIT",
