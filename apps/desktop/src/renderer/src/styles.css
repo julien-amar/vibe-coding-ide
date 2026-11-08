@@ -978,3 +978,47 @@ body.resizing-row * {
   z-index: 5;
   background: var(--bg);
 }
+
+/* A k9s tab: the context to look at, above k9s. */
+
+.kube-view {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.kube-toolbar {
+  gap: 8px;
+}
+
+.kube-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.kube-toolbar select {
+  height: 24px;
+  min-width: 220px;
+  padding: 0 6px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.kube-terminal {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.spinner.spinner-inline {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
+}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Profile } from '@shared/types'
 import { agentLogo, Logo } from '../logos'
+import K9S_LOGO from '../assets/logos/k9s.png'
 
 /** Icon data URLs from the main process, fetched once per profile. */
 const iconCache = new Map<string, Promise<string | null>>()
@@ -70,7 +71,9 @@ export function ProfileIcon({ profile, size = 16 }: { profile: Profile; size?: n
   // AI agents: their own logo (npm installs and most agent binaries carry no icon).
   const logo = profile.kind === 'agent' ? agentLogo(profile.id) : undefined
 
-  const hasLogo = logo !== undefined
+  // k9s (every context, on Windows or in WSL): its logo.
+  const k9s = profile.kind === 'tool' && profile.id.startsWith('tool:k9s')
+  const hasLogo = logo !== undefined || k9s
   useEffect(() => {
     if (hasLogo) return
     let alive = true
@@ -81,6 +84,7 @@ export function ProfileIcon({ profile, size = 16 }: { profile: Profile; size?: n
   }, [profile.id, hasLogo])
 
   if (logo) return <Logo svg={logo.svg} size={size} className={`profile-icon agent-logo ${logo.agent}`} />
+  if (k9s) return <img className="profile-icon tool-logo" src={K9S_LOGO} width={size} height={size} alt="" draggable={false} />
   if (src) return <img className="profile-icon" src={src} width={size} height={size} alt="" draggable={false} />
   if (src === undefined) return <span className="profile-icon placeholder" style={{ width: size, height: size }} />
   const m = monogramFor(profile)

@@ -6,6 +6,7 @@ import { LINUX_LOGO, Logo } from '../logos'
 import { ContainersIcon } from './KindBadge'
 import { ProfileIcon } from './ProfileIcon'
 import { useSettingsUi } from './SettingsDialog'
+import { k9sContexts } from './KubeView'
 
 interface Entry {
   key: string
@@ -35,9 +36,9 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
   const openProfile = useTabs((s) => s.openProfile)
   const openProject = useTabs((s) => s.openProject)
 
-  /** Adds tools found inside WSL distributions (k9s) to the list, once found. */
-  const addWslTools = (all: boolean): void => {
-    void window.ide.profiles.wslTools(all).then((tools) => {
+  /** Adds the tools found inside WSL distributions (k9s; looked for once, at app start) to the list. */
+  const addWslTools = (): void => {
+    void window.ide.profiles.wslTools().then((tools) => {
       if (tools.length) setProfiles((cur) => (cur ? [...cur.filter((p) => !tools.some((t) => t.id === p.id)), ...tools] : cur))
     })
   }
@@ -45,8 +46,7 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
   useEffect(() => {
     void loadProfiles().then((p) => {
       setProfiles(p)
-      // The running distributions only (none is started to look).
-      addWslTools(false)
+      addWslTools()
     })
     void window.ide.project.recent().then(setRecent)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps -- once, when the launcher opens
@@ -106,8 +106,20 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
         run: () => void openProject(p.root),
         remove: () => void forget(p.root)
       })),
+      // k9s: one entry (its contexts are chosen in the tab); opens on the current Windows context, else the first found.
+      ...k9sContexts(profiles ?? [])
+        .slice(0, 1)
+        .map((p) => ({
+          key: 'tool:k9s',
+          group: 'Tools',
+          label: 'k9s',
+          detail: 'Kubernetes: choose the context in the tab',
+          badge: p.kind,
+          profile: p,
+          run: () => void openProfile(p)
+        })),
       ...(profiles ?? [])
-        .filter((p) => !(p.kind === 'agent' && p.wslDistro))
+        .filter((p) => !(p.kind === 'agent' && p.wslDistro) && !p.id.startsWith('tool:k9s'))
         .map((p) => ({
           key: p.id,
           group: PROFILE_GROUP[p.kind],
@@ -147,8 +159,7 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
     setProfiles(null)
     void loadProfiles(true).then((p) => {
       setProfiles(p)
-      // Every distribution (started if need be): an explicit rescan.
-      addWslTools(true)
+      addWslTools()
     })
   }
 

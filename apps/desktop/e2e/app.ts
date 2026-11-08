@@ -47,6 +47,8 @@ export async function launch(userData: string): Promise<TestApp> {
       ...fakeToolsEnv(agentLog, editorLog),
       VIBE_CODING_IDE_USER_DATA: userData,
       VIBE_CODING_IDE_DEBUG: '1',
+      // The app wakes WSL distributions at start to look for k9s: not in tests (covered by unit tests).
+      VIBE_CODING_IDE_NO_WSL_TOOLS: '1',
       ELECTRON_ENABLE_LOGGING: '0'
     } as Record<string, string>
   })

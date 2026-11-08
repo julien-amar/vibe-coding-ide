@@ -33,3 +33,10 @@ OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 Claude and Claude Code are trademarks of Anthropic; Codex of OpenAI; Gemini of Google; opencode, pi and Linux of their
 respective owners. Their logos are used only to identify these tools in the application; vibe-coding-ide is not
 affiliated with or endorsed by them.
+
+## k9s logo
+
+`k9s.png`, cropped from `assets/k9s_small.png` of [k9s](https://github.com/derailed/k9s) (Kubernetes CLI to manage
+your clusters in style), released under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+
+Copyright (c) Fernand Galiana (derailed) and the k9s contributors.

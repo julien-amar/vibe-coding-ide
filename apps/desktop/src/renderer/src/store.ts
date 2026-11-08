@@ -63,6 +63,8 @@ interface State {
   openProfile(profile: Profile): Promise<void>
   /** The Containers tab (one per window: focused when already open). */
   openContainers(): void
+  /** A terminal-like tab on another profile (a k9s tab's context): its process restarts with it. */
+  switchTabProfile(tabId: string, profileId: string): Promise<void>
   openProject(root: string): Promise<void>
   /** Add a tab whose sessions already exist (moved from another window). */
   insertExisting(snapshot: TabSnapshot, index?: number): void
@@ -246,7 +248,10 @@ export const useTabs = create<State>((set, get) => ({
         tabs.push({ id: newTabId(), kind: 'containers', profileId: snap.profileId, autoTitle: 'Containers', customTitle: snap.customTitle })
         continue
       }
-      // Restored terminal tab: start a fresh session with the same profile.
+      // Restored terminal tab: start a fresh session with the same profile (k9s of a WSL distribution:
+      // the startup look-up of WSL tools first).
+      const wslK9s = /^tool:k9s@([^:]+)/.exec(snap.profileId ?? '')?.[1]
+      if (wslK9s && !list.some((p) => p.id === snap.profileId)) list.push(...(await window.ide.profiles.wslTools()))
       const profile = list.find((p) => p.id === snap.profileId)
       if (!profile) continue
       const s = await createSession(profile.id, snap.cwd)
@@ -274,6 +279,19 @@ export const useTabs = create<State>((set, get) => ({
     if (existing) return set({ activeId: existing.id })
     const tab: Tab = { id: newTabId(), kind: 'containers', autoTitle: 'Containers' }
     set((st) => ({ tabs: [...st.tabs, tab], activeId: tab.id }))
+  },
+
+  async switchTabProfile(tabId, profileId) {
+    const tab = get().tabs.find((t) => t.id === tabId)
+    if (!tab || tab.profileId === profileId) return
+    const s = await createSession(profileId)
+    if (!s) return
+    if (tab.sessionId) window.ide.pty.kill(tab.sessionId)
+    set((st) => ({
+      tabs: st.tabs.map((t) =>
+        t.id === tabId ? { ...t, profileId, sessionId: s.sessionId, autoTitle: s.title, exitCode: undefined, restoredScrollback: undefined } : t
+      )
+    }))
   },
 
   async openProfile(profile) {

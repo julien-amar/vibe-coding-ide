@@ -5,3 +5,9 @@ declare module '*.svg?raw' {
   const svg: string
   export default svg
 }
+
+/** Images imported as their URL (bundled). */
+declare module '*.png' {
+  const url: string
+  export default url
+}

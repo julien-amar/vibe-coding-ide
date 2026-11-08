@@ -246,7 +246,7 @@ function registerIpc(): void {
   // The app's own version (built in: app.getVersion() gives Electron's when the app is not packaged).
   handle('app:version', () => pkg.version)
   handle('profiles:wslAgents', async (_e, distro: string) => offeredProfiles(await wslAgents(String(distro))))
-  handle('profiles:wslTools', async (_e, all?: boolean) => offeredProfiles(await wslTools(Boolean(all))))
+  handle('profiles:wslTools', async () => offeredProfiles(await wslTools()))
   handle('profiles:icon', async (_e, id: string) => {
     const profile = await findProfile(String(id))
     return profile ? profileIcon(profile) : null
@@ -419,7 +419,8 @@ app.whenReady().then(() => {
   rmSync(harnessRuns(), { recursive: true, force: true })
   applySettings()
   registerIpc()
-  void listProfiles() // warm the cache
+  void listProfiles() // warm the cache (k9s on this system: looked for once, now)
+  void wslTools() // k9s inside WSL distributions: looked for once, now (they are woken for it)
   restoreOrCreate()
   startUpdates().catch((err) => console.error('Updates unavailable:', err))
   app.on('activate', () => {

@@ -12,6 +12,7 @@ import { onSessionExit } from './pty-bus'
 import { handleAppShortcut } from './shortcuts'
 import { useTabs } from './store'
 import { onWindowDragLeave, onWindowDragOver, onWindowDrop } from './tab-dnd'
+import { KubeView } from './components/KubeView'
 
 let initStarted = false
 
@@ -63,6 +64,8 @@ export function App(): React.JSX.Element {
                 <ProjectView tab={t} visible={visible} />
               ) : t.kind === 'containers' ? (
                 <ContainersView tab={t} visible={visible} />
+              ) : t.kind === 'tool' && t.profileId?.startsWith('tool:k9s') ? (
+                <KubeView tab={t} visible={visible} />
               ) : (
                 t.sessionId && (
                   <TerminalView

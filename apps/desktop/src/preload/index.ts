@@ -21,7 +21,7 @@ const api: IdeApi = {
     all: () => invoke('profiles:all'),
     icon: (id) => invoke('profiles:icon', id),
     wslAgents: (distro) => invoke('profiles:wslAgents', distro),
-    wslTools: (all) => invoke('profiles:wslTools', all)
+    wslTools: () => invoke('profiles:wslTools')
   },
   pty: {
     create: (req) => invoke('pty:create', req),

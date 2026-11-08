@@ -263,6 +263,9 @@ function agents(): Profile[] {
 }
 
 let cache: Profile[] | undefined
+/** k9s on this system (its contexts from kubectl): looked for once, at app start (not on a rescan). */
+let k9sOnce: Promise<Profile[]> | undefined
+const k9sTools = (): Promise<Profile[]> => (k9sOnce ??= k9sProfiles(which, launchSpec, spawnSpec))
 /** WSL integration (Settings): off, distributions and the agents inside them are not looked for. */
 let wslEnabled = true
 
@@ -272,6 +275,9 @@ export function setWslEnabled(on: boolean): void {
   cache = undefined
   wslAgentCache.clear()
   wslToolCache.clear()
+  wslToolsOnce = undefined
+  // Turned on: WSL tools are looked for now (as at app start).
+  if (on) void wslTools()
 }
 /** Agents found inside WSL distributions (discovered on demand, per distro). */
 const wslAgentCache = new Map<string, Profile[]>()
@@ -296,7 +302,7 @@ export function wslHome(distro: string): Promise<string | undefined> {
 export async function listProfiles(refresh = false): Promise<Profile[]> {
   if (cache && !refresh) return [...cache, ...[...wslAgentCache.values()].flat(), ...[...wslToolCache.values()].flat()]
   const shells = isWin ? windowsShells() : unixShells()
-  const [distros, tools] = await Promise.all([wslEnabled ? wslDistros() : Promise.resolve([]), k9sProfiles(which, launchSpec, spawnSpec)])
+  const [distros, tools] = await Promise.all([wslEnabled ? wslDistros() : Promise.resolve([]), k9sTools()])
   cache = [...shells, ...distros, ...agents(), ...tools]
   return [...cache, ...[...wslAgentCache.values()].flat(), ...[...wslToolCache.values()].flat()]
 }
@@ -348,29 +354,23 @@ export async function findProfile(id: string): Promise<Profile | undefined> {
   return extraProfiles.get(id) ?? (await listProfiles()).find((p) => p.id === id)
 }
 
-/** Names of the WSL distributions running now (none started to know). */
-function runningDistros(): Promise<string[]> {
-  return new Promise((resolve) => {
-    execFile(wslExe(), ['-l', '--running', '-q'], { encoding: 'buffer', timeout: 5000, windowsHide: true }, (err, stdout) => {
-      if (err) return resolve([])
-      resolve(
-        decodeWslOutput(stdout as Buffer)
-          .split(/\r?\n/)
-          .map((s) => s.trim())
-          .filter((s) => s && !s.startsWith('docker-desktop'))
-      )
-    })
-  })
-}
+/** Tools (k9s) inside WSL distributions: looked for once (see wslTools). */
+let wslToolsOnce: Promise<Profile[]> | undefined
 
 /**
  * Tools installed inside WSL distributions (k9s, one entry per context of the distribution's
- * kubeconfig). Only the running distributions are looked at (none is started for it), unless `all`
- * (the launcher's refresh: every distribution, started if need be). Found entries are kept (cache).
+ * kubeconfig): looked for once — at app start, or when WSL integration is turned on — in every
+ * distribution, woken for it. Later calls get the same result.
  */
-export async function wslTools(all = false): Promise<Profile[]> {
-  if (!isWin || !wslEnabled || !isFile(wslExe())) return []
-  const distros = all ? (await wslDistros()).map((d) => d.wslDistro!) : (await runningDistros()).filter((d) => !wslToolCache.has(d))
+/** (VIBE_CODING_IDE_NO_WSL_TOOLS=1: not looked for — end-to-end tests do not wake the machine's WSL.) */
+export function wslTools(): Promise<Profile[]> {
+  if (!isWin || !wslEnabled || process.env.VIBE_CODING_IDE_NO_WSL_TOOLS || !isFile(wslExe())) return Promise.resolve([])
+  wslToolsOnce ??= detectWslTools()
+  return wslToolsOnce
+}
+
+async function detectWslTools(): Promise<Profile[]> {
+  const distros = (await wslDistros()).map((d) => d.wslDistro!)
   const wsl = wslExe()
   await Promise.all(
     distros.map(
