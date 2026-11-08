@@ -352,7 +352,8 @@ test('images, volumes and networks; pulling an image shows its output (through t
   expect(engine.calls.some((c) => c.startsWith('POST /images/prune?filters=') && decodeURIComponent(c).includes('"dangling":["false"]'))).toBe(true)
   await views.getByRole('button', { name: 'Pull an image…' }).click()
   await page.locator('.dialog input').fill('redis:7')
-  await page.locator('.dialog button', { hasText: 'Pull' }).click()
+  // Enter: the typed image (registry suggestions arriving late may cover the Pull button).
+  await page.locator('.dialog input').press('Enter')
   const output = tab.locator('.ctr-output')
   await expect(output).toContainText('Status: Downloaded newer image for redis:7')
   await expect(output.locator('.ctr-output-head')).toContainText('done')
