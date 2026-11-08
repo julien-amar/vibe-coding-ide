@@ -1,6 +1,6 @@
 import type { TabKind } from '@shared/types'
 
-const LABELS: Record<TabKind, string> = { shell: '>_', wsl: 'WSL', agent: 'AI', project: 'PRJ', containers: '' }
+const LABELS: Record<TabKind, string> = { shell: '>_', wsl: 'WSL', agent: 'AI', tool: '⎈', project: 'PRJ', containers: '' }
 
 export function KindBadge({ kind }: { kind: TabKind }): React.JSX.Element {
   if (kind === 'containers') return <ContainersIcon />

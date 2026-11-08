@@ -3,6 +3,7 @@ import { existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'nod
 import { basename, delimiter, dirname, extname, join } from 'node:path'
 import type { Profile } from '@shared/types'
 import { decodeWslOutput, wslenvWith, wslExe, wslExec } from './wsl'
+import { k9sProfiles } from './kube'
 
 const isWin = process.platform === 'win32'
 
@@ -292,8 +293,8 @@ export function wslHome(distro: string): Promise<string | undefined> {
 export async function listProfiles(refresh = false): Promise<Profile[]> {
   if (cache && !refresh) return [...cache, ...[...wslAgentCache.values()].flat()]
   const shells = isWin ? windowsShells() : unixShells()
-  const distros = wslEnabled ? await wslDistros() : []
-  cache = [...shells, ...distros, ...agents()]
+  const [distros, tools] = await Promise.all([wslEnabled ? wslDistros() : Promise.resolve([]), k9sProfiles(which, launchSpec, spawnSpec)])
+  cache = [...shells, ...distros, ...agents(), ...tools]
   return [...cache, ...[...wslAgentCache.values()].flat()]
 }
 

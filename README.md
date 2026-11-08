@@ -23,6 +23,7 @@ A project tab: the Git history with its branch graph, a terminal and an AI agent
 - **Git** — history graph, staging by hunk or single line, branches, worktrees, pull requests (GitHub, GitLab…).
 - **Tests** — Vitest, Jest, Playwright, pytest, Go, Rust, .NET, Java: live results; a failing test sent to the AI agent in one click.
 - **Containers** — Docker, Podman and wslc in one tab: logs, live stats, a shell, files, volumes, ports, environment, images, Compose.
+- **Kubernetes** — [k9s](https://k9scli.io) in a tab, one launcher entry per kubectl context (the current one first).
 - **WSL inside** — a project in a WSL distribution runs its git, terminal, agent and tests there.
 - **Always current** — the app updates itself; pending package updates of your systems are offered in the terminal.
 

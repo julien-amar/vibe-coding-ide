@@ -21,7 +21,7 @@ interface Entry {
 }
 
 const GROUP_ORDER = ['Projects', 'Shells', 'WSL distributions', 'AI agents', 'Tools']
-const PROFILE_GROUP: Record<Profile['kind'], string> = { shell: 'Shells', wsl: 'WSL distributions', agent: 'AI agents' }
+const PROFILE_GROUP: Record<Profile['kind'], string> = { shell: 'Shells', wsl: 'WSL distributions', agent: 'AI agents', tool: 'Tools' }
 
 /** Tab types from the plan that are not built yet; shown so the launcher reflects the roadmap. */
 const COMING_SOON = ['Web browser', 'Messaging', 'S/FTP client']

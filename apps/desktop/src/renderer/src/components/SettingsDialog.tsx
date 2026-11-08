@@ -216,6 +216,11 @@ export function SettingsDialog(): React.JSX.Element | null {
             profiles.filter((p) => p.kind === 'agent'),
             'No AI agent CLI found on PATH (claude, codex, gemini, opencode, pi).'
           )}
+          {section(
+            'Tools',
+            profiles.filter((p) => p.kind === 'tool'),
+            'k9s not found on PATH (Kubernetes: one entry per kubectl context).'
+          )}
           <p className="muted settings-note">
             Hidden entries are not offered in the launcher, as defaults of new projects or in the agent switcher; open tabs keep running.
           </p>

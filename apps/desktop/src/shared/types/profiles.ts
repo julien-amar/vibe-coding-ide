@@ -1,9 +1,9 @@
 import type { Harness } from './harness'
 
-/** Launchable profiles (shells, WSL distributions, AI agents) and terminal sessions. */
+/** Launchable profiles (shells, WSL distributions, AI agents, tools such as k9s) and terminal sessions. */
 
 /** A launchable entry shown in the `+` launcher. */
-export type ProfileKind = 'shell' | 'wsl' | 'agent'
+export type ProfileKind = 'shell' | 'wsl' | 'agent' | 'tool'
 
 export interface Profile {
   id: string

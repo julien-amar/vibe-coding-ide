@@ -4,7 +4,7 @@ import { harnessIsEmpty, sanitizeHarness } from './harness'
 /** Validation of tabs and layouts coming from a renderer (or the saved layout file): drops anything malformed. */
 
 const PANE_TYPES = new Set(['terminal', 'agent', 'git', 'tests'])
-const TAB_KINDS = new Set(['shell', 'wsl', 'agent', 'project', 'containers'])
+const TAB_KINDS = new Set(['shell', 'wsl', 'agent', 'tool', 'project', 'containers'])
 
 export function sanitizeLayout(n: LayoutNode | undefined, depth = 0): LayoutNode | undefined {
   if (!n || typeof n !== 'object' || depth > 8) return undefined
