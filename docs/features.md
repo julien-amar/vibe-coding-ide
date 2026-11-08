@@ -1,0 +1,75 @@
+# vibe-coding-ide: features in detail
+
+The short version, with screenshots: [README.md](../README.md).
+
+## Tabs, shells & windows
+- Tab strip with rename (double-click / context menu), drag to reorder, close (×, middle-click, Ctrl+Shift+W); each tab shows the icon of its shell, distribution or agent.
+- `+` launcher (Ctrl+T): projects, shells found on PATH, Git Bash, WSL distributions, AI agent CLIs (claude, codex, gemini, opencode, pi) — in two columns, grouped under category logos (projects with their folder); search, ↑↓ and Enter.
+- **Settings** (⚙ in the launcher, saved in the app's data folder, applied to every window at once; the app's version next to ✕; **Reset to defaults**): theme (system, light or dark); **default shell and AI agent** of new projects (a project inside a WSL distribution still uses the distribution's own when it has one); **WSL integration** on or off (off: distributions, projects in them and their agents are not offered, and `wsl.exe` is not started to look for them); which shells, distributions and AI agents are offered (hidden ones are left out of the launcher, the defaults of new projects and the agent switcher; open tabs keep running).
+- A window without tabs shows a welcome screen (what the app does, open a project or a new tab) — also at the next start after closing the last tab.
+- Terminal tabs (xterm.js + node-pty), copy/paste (Ctrl+C with selection, Ctrl+V, right-click), clickable links, light/dark theme following the OS (or Settings).
+- Drag a tab out of the window to open it in a new window, or onto another vibe-coding-ide window to move it there (also: right-click → **Move to new window**). Processes keep running. A window closes when its last tab closes or moves away.
+- **Package updates:** when a shell starts, vibe-coding-ide checks once whether its system has pending package updates — **Windows via winget** for PowerShell, cmd, Git Bash and other Windows shells; the **distribution** for WSL shells (apt, dnf, pacman, apk or zypper, using the cached package lists). If so, a status bar under the terminal offers **Update now**, which types the update command (`winget upgrade --all`, `sudo apt update && sudo apt upgrade -y`, …) into that terminal, where you follow the progress and answer prompts (sudo password, UAC); **×** dismisses it.
+- Icons: AI agents show their own logos (Claude Code, Codex, Gemini CLI, opencode, pi — see [third-party notices](../apps/desktop/THIRD-PARTY-NOTICES.md)); shells and distributions the real icon of the installed software where Windows provides one (executable icon, the distro's own `shortcut.ico`, Git for Windows' icon), otherwise a small coloured monogram unique to that entry.
+
+## Layout restore
+- Window positions/sizes, tabs, custom names, the active tab, project layouts and collapsed panels are saved to `%APPDATA%/vibe-coding-ide/layout.json` (`~/Library/Application Support/vibe-coding-ide`, `~/.config/vibe-coding-ide`) and restored on start.
+- Each shell restarts **in the folder it was in** (PowerShell, cmd, Git Bash and bash in WSL report their working directory to vibe-coding-ide) and shows its previous output above a "restored from previous session" marker.
+
+## Project tabs
+`+` → **Projects** → *Open project…*, *Open project in &lt;WSL distro&gt;…*, or a recent project (its trash button, on hover, or the Delete key removes it from the list).
+
+- **Panels:** Git, Terminal and AI agent to start with, plus Tests in the side rail. Every panel header can **split** it right/down, **collapse** it to the side rail (its process keeps running — click it in the rail to bring it back) or **close** it. The rail's **+** adds a Terminal, AI agent, Git or Tests panel. **Drag a panel by its header** onto another panel to dock it to that edge. Drag the dividers to resize.
+- **Terminal / AI agent panels** run in the project folder; switch the shell or agent from the header (with icons). A panel whose process exits shows a **Restart** button.
+- **Git panel:**
+  - *History* — all branches with a commit graph, branch/tag badges, commit details on click.
+  - *Changes* — staged and unstaged files with diffs; stage / unstage / discard per file or all, **per hunk** (buttons on each `@@` line) or **per line** (click changed lines, Shift+click for a range, then Stage / Unstage / Discard); commit (Ctrl+Enter), or amend: *Amend last commit* puts the last commit's message in the box, to edit it.
+  - *Branches* — switch, create, rename, merge into the current branch, delete (with a confirmation for unmerged branches), check out remote branches.
+  - **New feature…** — creates `feature/<name>` in its own folder next to the repository (a git worktree) and opens it as a new project with its own terminal and agent, so you can work on it in parallel. Worktrees can be reopened or removed from the Branches view.
+  - Fetch / Pull / Push (Publish for a branch without upstream), ahead/behind counts. Refreshes automatically when the repository changes.
+  - **Pull request** — opens the branch's open pull (merge) request, or creates one: pushes the branch first, then creates it with **GitHub CLI** (`gh`) or **glab** when installed and logged in (title, Markdown description, target branch, draft), otherwise opens the host's "new pull request" page (GitHub, GitLab, Bitbucket, Azure DevOps). WSL projects use the `gh` / `glab` of the distribution.
+- **Tests panel:** finds the project's tests, also in sub-folders of a monorepo, and lists them by file and `describe()` block / module / class:
+
+  | Framework | Found from | Grouped by | Runs with |
+  |---|---|---|---|
+  | **Vitest**, **Jest**, **Playwright** | `vitest.config.*`, `jest.config.*` (or a `jest` section / script in package.json), `playwright.config.*` | file, `describe()` | the project's `node_modules` |
+  | **pytest** | `pytest.ini`, `pyproject.toml`, `setup.cfg`, `tox.ini` | file, class | the project's virtualenv (`.venv`, `venv`, `env`) or Python on PATH |
+  | **Go** | `go.mod` | package, test → subtests | `go test` |
+  | **Rust** | `Cargo.toml` | source file (lib, integration tests), module | `cargo test` |
+  | **.NET** (xUnit, NUnit, MSTest) | a test project (`*.csproj` / `*.fsproj` referencing a test SDK) | class | `dotnet test` |
+  | **Java** (JUnit 4/5, TestNG) | `pom.xml` (Maven) or `build.gradle(.kts)` (Gradle) | class (nested classes too) | `mvnw` / `gradlew` if present, else `mvn` / `gradle` |
+
+  Java tests are listed from the sources (test annotations), before any build; Go subtests appear once they have run. **Run all**, or hover any project, file, suite or test and click **▶**; each test turns passed / failed / skipped **as soon as it finishes**, with its duration, and files with failures open automatically. Skipped tests are listed too. Click a test for its error and stack trace; **Output** shows the console output of the runs. Connected filter buttons show **All**, **✓ Passed**, **○ Skipped** or **✗ Failed** tests (with their counts), combined with a name filter; **■ Stop** ends a run. WSL projects run their tests inside the distribution.
+  - **✦ Fix with agent** on a failed test (or a file / suite with failures) sends the failure to the project's **AI agent** panel — the test, its file and line, the error and the command that re-runs just that test — opening an agent panel first if none is running.
+  - **Open in your editor:** the `file:line` under a test, every location in an error's stack trace, and double-clicking a test open that file at that line in **VS Code**, Cursor, Windsurf, VSCodium, Zed or Sublime Text (the first one found on PATH; otherwise the system's default app).
+- **AI agent settings (⚙ in each AI agent panel's header):** every agent panel has its own MCP servers, skills and instructions — independent of the other panels and projects, kept with the panel in vibe-coding-ide's layout (restored on restart; nothing is written into the repository). The ⚙ shows how many settings are in use.
+  - **MCP servers** — a command the agent starts (stdio) or an HTTP endpoint, with environment / headers; enable or disable each; **Check** starts the server and lists its tools (or shows its error and output); **Import from .mcp.json** takes the repository's servers; **Only these servers** makes the agent ignore other MCP configurations.
+  - **Skills** — add folders with a `SKILL.md` (or folders of skills), enable or disable them, preview them; the skills Claude Code already loads from the repository's `.claude/skills` and `~/.claude/skills` are listed too.
+  - **Instructions** — added to the agent's system prompt.
+  - Applied when the agent starts, in each agent's own format — generated files and flags for that session only (your agent configuration and the repository are not changed); the dialog shows what the panel's agent gets:
+
+    | Agent | MCP servers | Skills | Instructions | Only these servers | Only these skills |
+    |---|---|---|---|---|---|
+    | **Claude Code** | `--mcp-config` | `--plugin-dir` (a session-only plugin) | `--append-system-prompt-file` | `--strict-mcp-config` | `--settings`: your and the repository's skills `off`, bundled skills disabled (installed plugins' skills stay) |
+    | **Codex CLI** | `-c mcp_servers.<name>…` | listed in its instructions (name, description, `SKILL.md` location) | `-c developer_instructions` | ✓ (replaces the server list) | `-c skills.config` turns off its skills (bundled, `~/.codex`, `~/.agents`, the repository) |
+    | **opencode** | `OPENCODE_CONFIG` (an extra config file); opencode 2 also gets `--standalone`, a private server (its shared background service would not see the panel's config) | `skills.paths` | `instructions` | ✗ (your and the repository's servers always apply) | `permission.skill`: deny all but the panel's |
+    | **pi** | a session-only extension (`--extension`) calling `pi.registerMcpServer` (pi 1.5+) | `--skill` | `--append-system-prompt` | ✗ (`~/.pi/agent/mcp.json` and `.pi/mcp.json` always apply) | `--no-skills` |
+    | **Gemini CLI** | ✗ | ✗ | ✗ | Gemini only reads `~/.gemini` or the repository's `.gemini` | ✗ |
+
+    Agents running **inside WSL** get the same, with paths written for Linux (`/mnt/c/…`, the project's Linux path), MCP server commands run in the distribution (as typed), and **Check** starting servers there too. Checked against Claude Code 2.1, Codex CLI 0.166, opencode 2.2 (and 1.19), pi 1.5 and Gemini CLI 0.67. Agents installed with npm on Windows are started directly (not through their `.cmd` shim), so arguments keep their quotes and line breaks. After a change, the running agent shows **Restart** to apply it.
+- **WSL projects** (`\\wsl.localhost\<distro>\...`): git runs inside the distribution, the terminal opens the distro's shell in the project folder, and the agent defaults to one installed inside the distro (e.g. `claude` in Ubuntu), falling back to the Windows one.
+- Project tabs move between windows like any other tab and are restored on start. Right-click → **Reset layout** rebuilds the tab as a new project tab for its folder (Git, Tests in the rail, terminal, AI agent), after a confirmation: its terminals and agent restart, and the agent's panel settings are cleared.
+
+## Containers tab
+`+` → **Tools** → *Containers* (one per window; restored on start). One view of every engine that runs: each item is tagged with its engine, and actions go to that engine.
+
+- **Engines:** **Docker** and **Podman** through the Docker Engine API — `DOCKER_HOST` / `CONTAINER_HOST`, else their usual sockets and named pipes (Docker Desktop, Rancher Desktop, Podman machine…) — and **wslc** (WSL containers on Windows) through its command line tool. The status bar (bottom of the tab) shows which ones answer (green) or not (grey), with their version or error on hover.
+- **Containers:** state, image, Compose project, published ports (click one to open `http://localhost:<port>`); start, stop, restart, pause / resume (Docker, Podman), **shell** (a terminal tab running `exec -it … sh`), remove; prune the stopped ones. The selected container's **logs** (followed, searchable), **terminal** (a shell in the container, inside the tab; kept while the container stays selected), **files** (browse its file system, preview text files, save a file to this computer — through `exec`, so for a running container), **volumes** (volumes, host folders, tmpfs; read-only), **ports** (published ports; publish the ones the image exposes), **environment** (secret-looking values masked) — Docker and Podman: edit them; the container is recreated with the change and the rest as it was (image, command, networks, restart policy), and restarted if it ran; wslc: read-only — **live stats** (CPU and memory with graphs, network, block I/O, processes) and **inspect**. Each list is a table with a header (name, engine, image, status…; click a column to sort; containers: *Show stopped* in the header); every row is tagged with its engine (Docker, Podman, wslc).
+- **Images:** pull (live output; the image field suggests repositories from the engine's registry search — Docker Hub, or Podman's registries — else Docker Hub's, and after a colon the repository's tags), **build** from a folder (tag, Dockerfile, target stage, build arguments; live output), **run** (name, ports, volumes, environment, network, restart policy), remove, prune.
+- **Volumes / networks:** create (volumes: a name or one from the engine, a type — local, NFS share, SMB / CIFS share, a folder of the engine's host, in memory, another driver; wslc: guest or vhd — driver options and labels), inspect, remove, prune (built-in networks are kept).
+- **Compose** (Docker, Podman): projects from their containers' labels, with each service's state; up, restart, stop, pull, down; *Compose up a folder…* for a project not started yet.
+- **Settings (⚙):** engines shown, the default engine for new pulls, builds, volumes and networks (others can be picked in each dialog), the refresh interval, confirmation before removing; **registry login / logout** per engine — login opens a terminal tab running `docker login` / `podman login` / `wslc login`: the password is typed there and kept by the engine's credential store (the OS keychain).
+
+The lists refresh every 3 s (configurable) while the tab is on screen. Pull, build, run and Compose use the engine's own command line tool (so its credentials and contexts apply), the rest the Engine API (or wslc).
+
+**Known limits:** SSH and dev-container projects are not supported yet; closing one of several windows drops it from the saved layout — only the last window / app quit is saved (same as Windows Terminal). WSL's `/tmp` is not visible from Windows, so WSL projects must live elsewhere (e.g. under your home).
