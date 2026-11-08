@@ -3,7 +3,7 @@ import { existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'nod
 import { basename, delimiter, dirname, extname, join } from 'node:path'
 import type { Profile } from '@shared/types'
 import { decodeWslOutput, wslenvWith, wslExe, wslExec } from './wsl'
-import { k9sProfiles } from './kube'
+import { k9sProfiles, parseWslK9sProbe, wslK9sEntries, WSL_K9S_PROBE } from './kube'
 
 const isWin = process.platform === 'win32'
 
@@ -271,9 +271,12 @@ export function setWslEnabled(on: boolean): void {
   wslEnabled = on
   cache = undefined
   wslAgentCache.clear()
+  wslToolCache.clear()
 }
 /** Agents found inside WSL distributions (discovered on demand, per distro). */
 const wslAgentCache = new Map<string, Profile[]>()
+/** Tools (k9s) found inside WSL distributions (see wslTools). */
+const wslToolCache = new Map<string, Profile[]>()
 const wslHomeCache = new Map<string, Promise<string | undefined>>()
 
 /** The distribution user's home folder as a \\wsl.localhost path (asked once per distribution). */
@@ -291,11 +294,11 @@ export function wslHome(distro: string): Promise<string | undefined> {
 }
 
 export async function listProfiles(refresh = false): Promise<Profile[]> {
-  if (cache && !refresh) return [...cache, ...[...wslAgentCache.values()].flat()]
+  if (cache && !refresh) return [...cache, ...[...wslAgentCache.values()].flat(), ...[...wslToolCache.values()].flat()]
   const shells = isWin ? windowsShells() : unixShells()
   const [distros, tools] = await Promise.all([wslEnabled ? wslDistros() : Promise.resolve([]), k9sProfiles(which, launchSpec, spawnSpec)])
   cache = [...shells, ...distros, ...agents(), ...tools]
-  return [...cache, ...[...wslAgentCache.values()].flat()]
+  return [...cache, ...[...wslAgentCache.values()].flat(), ...[...wslToolCache.values()].flat()]
 }
 
 const AGENT_LABELS: Record<string, string> = { claude: 'Claude Code', codex: 'Codex CLI', gemini: 'Gemini CLI', opencode: 'opencode', pi: 'pi' }
@@ -343,4 +346,42 @@ export function registerProfile(p: Profile): void {
 
 export async function findProfile(id: string): Promise<Profile | undefined> {
   return extraProfiles.get(id) ?? (await listProfiles()).find((p) => p.id === id)
+}
+
+/** Names of the WSL distributions running now (none started to know). */
+function runningDistros(): Promise<string[]> {
+  return new Promise((resolve) => {
+    execFile(wslExe(), ['-l', '--running', '-q'], { encoding: 'buffer', timeout: 5000, windowsHide: true }, (err, stdout) => {
+      if (err) return resolve([])
+      resolve(
+        decodeWslOutput(stdout as Buffer)
+          .split(/\r?\n/)
+          .map((s) => s.trim())
+          .filter((s) => s && !s.startsWith('docker-desktop'))
+      )
+    })
+  })
+}
+
+/**
+ * Tools installed inside WSL distributions (k9s, one entry per context of the distribution's
+ * kubeconfig). Only the running distributions are looked at (none is started for it), unless `all`
+ * (the launcher's refresh: every distribution, started if need be). Found entries are kept (cache).
+ */
+export async function wslTools(all = false): Promise<Profile[]> {
+  if (!isWin || !wslEnabled || !isFile(wslExe())) return []
+  const distros = all ? (await wslDistros()).map((d) => d.wslDistro!) : (await runningDistros()).filter((d) => !wslToolCache.has(d))
+  const wsl = wslExe()
+  await Promise.all(
+    distros.map(
+      (distro) =>
+        new Promise<void>((resolve) => {
+          execFile(wsl, wslExec(distro, ['bash', '-lic', WSL_K9S_PROBE]), { encoding: 'buffer', timeout: 25000, windowsHide: true }, (_err, stdout) => {
+            wslToolCache.set(distro, wslK9sEntries(distro, parseWslK9sProbe(decodeWslOutput((stdout as Buffer) ?? Buffer.alloc(0))), wsl))
+            resolve()
+          })
+        })
+    )
+  )
+  return [...wslToolCache.values()].flat()
 }

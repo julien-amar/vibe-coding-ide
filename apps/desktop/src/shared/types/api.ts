@@ -36,6 +36,8 @@ export interface IdeApi {
     icon(profileId: string): Promise<string | null>
     /** Agent CLIs installed inside a WSL distribution (starts the distro; cached). */
     wslAgents(distro: string): Promise<Profile[]>
+    /** Tools (k9s) inside WSL distributions: the running ones, or all (started if need be). */
+    wslTools(all?: boolean): Promise<Profile[]>
   }
   pty: {
     create(req: PtyCreateRequest): Promise<PtyCreateResult>

@@ -22,7 +22,7 @@ import { isDir, startIn, withAgentSettings } from './launch'
 import { sanitizeTab } from './layout-sanitize'
 import { loadLayout, saveLayout, visibleBounds, type SavedWindow } from './layout-store'
 import { checkUpdates, forgetUpdates, type UpdateTarget } from './package-updates'
-import { findProfile, listProfiles, wslAgents } from './profiles'
+import { findProfile, listProfiles, wslAgents, wslTools } from './profiles'
 import { registerContainerIpc } from './containers'
 import { forgetProject, recentProjects, touchProject } from './projects'
 import { PtyManager } from './pty-manager'
@@ -246,6 +246,7 @@ function registerIpc(): void {
   // The app's own version (built in: app.getVersion() gives Electron's when the app is not packaged).
   handle('app:version', () => pkg.version)
   handle('profiles:wslAgents', async (_e, distro: string) => offeredProfiles(await wslAgents(String(distro))))
+  handle('profiles:wslTools', async (_e, all?: boolean) => offeredProfiles(await wslTools(Boolean(all))))
   handle('profiles:icon', async (_e, id: string) => {
     const profile = await findProfile(String(id))
     return profile ? profileIcon(profile) : null

@@ -35,10 +35,21 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
   const openProfile = useTabs((s) => s.openProfile)
   const openProject = useTabs((s) => s.openProject)
 
+  /** Adds tools found inside WSL distributions (k9s) to the list, once found. */
+  const addWslTools = (all: boolean): void => {
+    void window.ide.profiles.wslTools(all).then((tools) => {
+      if (tools.length) setProfiles((cur) => (cur ? [...cur.filter((p) => !tools.some((t) => t.id === p.id)), ...tools] : cur))
+    })
+  }
+
   useEffect(() => {
-    void loadProfiles().then(setProfiles)
+    void loadProfiles().then((p) => {
+      setProfiles(p)
+      // The running distributions only (none is started to look).
+      addWslTools(false)
+    })
     void window.ide.project.recent().then(setRecent)
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps -- once, when the launcher opens
 
   useEffect(() => {
     const onDown = (e: MouseEvent): void => {
@@ -134,7 +145,11 @@ export function Launcher({ onClose }: { onClose: () => void }): React.JSX.Elemen
 
   const refresh = (): void => {
     setProfiles(null)
-    void loadProfiles(true).then(setProfiles)
+    void loadProfiles(true).then((p) => {
+      setProfiles(p)
+      // Every distribution (started if need be): an explicit rescan.
+      addWslTools(true)
+    })
   }
 
   const onKeyDown = (e: React.KeyboardEvent): void => {

@@ -16,6 +16,7 @@ export interface IpcRequests {
   'profiles:all': Api['profiles']['all']
   'profiles:icon': Api['profiles']['icon']
   'profiles:wslAgents': Api['profiles']['wslAgents']
+  'profiles:wslTools': Api['profiles']['wslTools']
 
   'pty:create': Api['pty']['create']
   'pty:attach': Api['pty']['attach']
