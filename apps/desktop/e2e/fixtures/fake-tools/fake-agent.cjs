@@ -11,7 +11,8 @@ if (process.argv.includes('--version')) {
 const log = process.env.FAKE_AGENT_LOG
 // Each start's folder and arguments (e.g. the agent settings flags), one JSON line per start, next to the log.
 if (log) fs.appendFileSync(`${log}.argv`, JSON.stringify({ cwd: process.cwd(), args: process.argv.slice(2) }) + '\n')
-process.stdout.write('Fake agent ready\r\n> ')
+// FAKE_AGENT_BANNER (README screenshots): an illustrative session instead of the test banner.
+process.stdout.write(process.env.FAKE_AGENT_BANNER ? process.env.FAKE_AGENT_BANNER.replace(/\n/g, '\r\n') : 'Fake agent ready\r\n> ')
 if (process.stdin.isTTY) process.stdin.setRawMode(true)
 process.stdin.on('data', (data) => {
   if (log) fs.appendFileSync(log, data)
