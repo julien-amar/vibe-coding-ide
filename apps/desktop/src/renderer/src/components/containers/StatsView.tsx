@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { ContainerBackendId, ContainerStats } from '@shared/types'
 import { formatBytes } from './model'
 import { useStream } from './streams'
+import { Spinner } from '../Spinner'
 
 /** A container's live stats: CPU and memory with graphs, network, block I/O, processes. */
 export function StatsView({ backend, id, running }: { backend: ContainerBackendId; id: string; running: boolean }): React.JSX.Element {
@@ -16,7 +17,7 @@ export function StatsView({ backend, id, running }: { backend: ContainerBackendI
   )
   if (!running) return <div className="pane-message">The container is not running.</div>
   const last = samples[samples.length - 1]
-  if (!last) return <div className="pane-message">{ended ?? 'Waiting for the first sample…'}</div>
+  if (!last) return ended ? <div className="pane-message">{ended}</div> : <Spinner label="Waiting for the first sample" />
   const memPct = last.memLimit ? (last.memUsed / last.memLimit) * 100 : 0
   return (
     <div className="ctr-stats">

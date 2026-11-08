@@ -22,12 +22,7 @@
 
 .containers-views {
   gap: 8px;
-}
-
-.containers-views .segmented button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  height: 34px;
 }
 
 .ctr-icon {
@@ -55,6 +50,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* After the tabs: the selection's name, set apart (not one more tab). */
+.containers-status .subtabs + .containers-selected {
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+  line-height: 16px;
 }
 
 .containers-engines {

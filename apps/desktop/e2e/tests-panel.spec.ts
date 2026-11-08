@@ -39,6 +39,14 @@ test('the Tests panel discovers and runs Vitest, Jest, Playwright and pytest tes
   // Skipped tests are listed too.
   await expect(count('all')).toHaveText(String(expected.all))
 
+  // Refresh: the list empties, a spinner shows while the tests are found again, then they are back.
+  await panel.getByRole('button', { name: '⟳' }).click()
+  await expect(panel.locator('.test-row')).toHaveCount(0)
+  await expect(panel.getByRole('status', { name: 'Finding tests' })).toBeVisible()
+  await expect(panel.locator('.test-row.kind-project')).toHaveCount(PYTEST ? 4 : 3, { timeout: 90_000 })
+  await expect(count('all')).toHaveText(String(expected.all))
+  await expect(panel.getByRole('status', { name: 'Finding tests' })).toHaveCount(0)
+
   // Run everything.
   await panel.getByRole('button', { name: /Run all/ }).click()
   await expect(panel.locator('.tests-summary .busy')).toHaveCount(0, { timeout: 180_000 })
@@ -47,7 +55,7 @@ test('the Tests panel discovers and runs Vitest, Jest, Playwright and pytest tes
   await expect(count('skipped')).toHaveText(String(expected.skipped))
   await expect(count('all')).toHaveText(String(expected.all))
   // The marked live-result lines are hidden from the output.
-  await panel.getByRole('button', { name: 'Output' }).click()
+  await panel.getByRole('tab', { name: 'Output' }).click()
   await expect(panel.locator('.tests-output')).not.toContainText('@@vibe-coding-ide')
   await expect(panel.locator('.tests-output')).toContainText('$ jest')
 

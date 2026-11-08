@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { GitCommit, GitCommitFile } from '@shared/types'
 import { relativeTime } from '../time'
 import { DiffView, STATUS_LABEL } from './GitDiff'
+import { Spinner } from './Spinner'
 
 /**
  * Details of a commit selected in the History view: message, metadata, the
@@ -74,7 +75,7 @@ export function CommitDetails({ root, commit, onClose }: { root: string; commit:
             <span>Changed files</span>
             {files && <span className="count">{files.length}</span>}
           </div>
-          {files === null && <div className="file-empty">Loading…</div>}
+          {files === null && <Spinner label="Loading the changed files" />}
           {error && <div className="pane-message error">{error}</div>}
           {files?.length === 0 && !error && <div className="file-empty">No file changes</div>}
           {files?.map((f) => {

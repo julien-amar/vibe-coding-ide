@@ -44,6 +44,7 @@ import { EnvView, MountsView, PortsView, type SpecViewProps } from './SpecViews'
 import { PullDialog } from './PullDialog'
 import { VolumeDialog } from './VolumeDialog'
 import { ContainersSettings } from './ContainersSettings'
+import { Spinner } from '../Spinner'
 
 /**
  * The Containers tab: one view of every engine that runs — Docker, Podman (Engine API) and wslc (its
@@ -108,6 +109,29 @@ export function ContainersView({ visible }: { tab: Tab; visible: boolean }): Rea
     setData(Object.fromEntries(results))
   }, [engines, view])
 
+  /**
+   * Items of every view (all shown engines), for the views' tabs: on start, every 15 s and after a
+   * change; the shown view's count comes from its own list (kept current every few seconds).
+   */
+  const [counts, setCounts] = useState<Partial<Record<ContainerListKind, number>>>({})
+  const loadCounts = useCallback(async () => {
+    if (!engines.length) return setCounts({})
+    const entries = await Promise.all(
+      VIEWS.map(async ({ id }) => {
+        const list = engines.filter((e) => id !== 'compose' || e.features.compose)
+        const results = await Promise.all(list.map((e) => window.ide.containers.list(e.id, id)))
+        return [id, results.reduce((n, r) => n + ((r[id] as unknown[] | undefined)?.length ?? 0), 0)] as const
+      })
+    )
+    setCounts(Object.fromEntries(entries))
+  }, [engines])
+  /** After a change: the shown list and every count. */
+  const reloadAll = useCallback((): void => {
+    void load()
+    void loadCounts()
+  }, [load, loadCounts])
+  const countOf = (kind: ContainerListKind): number | undefined => (kind === view && data ? items[kind].length : counts[kind])
+
   useEffect(() => {
     setData(null)
     setSelected(undefined)
@@ -120,12 +144,16 @@ export function ContainersView({ visible }: { tab: Tab; visible: boolean }): Rea
     if (!visible) return
     void load()
     const lists = prefs.refresh > 0 ? setInterval(() => void load(), prefs.refresh * 1000) : undefined
-    const status = setInterval(() => void loadBackends(), 15_000)
+    void loadCounts()
+    const status = setInterval(() => {
+      void loadBackends()
+      void loadCounts()
+    }, 15_000)
     return () => {
       clearInterval(lists)
       clearInterval(status)
     }
-  }, [visible, load, loadBackends, prefs.refresh])
+  }, [visible, load, loadBackends, loadCounts, prefs.refresh])
 
   /** The current view's items of every engine, each tagged with its engine. */
   const items = useMemo(() => {
@@ -150,7 +178,7 @@ export function ContainersView({ visible }: { tab: Tab; visible: boolean }): Rea
     setBusy(undefined)
     if (!r.ok) notify(r.error ?? `${label} failed`, 'error')
     else if (success || r.text) notify(r.text ? `${success ?? label}: ${r.text}` : success!, 'success')
-    void load()
+    reloadAll()
     return r.ok
   }
 
@@ -171,13 +199,13 @@ export function ContainersView({ visible }: { tab: Tab; visible: boolean }): Rea
           if (e.kind === 'end') {
             const ok = !e.error && (e.code === 0 || e.code === undefined)
             notify(ok ? `${cur.title}: done` : `${cur.title}: ${e.error ?? `failed (exit ${e.code})`}`, ok ? 'success' : 'error')
-            void load()
+            reloadAll()
             return { ...cur, running: false, code: e.code, error: e.error }
           }
           return cur
         })
       }),
-    [load]
+    [reloadAll]
   )
 
   // ---------- Dialogs (an Engine field when several run) ----------
@@ -323,7 +351,7 @@ export function ContainersView({ visible }: { tab: Tab; visible: boolean }): Rea
   }
 
   const content = (): React.ReactNode => {
-    if (!backends) return <div className="pane-message">Looking for container engines…</div>
+    if (!backends) return <Spinner label="Looking for container engines" />
     if (!engines.length)
       return (
         <div className="pane-message containers-unavailable">
@@ -342,7 +370,7 @@ export function ContainersView({ visible }: { tab: Tab; visible: boolean }): Rea
           </button>
         </div>
       )
-    if (!data) return <div className="pane-message">Loading…</div>
+    if (!data) return <Spinner />
     const list = (() => {
       switch (view) {
         case 'containers':
@@ -442,7 +470,7 @@ export function ContainersView({ visible }: { tab: Tab; visible: boolean }): Rea
           editable: !!engines.find((e) => e.id === selected.engine)?.features.editSpec,
           onRecreated: (newId) => {
             setSelected({ ...selected, id: newId })
-            void load()
+            reloadAll()
           }
         }
       : undefined
@@ -456,12 +484,12 @@ export function ContainersView({ visible }: { tab: Tab; visible: boolean }): Rea
   return (
     <div className="containers">
       <div className="pane-toolbar containers-views">
-        <div className="segmented" role="tablist">
+        <div className="subtabs" role="tablist" aria-label="Views">
           {views.map((v) => (
             <button key={v.id} role="tab" aria-selected={view === v.id} className={view === v.id ? 'active' : ''} onClick={() => setView(v.id)}>
               {ICONS[v.id]}
               {v.label}
-              {view === v.id && data && <span className="count">{items[v.id].length}</span>}
+              {countOf(v.id) !== undefined && <span className="count">{countOf(v.id)}</span>}
             </button>
           ))}
         </div>
@@ -473,8 +501,11 @@ export function ContainersView({ visible }: { tab: Tab; visible: boolean }): Rea
         <IconButton
           title="Refresh"
           onClick={() => {
+            // The list and the views' counts empty: a spinner until they are loaded again.
+            setData(null)
+            setCounts({})
             void loadBackends()
-            void load()
+            reloadAll()
           }}
         >
           {ICONS.refresh}
@@ -522,7 +553,7 @@ export function ContainersView({ visible }: { tab: Tab; visible: boolean }): Rea
       {/* Status bar: details of the selection (logs, stats…), and which engines answer. */}
       <div className="pane-toolbar containers-status">
         {tabs.length > 0 && (
-          <div className="segmented" role="tablist">
+          <div className="subtabs subtabs-bottom" role="tablist" aria-label="Details">
             {tabs.map((b) => (
               <button
                 key={b}

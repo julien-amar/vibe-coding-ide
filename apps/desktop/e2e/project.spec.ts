@@ -12,7 +12,11 @@ let repo: string
 
 const panel = (page: Page) => page.locator('.tab-panel.visible')
 const gitPanel = (page: Page) => panel(page).locator('.git-panel')
-const view = (page: Page, name: 'History' | 'Changes' | 'Branches') => gitPanel(page).locator('.segmented button', { hasText: name }).click()
+const view = (page: Page, name: 'History' | 'Changes' | 'Branches') =>
+  gitPanel(page)
+    .locator('.git-toolbar')
+    .getByRole('tab', { name: new RegExp(`^${name}`) })
+    .click()
 
 test.beforeEach(async () => {
   profile = tempDir('profile')
@@ -223,8 +227,14 @@ test('panels can be collapsed, closed and added back', async () => {
   await panel(page).locator('.rail-item', { hasText: 'Git' }).click()
   await expect(gitPanel(page)).toBeVisible()
 
-  // The Git panel has no split buttons; terminals do.
+  // The Git panel has no split buttons; terminals do. Terminal / AI agent panels have no Restart button.
   await expect(gitPane.locator('button[title="Split right"]')).toHaveCount(0)
+  await expect(panel(page).locator('.pane-header button[title="Restart"]')).toHaveCount(0)
+
+  // Git's Refresh: the history reloads (never "not a git repository" meanwhile).
+  await gitPane.locator('.git-toolbar button[title="Refresh"]').click()
+  await expect(gitPanel(page).locator('.git-row')).toHaveCount(5)
+  await expect(gitPanel(page)).not.toContainText('not a git repository')
 
   // Close, then add back from the rail's + menu (real clicks: the menu must be on top).
   await gitPane.locator('button[title^="Close panel"]').click()
@@ -233,4 +243,38 @@ test('panels can be collapsed, closed and added back', async () => {
   await page.locator('.rail-menu button', { hasText: 'Git' }).click()
   await expect(gitPanel(page)).toBeVisible()
   await expect(gitPanel(page).locator('.git-row')).toHaveCount(5)
+})
+
+test('any panel can go full screen; Escape (or Restore) brings the layout back as it was', async () => {
+  const { page } = hub
+  const main = panel(page).locator('.project-main')
+  const gitPane = panel(page).locator('.pane', { has: page.locator('.pane-title', { hasText: 'Git' }) })
+  const termPane = panel(page)
+    .locator('.pane', { has: page.locator('.terminal-host') })
+    .first()
+  await expect(termPane).toBeVisible()
+  const before = (await gitPane.boundingBox())!
+
+  // Git full screen: it takes the whole project area, the other panels are hidden.
+  await gitPane.getByRole('button', { name: 'Full screen' }).click()
+  const box = (await gitPane.boundingBox())!
+  const area = (await main.boundingBox())!
+  expect(Math.round(box.width)).toBe(Math.round(area.width))
+  expect(Math.round(box.height)).toBe(Math.round(area.height))
+  await expect(termPane).toBeHidden()
+  // Escape (focus in the Git panel): back as it was.
+  await gitPanel(page).locator('.git-row').first().click()
+  await page.keyboard.press('Escape')
+  await expect(termPane).toBeVisible()
+  expect(await gitPane.boundingBox()).toEqual(before)
+
+  // A terminal full screen (double-click on its header): Escape stays the program's; Restore brings it back.
+  await termPane.locator('.pane-header').dblclick({ position: { x: 400, y: 10 } })
+  await expect(gitPane).toBeHidden()
+  await termPane.locator('.terminal-host').click()
+  await page.keyboard.press('Escape')
+  await expect(gitPane).toBeHidden()
+  await termPane.getByRole('button', { name: 'Restore the layout' }).click()
+  await expect(gitPane).toBeVisible()
+  expect(await gitPane.boundingBox()).toEqual(before)
 })

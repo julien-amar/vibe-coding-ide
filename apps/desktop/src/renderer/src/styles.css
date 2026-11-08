@@ -871,3 +871,110 @@ body.resizing-row * {
   width: 18px;
   height: 18px;
 }
+
+/* Sub-panel tabs (a panel's views): flat tabs the height of their bar; the selected one is marked by
+   an accent bar on the side of its content (below; .subtabs-bottom: above, for a bar under its content). */
+
+.subtabs {
+  display: flex;
+  align-self: stretch;
+  margin-left: -10px;
+}
+
+.subtabs button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.subtabs button:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.subtabs button.active {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.subtabs button.active::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--accent);
+}
+
+.subtabs.subtabs-bottom button.active::after {
+  top: 0;
+  bottom: auto;
+  border-radius: 0 0 2px 2px;
+}
+
+.subtabs button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Loading: a spinner in the middle of its container (Spinner). */
+
+.spinner-area {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 64px;
+}
+
+.spinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid color-mix(in srgb, var(--text-muted) 30%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spinner-turn 0.8s linear infinite;
+}
+
+@keyframes spinner-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2.4s;
+  }
+}
+
+/* A project panel full screen: laid over the project area; the others stay (hidden) as they are. */
+
+.project-main.has-maximized .split-child {
+  position: static;
+}
+
+.project-main.has-maximized .pane:not(.pane-maximized),
+.project-main.has-maximized .splitter {
+  visibility: hidden;
+}
+
+.pane.pane-maximized {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: var(--bg);
+}

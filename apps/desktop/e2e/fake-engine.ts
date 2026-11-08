@@ -163,16 +163,18 @@ export async function startFakeEngine(): Promise<FakeEngine> {
       res.write(frame(1, `hello from ${m[1]}\n`))
       res.write(frame(2, 'a warning on stderr\n'))
       const iv = setInterval(() => res.write(frame(1, 'tick\n')), 1000)
-      req.on('close', () => clearInterval(iv))
+      res.on('close', () => clearInterval(iv)) // (the response: the request's close comes once its body is read)
       return
     }
     if ((m = /^\/containers\/([^/]+)\/stats/.exec(url))) {
       res.writeHead(200, { 'Content-Type': 'application/json' })
       let total = 1_000_000
       let system = 100_000_000
+      let n = 0
       const sample = (): void => {
         const pre = { cpu_usage: { total_usage: total }, system_cpu_usage: system }
-        total += 2_500_000
+        // A varying load (20–80 %), so the graphs have a shape.
+        total += Math.round(2_500_000 + 1_500_000 * Math.sin(n++ / 2))
         system += 10_000_000
         res.write(
           JSON.stringify({
@@ -187,7 +189,7 @@ export async function startFakeEngine(): Promise<FakeEngine> {
       }
       sample()
       const iv = setInterval(sample, 500)
-      req.on('close', () => clearInterval(iv))
+      res.on('close', () => clearInterval(iv))
       return
     }
     if (url === '/images/json') return send(200, images)

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ContainerBackendId, ContainerTarget } from '@shared/types'
 import { keepTail } from './model'
 import { useLatest } from '../../use-latest'
+import { Spinner } from '../Spinner'
 
 /** Logs and inspect of the selection; the auto-scrolling output and the stream hook the details share. */
 // ---------------------------------------------------------------------------
@@ -78,7 +79,8 @@ export function LogsView({ backend, id }: { backend: ContainerBackendId; id: str
         <input className="containers-filter" placeholder="Search the logs" value={search} onChange={(e) => setSearch(e.target.value)} />
         {ended && <span className="muted">{ended}</span>}
       </div>
-      <AutoScrollPre text={shown || (ended ? '' : 'Waiting for logs…')} />
+      {/* Until the first lines arrive (and with a search typed, the matches: possibly none). */}
+      {text || ended ? <AutoScrollPre text={shown} /> : <Spinner label="Waiting for logs" />}
     </div>
   )
 }
@@ -92,5 +94,5 @@ export function InspectView({ backend, target, id }: { backend: ContainerBackend
       alive = false
     }
   }, [backend, target, id])
-  return <pre className="ctr-pre selectable">{text ?? 'Loading…'}</pre>
+  return text === undefined ? <Spinner /> : <pre className="ctr-pre selectable">{text}</pre>
 }

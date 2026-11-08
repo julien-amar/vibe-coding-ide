@@ -3,6 +3,7 @@ import type { GitCommit, GitLog } from '@shared/types'
 import { computeGraph, laneColor, type GraphRow } from '../git-graph'
 import { relativeTime } from '../time'
 import { CommitDetails } from './CommitDetails'
+import { Spinner } from './Spinner'
 
 const ROW_H = 26
 const LANE_W = 14
@@ -77,8 +78,8 @@ function RefBadges({ refs }: { refs: string[] }): React.JSX.Element {
   )
 }
 
-/** History view of the Git panel: all branches with a commit graph. Reloads when `tick` changes. */
-export function GitLogPane({ root, visible, tick }: { root: string; visible: boolean; tick: number }): React.JSX.Element {
+/** History view of the Git panel: all branches with a commit graph. Reloads when `tick` changes; emptied (loading) when `reset` does. */
+export function GitLogPane({ root, visible, tick, reset = 0 }: { root: string; visible: boolean; tick: number; reset?: number }): React.JSX.Element {
   const [log, setLog] = useState<GitLog | null>(null)
   const [selected, setSelected] = useState<string>()
   const [scrollTop, setScrollTop] = useState(0)
@@ -92,6 +93,10 @@ export function GitLogPane({ root, visible, tick }: { root: string; visible: boo
   useEffect(() => {
     load()
   }, [load, tick])
+  // The Refresh button: the history shows loading until it is reloaded.
+  useEffect(() => {
+    if (reset) setLog(null)
+  }, [reset])
 
   useEffect(() => {
     const el = scrollRef.current
@@ -127,6 +132,7 @@ export function GitLogPane({ root, visible, tick }: { root: string; visible: boo
 
   return (
     <div className="git-pane">
+      {!log && <Spinner label="Loading the history" />}
       {log && !log.isRepo && (
         <div className="pane-message">{log.error ? <p className="error">{log.error}</p> : <p>This folder is not a git repository.</p>}</div>
       )}

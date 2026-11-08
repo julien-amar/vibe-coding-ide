@@ -5,6 +5,7 @@ import { fixPrompt, type Failure } from '../test-prompt'
 import { aggregateStatus, buildTestTree, filterTestTree, formatDuration, splitLocations, stripAnsi, type TestTreeNode } from '../test-tree'
 import { resultKey, useProjectTests, useTestsStore } from '../tests-store'
 import { notify } from './Dialogs'
+import { Spinner } from './Spinner'
 
 const STATUS_ICON: Record<TestStatus | 'none', string> = { passed: '✓', failed: '✗', skipped: '○', running: '◌', none: '·' }
 const STATUS_TEXT: Record<TestStatus, string> = { passed: 'Passed', failed: 'Failed', skipped: 'Skipped', running: 'Running' }
@@ -166,13 +167,14 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
           className="tool-button"
           disabled={st.discovering || st.running}
           title="Find tests again (after adding or renaming tests)"
-          onClick={() => void discover(root)}
+          onClick={() => void discover(root, { reset: true })}
         >
           ⟳
         </button>
         <span className="spacer" />
         <span className="tests-summary">
-          {st.discovering ? <span className="busy">Finding tests…</span> : st.running ? <span className="busy">Running…</span> : null}
+          {/* (Finding tests: the list's spinner.) */}
+          {st.running && <span className="busy">Running…</span>}
         </span>
       </div>
 
@@ -205,7 +207,7 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
             <p className="muted">Supported: Vitest and Playwright (a vitest / playwright config file, also in sub-folders).</p>
           </div>
         )}
-        {!st.projects && st.discovering && <div className="tests-empty muted">Finding tests…</div>}
+        {!st.projects && st.discovering && <Spinner label="Finding tests" />}
         {rows.length === 0 && counts.total > 0 && (
           <div className="tests-empty muted">
             No {statusFilter === 'all' ? '' : `${statusFilter} `}tests{filter.trim() ? ` matching “${filter.trim()}”` : ''}.
@@ -307,11 +309,21 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
           <TestDetails node={selectedRow} root={root} tabId={tabId} projects={st.projects ?? []} results={st.results} fileErrors={st.fileErrors} />
         )}
         <div className="pane-toolbar tests-bottom-bar">
-          <div className="segmented" role="tablist">
-            <button className={bottomOpen && view === 'details' ? 'active' : ''} onClick={() => show('details')}>
+          <div className="subtabs subtabs-bottom" role="tablist" aria-label="Test details">
+            <button
+              role="tab"
+              aria-selected={bottomOpen && view === 'details'}
+              className={bottomOpen && view === 'details' ? 'active' : ''}
+              onClick={() => show('details')}
+            >
               Details
             </button>
-            <button className={bottomOpen && view === 'output' ? 'active' : ''} onClick={() => show('output')}>
+            <button
+              role="tab"
+              aria-selected={bottomOpen && view === 'output'}
+              className={bottomOpen && view === 'output' ? 'active' : ''}
+              onClick={() => show('output')}
+            >
               Output
             </button>
           </div>
@@ -322,8 +334,18 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
           )}
           <span className="spacer" />
           {bottomOpen && view === 'output' && (
-            <button className="tool-button" disabled={!st.output} onClick={() => clearOutput(root)}>
-              Clear
+            <button
+              className="icon-button pane-action"
+              title="Clear the output"
+              aria-label="Clear the output"
+              disabled={!st.output}
+              onClick={() => clearOutput(root)}
+            >
+              {/* Lines of text, crossed out. */}
+              <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+                <path d="M2.5 4h11M2.5 8h6M2.5 12h4" />
+                <path d="M10 10l3.5 3.5M13.5 10L10 13.5" />
+              </svg>
             </button>
           )}
         </div>

@@ -3,6 +3,7 @@ import type { GitStatus, GitStatusFile } from '@shared/types'
 import { confirmDialog } from './Dialogs'
 import { DiffView, STATUS_LABEL, type DiffLineActions } from './GitDiff'
 import type { GitRun as Run } from './GitPanel'
+import { Spinner } from './Spinner'
 
 /** The Git panel's Changes view: staged / unstaged files, diffs with partial staging, commit. */
 
@@ -43,7 +44,17 @@ function FileRow({
   )
 }
 
-export function ChangesView({ root, status, run, refreshKey }: { root: string; status: GitStatus | null; run: Run; refreshKey: string }): React.JSX.Element {
+export function ChangesView({
+  root,
+  status,
+  run,
+  refreshKey
+}: {
+  root: string
+  status: GitStatus | null | undefined
+  run: Run
+  refreshKey: string
+}): React.JSX.Element {
   const [message, setMessage] = useState('')
   const [amend, setAmend] = useState(false)
   /** The last commit's message, put in the box when amending (to edit it). */
@@ -127,6 +138,7 @@ export function ChangesView({ root, status, run, refreshKey }: { root: string; s
         }
       : undefined
 
+  if (status === undefined) return <Spinner />
   if (!status) return <div className="pane-message">This folder is not a git repository.</div>
 
   const canCommit = (staged.length > 0 || amend) && (message.trim().length > 0 || amend)

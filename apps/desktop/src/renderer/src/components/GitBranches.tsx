@@ -4,6 +4,7 @@ import { useTabs } from '../store'
 import { relativeTime } from '../time'
 import { confirmDialog, notify, openDialog } from './Dialogs'
 import type { GitRun as Run } from './GitPanel'
+import { Spinner } from './Spinner'
 
 /** The Git panel's Branches view: switch, create, merge, delete, feature worktrees. */
 
@@ -15,7 +16,7 @@ export function BranchesView({
   openProject
 }: {
   root: string
-  status: GitStatus | null
+  status: GitStatus | null | undefined
   run: Run
   tick: number
   openProject: (path: string) => void
@@ -36,6 +37,7 @@ export function BranchesView({
     }
   }, [root, tick])
 
+  if (status === undefined) return <Spinner />
   if (!status) return <div className="pane-message">This folder is not a git repository.</div>
 
   const local = branches.filter((b) => !b.remote).sort((a, b) => Number(b.current) - Number(a.current) || b.date - a.date)

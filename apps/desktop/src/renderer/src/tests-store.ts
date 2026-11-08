@@ -31,7 +31,8 @@ export function testFromId(id: string): TestCase {
 
 interface TestsStore {
   byRoot: Record<string, ProjectTestsState>
-  discover(root: string): Promise<void>
+  /** Find the tests; `reset` (the Refresh button): the list and its results emptied first (a spinner shows). */
+  discover(root: string, opts?: { reset?: boolean }): Promise<void>
   /** Run `req`; `testIds` are the tests it covers (shown as running). */
   run(root: string, req: TestRunRequest, testIds: string[]): Promise<void>
   stop(root: string): void
@@ -68,9 +69,9 @@ export const useTestsStore = create<TestsStore>((set, get) => {
   return {
     byRoot: {},
 
-    async discover(root) {
+    async discover(root, opts) {
       if (get().byRoot[root]?.discovering) return
-      patch(root, () => ({ discovering: true, lastError: undefined }))
+      patch(root, () => ({ discovering: true, lastError: undefined, ...(opts?.reset ? { projects: undefined, results: {}, fileErrors: {} } : {}) }))
       try {
         const projects = await window.ide.tests.discover(root)
         patch(root, () => ({ projects, discovering: false }))

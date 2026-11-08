@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { hasVisiblePane, panesOf, updateAt, type DropSide, type PaneNode } from '@shared/layout'
 import type { LayoutNode, PaneType, Profile } from '@shared/types'
@@ -36,8 +36,20 @@ const ICONS = {
   collapse: 'M3 2v10M11 3.5L7 7l4 3.5',
   splitRight: 'M2 2.5h10v9H2zM7 2.5v9',
   splitDown: 'M2 2.5h10v9H2zM2 7h10',
-  close: 'M3.5 3.5l7 7M10.5 3.5l-7 7'
+  close: 'M3.5 3.5l7 7M10.5 3.5l-7 7',
+  maximize: 'M2.5 5.5v-3h3M8.5 2.5h3v3M11.5 8.5v3h-3M5.5 11.5h-3v-3',
+  restore: 'M5.5 2.5v3h-3M11.5 5.5h-3v-3M8.5 11.5v-3h3M2.5 8.5h3v3'
 }
+
+/**
+ * A panel shown full screen (over the others, which stay as they are: Escape or Restore puts the
+ * layout back). Provided by the project view.
+ */
+const PaneMaximize = createContext<{ maxId: string | undefined; toggle: (paneId: string) => void; canMaximize: boolean }>({
+  maxId: undefined,
+  toggle: () => undefined,
+  canMaximize: false
+})
 
 /** Which edge of a pane the pointer is closest to (drop zones for moving panes). */
 function sideAt(e: React.DragEvent, el: HTMLElement): DropSide {
@@ -78,12 +90,19 @@ function PaneFrame({
   const split = (side: DropSide): void => void addPane(tab.id, pane.type, { target: pane.id, side, profileId: pane.profileId })
 
   const isPaneDrag = (e: React.DragEvent): boolean => e.dataTransfer.types.includes(PANE_MIME)
+  const { maxId, toggle, canMaximize } = useContext(PaneMaximize)
+  const maximized = maxId === pane.id
 
   return (
-    <div className="pane">
+    <div className={`pane${maximized ? ' pane-maximized' : ''}`}>
       <div
         className="pane-header"
-        draggable
+        // Double-click: full screen, or back (as a window's title bar).
+        onDoubleClick={(e) => {
+          if ((e.target as Element).closest('button, input, select, a')) return
+          if (canMaximize || maximized) toggle(pane.id)
+        }}
+        draggable={!maximized}
         title="Drag to move this panel"
         onDragStart={(e) => {
           e.dataTransfer.setData(PANE_MIME, JSON.stringify({ tabId: tab.id, paneId: pane.id }))
@@ -103,6 +122,17 @@ function PaneFrame({
               <Icon d={ICONS.splitDown} />
             </button>
           </>
+        )}
+        {(canMaximize || maximized) && (
+          <button
+            className="icon-button pane-action"
+            title={maximized ? 'Restore the layout (Esc)' : 'Full screen (Esc to restore)'}
+            aria-label={maximized ? 'Restore the layout' : 'Full screen'}
+            aria-pressed={maximized}
+            onClick={() => toggle(pane.id)}
+          >
+            <Icon d={maximized ? ICONS.restore : ICONS.maximize} />
+          </button>
         )}
         <button
           className="icon-button pane-action collapse-button"
@@ -197,11 +227,6 @@ function TerminalPane({ tab, pane, visible, autoFocus }: { tab: Tab; pane: PaneN
               onClick={() => setSettingsOpen(true)}
             >
               ⚙{settingsCount > 0 && <span className="agent-settings-count">{settingsCount}</span>}
-            </button>
-          )}
-          {pane.profileId && (
-            <button className="icon-button pane-action" title="Restart" onClick={() => void restartPane(tab.id, pane.id)}>
-              ⟳
             </button>
           )}
         </>
@@ -386,6 +411,30 @@ function SideRail({ tab, panes }: { tab: Tab; panes: PaneNode[] }): React.JSX.El
 export function ProjectView({ tab, visible }: { tab: Tab; visible: boolean }): React.JSX.Element | null {
   const setLayout = useTabs((s) => s.setLayout)
   const setPaneCollapsed = useTabs((s) => s.setPaneCollapsed)
+  const [maxPane, setMaxPane] = useState<string>()
+  // A panel that went away (closed, collapsed) is no longer full screen.
+  const shownIds = tab.project
+    ? panesOf(tab.project.layout)
+        .filter((p) => !p.collapsed)
+        .map((p) => p.id)
+    : []
+  const maxId = maxPane && shownIds.includes(maxPane) ? maxPane : undefined
+
+  // Escape restores the layout, except in a terminal or AI agent panel: Escape is the program's
+  // (an agent's interrupt, vim…); there, Restore or a double-click on the header. Not while a dialog is open.
+  useEffect(() => {
+    if (!maxId || !visible) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape' || document.querySelector('.dialog-backdrop')) return
+      if (e.target instanceof Element && e.target.closest('.xterm')) return
+      e.preventDefault()
+      e.stopPropagation()
+      setMaxPane(undefined)
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [maxId, visible])
+
   if (!tab.project) return null
   const layout = tab.project.layout
   const panes = panesOf(layout)
@@ -421,19 +470,22 @@ export function ProjectView({ tab, visible }: { tab: Tab; visible: boolean }): R
     return <TerminalPane key={node.id} tab={tab} pane={node} visible={visible} autoFocus={node.id === focusId} />
   }
 
+  const maximize = { maxId, toggle: (id: string) => setMaxPane((cur) => (cur === id ? undefined : id)), canMaximize: shownPanes.length > 1 }
   return (
-    <div className="project-view">
-      <SideRail tab={tab} panes={collapsed} />
-      <div className="project-main">
-        {hasVisiblePane(layout) ? (
-          render(layout, [])
-        ) : (
-          <div className="empty-state">
-            <p>All panels are collapsed.</p>
-            <button onClick={() => collapsed.forEach((p) => setPaneCollapsed(tab.id, p.id, false))}>Show all panels</button>
-          </div>
-        )}
+    <PaneMaximize.Provider value={maximize}>
+      <div className="project-view">
+        <SideRail tab={tab} panes={collapsed} />
+        <div className={`project-main${maxId ? ' has-maximized' : ''}`}>
+          {hasVisiblePane(layout) ? (
+            render(layout, [])
+          ) : (
+            <div className="empty-state">
+              <p>All panels are collapsed.</p>
+              <button onClick={() => collapsed.forEach((p) => setPaneCollapsed(tab.id, p.id, false))}>Show all panels</button>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </PaneMaximize.Provider>
   )
 }

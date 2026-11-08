@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { hunkLines, partialUnsupported } from '@shared/git-patch'
+import { Spinner } from './Spinner'
 
 /** Git status letter → [short label, description] (shared by the Changes view and commit details). */
 export const STATUS_LABEL: Record<string, [string, string]> = {
@@ -61,7 +62,7 @@ export function DiffView({ text, loading, actions }: { text: string; loading: bo
     anchor.current = undefined
   }, [text])
 
-  if (loading) return <div className="pane-message">Loading diff…</div>
+  if (loading) return <Spinner label="Loading the diff" />
   if (!text.trim()) return <div className="pane-message">No textual changes (binary file or mode change).</div>
 
   const act = async (action: LineAction, which: number[]): Promise<void> => {

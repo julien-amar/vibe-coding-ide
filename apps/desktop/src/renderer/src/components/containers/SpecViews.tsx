@@ -5,6 +5,7 @@ import { ICONS } from './icons'
 import { ENGINE_LABEL } from './model'
 import { IconButton } from './ui'
 import { SECRET, envList, envRows, sameRows, validateEnv, validateMounts, validatePorts, type EnvRow } from './spec-rows'
+import { Spinner } from '../Spinner'
 
 // ---------------------------------------------------------------------------
 // A container's settings — environment, volumes (mounts), ports — edited in a draft; applying recreates
@@ -58,7 +59,7 @@ export function SpecEditor<T>(
   }, [backend, id]) // eslint-disable-line react-hooks/exhaustive-deps -- loaded once per container (fromSpec is the caller's mapping, a new function each render)
 
   if (error) return <div className="pane-message containers-error">{error}</div>
-  if (!spec) return <div className="pane-message">Loading…</div>
+  if (!spec) return <Spinner />
   const original = props.fromSpec(spec)
   const changed = !props.same(rows, original)
   const invalid = props.validate(rows)

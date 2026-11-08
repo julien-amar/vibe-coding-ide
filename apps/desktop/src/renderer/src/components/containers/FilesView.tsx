@@ -5,6 +5,7 @@ import { notify } from '../Dialogs'
 import { ICONS } from './icons'
 import { formatBytes } from './model'
 import { IconButton } from './ui'
+import { Spinner } from '../Spinner'
 
 // ---------------------------------------------------------------------------
 // Files: browse the selected (running) container's file system; preview and save files
@@ -63,8 +64,7 @@ export function FilesView({ backend, id }: { backend: ContainerBackendId; id: st
   const previewText = (f: FilePreview): string => {
     if (f.error) return f.error
     if (f.binary) return 'Binary file: save it to open it on this computer.'
-    if (f.text === undefined) return 'Loading…'
-    return f.text + (f.truncated ? '\n… (only the first 256 kB: save the file for the rest)' : '')
+    return (f.text ?? '') + (f.truncated ? '\n… (only the first 256 kB: save the file for the rest)' : '')
   }
 
   return (
@@ -102,7 +102,7 @@ export function FilesView({ backend, id }: { backend: ContainerBackendId; id: st
       <div className="ctr-files-body">
         <div className="ctr-files-list" role="list" aria-label="Files">
           {error && <div className="containers-error">{error}</div>}
-          {!entries && !error && <div className="pane-message">Loading…</div>}
+          {!entries && !error && <Spinner label="Loading the folder" />}
           {entries?.length === 0 && <div className="pane-message">Empty folder.</div>}
           {entries?.map((e) => {
             const p = childPath(path, e.name)
@@ -139,7 +139,11 @@ export function FilesView({ backend, id }: { backend: ContainerBackendId; id: st
                 <span aria-hidden>✕</span>
               </IconButton>
             </div>
-            <pre className="ctr-pre selectable">{previewText(file)}</pre>
+            {file.text === undefined && !file.error && !file.binary ? (
+              <Spinner label="Loading the file" />
+            ) : (
+              <pre className="ctr-pre selectable">{previewText(file)}</pre>
+            )}
           </div>
         )}
       </div>

@@ -21,9 +21,17 @@ export function GitPanel({ root, visible, openProject }: { root: string; visible
   const [tick, setTick] = useState(0)
   /** Bumped by the status poll: only status and the open diff reload. */
   const [poll, setPoll] = useState(0)
-  const [status, setStatus] = useState<GitStatus | null>(null)
+  /** undefined: loading; null: not a git repository. */
+  const [status, setStatus] = useState<GitStatus | null | undefined>(undefined)
   const [busy, setBusy] = useState<string | null>(null)
   const refresh = useCallback(() => setTick((t) => t + 1), [])
+  /** Bumped by the Refresh button: the views show loading (spinners) until reloaded. */
+  const [reset, setReset] = useState(0)
+  const reload = (): void => {
+    setStatus(undefined)
+    setReset((r) => r + 1)
+    refresh()
+  }
 
   // Repository changes (commit, checkout, fetch, staging…) from any source refresh every view.
   useEffect(() => {
@@ -70,7 +78,7 @@ export function GitPanel({ root, visible, openProject }: { root: string; visible
   return (
     <div className="git-panel">
       <div className="pane-toolbar git-toolbar">
-        <div className="segmented" role="tablist">
+        <div className="subtabs" role="tablist" aria-label="Git views">
           {(['history', 'changes', 'branches'] as const).map((v) => (
             <button key={v} role="tab" aria-selected={view === v} className={view === v ? 'active' : ''} onClick={() => setView(v)}>
               {v === 'history' ? 'History' : v === 'changes' ? 'Changes' : 'Branches'}
@@ -121,12 +129,12 @@ export function GitPanel({ root, visible, openProject }: { root: string; visible
             </button>
           </>
         )}
-        <button className="icon-button" title="Refresh" onClick={refresh}>
+        <button className="icon-button" title="Refresh" onClick={reload}>
           ⟳
         </button>
       </div>
       <div className="git-view">
-        {view === 'history' && <GitLogPane root={root} visible={visible} tick={tick} />}
+        {view === 'history' && <GitLogPane root={root} visible={visible} tick={tick} reset={reset} />}
         {view === 'changes' && <ChangesView root={root} status={status} run={run} refreshKey={`${tick}:${poll}`} />}
         {view === 'branches' && <BranchesView root={root} status={status} run={run} tick={tick} openProject={openProject} />}
       </div>

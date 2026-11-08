@@ -47,6 +47,21 @@ test('the Containers tab lists, acts on, and shows the logs and stats of contain
   const { page } = hub
   const tab = await openContainers(page)
   await expect(page.locator('.tab.active')).toContainText('Containers')
+  // Every view shows its count, not only the shown one.
+  const viewCount = (name: string) =>
+    tab
+      .locator('.containers-views')
+      .getByRole('tab', { name: new RegExp(`^${name}`) })
+      .locator('.count')
+  await expect(viewCount('Containers')).toHaveText('2')
+  await expect(viewCount('Images')).toHaveText('2')
+  await expect(viewCount('Volumes')).toHaveText('1')
+  await expect(viewCount('Networks')).toHaveText('2')
+  await expect(viewCount('Compose')).toHaveText('1')
+  // Refresh: the list and the counts load again (a spinner meanwhile), then are back.
+  await tab.getByRole('button', { name: 'Refresh', exact: true }).click()
+  await expect(tab.locator('.ctr-row')).toHaveCount(2)
+  await expect(viewCount('Images')).toHaveText('2')
   // Status bar: Docker answers (the fake engine), Podman does not.
   const status = tab.locator('.containers-status')
   await expect(status.locator('.engine-status[data-engine="docker"]')).toHaveClass(/\bon\b/)
@@ -85,6 +100,8 @@ test('the Containers tab lists, acts on, and shows the logs and stats of contain
   await expect(bottom.locator('.ctr-stat', { hasText: 'CPU' })).toContainText('%')
   await expect(bottom.locator('.ctr-stat', { hasText: 'Memory' })).toContainText('52 MB / 1.1 GB')
   await expect(bottom.locator('.ctr-stat', { hasText: 'Processes' })).toContainText('3')
+  // Live: the CPU and memory graphs need several samples.
+  await expect(bottom.locator('.ctr-spark polyline')).toHaveCount(2)
   await status.getByRole('tab', { name: 'Inspect' }).click()
   await expect(bottom.locator('.ctr-pre')).toContainText('"Tty": false')
 
