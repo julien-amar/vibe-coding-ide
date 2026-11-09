@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TestCase, TestProject, TestResult, TestStatus } from '@shared/types'
 import { sendToAgent } from '../agent-bridge'
 import { fixPrompt, type Failure } from '../test-prompt'
-import { aggregateStatus, buildTestTree, filterTestTree, formatDuration, splitLocations, stripAnsi, type TestTreeNode } from '../test-tree'
+import { tabTitle, useTabs } from '../store'
+import { buildTestTree, filterTestTree, formatDuration, groupTestTrees, nodeStatus, splitLocations, stripAnsi, type TestTreeNode } from '../test-tree'
 import { resultKey, useProjectTests, useTestsStore } from '../tests-store'
 import { notify } from './Dialogs'
 import { Spinner } from './Spinner'
+import { TestTreeIcon } from './TestTreeIcon'
 
 const STATUS_ICON: Record<TestStatus | 'none', string> = { passed: '✓', failed: '✗', skipped: '○', running: '◌', none: '·' }
 const STATUS_TEXT: Record<TestStatus, string> = { passed: 'Passed', failed: 'Failed', skipped: 'Skipped', running: 'Running' }
@@ -106,15 +108,21 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
     if (el && view === 'output') el.scrollTop = el.scrollHeight
   }, [st.output, view])
 
-  const trees = useMemo(() => (st.projects ?? []).map(buildTestTree), [st.projects])
+  // One tree per test project (counts, Run all); shown with the .NET ones under the tab's name.
+  const projectTrees = useMemo(() => (st.projects ?? []).map(buildTestTree), [st.projects])
+  const tabName = useTabs((s) => {
+    const t = s.tabs.find((x) => x.id === tabId)
+    return t ? (t.customTitle ?? t.project?.name ?? tabTitle(t)) : 'Tests'
+  })
+  const trees = useMemo(() => groupTestTrees(projectTrees, st.projects ?? [], tabName), [projectTrees, st.projects, tabName])
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase()
     if (!q && statusFilter === 'all') return trees
     return trees
       .map((tree) =>
-        filterTestTree(tree, (t) => {
-          if (statusFilter !== 'all' && st.results[resultKey(tree.projectId, t.id)]?.status !== statusFilter) return false
+        filterTestTree(tree, (t, projectId) => {
+          if (statusFilter !== 'all' && st.results[resultKey(projectId, t.id)]?.status !== statusFilter) return false
           return !q || [t.file, ...t.suite, t.name].some((s) => s.toLowerCase().includes(q))
         })
       )
@@ -124,9 +132,10 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
   const searching = filter.trim() !== '' || statusFilter !== 'all'
   const rows: Row[] = []
   const walk = (node: TestTreeNode, depth: number): void => {
-    const status = aggregateStatus(node.projectId, node.testIds, st.results)
-    // Projects and suites start expanded; files start collapsed unless they hold a failure (or a search is on).
-    const byDefault = node.kind !== 'file' || status === 'failed' || searching
+    const status = nodeStatus(node, st.results)
+    // Projects, suites and namespaces start expanded; files and classes start collapsed unless they hold a
+    // failure (or a search is on).
+    const byDefault = (node.kind !== 'file' && node.kind !== 'class') || status === 'failed' || searching
     const isOpen = node.kind !== 'test' && (expanded[node.key] ?? byDefault)
     rows.push({ node, depth, status, expanded: isOpen })
     if (isOpen) node.children.forEach((c) => walk(c, depth + 1))
@@ -134,7 +143,7 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
   filtered.forEach((t) => walk(t, 0))
 
   const counts = { passed: 0, failed: 0, skipped: 0, total: 0 }
-  for (const tree of trees) {
+  for (const tree of projectTrees) {
     for (const id of tree.testIds) {
       counts.total++
       const s = st.results[resultKey(tree.projectId, id)]?.status
@@ -142,12 +151,14 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
     }
   }
 
-  const runNode = (node: TestTreeNode): void => {
+  const runNode = async (node: TestTreeNode): Promise<void> => {
     setSelected(node.key)
-    void run(root, node.req, node.testIds)
+    // A group: its test projects, one after the other.
+    if (node.kind === 'group') for (const c of node.children) await useTestsStore.getState().run(root, c.req, c.testIds)
+    else await run(root, node.req, node.testIds)
   }
   const runAll = async (): Promise<void> => {
-    for (const tree of trees) await useTestsStore.getState().run(root, tree.req, tree.testIds)
+    for (const tree of projectTrees) await useTestsStore.getState().run(root, tree.req, tree.testIds)
   }
 
   const selectedRow = rows.find((r) => r.node.key === selected)?.node ?? findNode(trees, selected)
@@ -223,7 +234,15 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
                 role="treeitem"
                 aria-expanded={node.kind === 'test' ? undefined : isOpen}
                 style={{ paddingLeft: 6 + depth * 14 }}
-                title={node.kind === 'file' && project ? `${project.relDir ? project.relDir + '/' : ''}${node.label}` : undefined}
+                title={
+                  node.kind === 'file' && project
+                    ? `${project.relDir ? project.relDir + '/' : ''}${node.label}`
+                    : node.kind === 'namespace' || node.kind === 'class'
+                      ? node.req.file
+                      : node.kind === 'project' && project?.projectFile
+                        ? `${project.relDir ? project.relDir + '/' : ''}${project.projectFile}`
+                        : undefined
+                }
                 onClick={() => {
                   setSelected(node.key)
                   show('details')
@@ -246,6 +265,7 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
                   {isOpen ? '▾' : '▸'}
                 </button>
                 <StatusIcon status={status} />
+                <TestTreeIcon node={node} project={project} />
                 <span className="test-label">{node.label}</span>
                 {node.kind !== 'test' && <span className="test-count">{node.testIds.length}</span>}
                 {result && 'duration' in result && <span className="test-duration">{formatDuration(result.duration)}</span>}
@@ -256,11 +276,11 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
                 )}
                 <button
                   className="test-run"
-                  title={`Run ${node.kind === 'project' ? 'all tests' : node.kind === 'test' ? 'this test' : `this ${node.kind}`}`}
+                  title={`Run ${node.kind === 'project' || node.kind === 'group' ? 'all tests' : node.kind === 'test' ? 'this test' : `this ${node.kind}`}`}
                   disabled={st.running}
                   onClick={(e) => {
                     e.stopPropagation()
-                    runNode(node)
+                    void runNode(node)
                   }}
                 >
                   ▶
@@ -435,6 +455,15 @@ function TestDetails({
   fileErrors: ReturnType<typeof useProjectTests>['fileErrors']
 }): React.JSX.Element {
   if (!node) return <div className="tests-details muted">Select a test to see its result.</div>
+  // A group: each of its test projects.
+  if (node.kind === 'group')
+    return (
+      <div className="tests-details-group">
+        {node.children.map((c) => (
+          <TestDetails key={c.key} node={c} root={root} tabId={tabId} projects={projects} results={results} fileErrors={fileErrors} />
+        ))}
+      </div>
+    )
   const project = projects.find((p) => p.id === node.projectId)
   const errors = (fileErrors[node.projectId] ?? []).filter((e) => node.kind === 'project' || (node.req.file && e.file === node.req.file))
   const testOf = (id: string): TestCase | undefined => project?.tests.find((t) => t.id === id)

@@ -61,8 +61,8 @@ export async function discoverTests(root: string): Promise<TestProject[]> {
     detectTestProjects(root).map(async ({ framework, dir, relDir }) => {
       const work = workDir()
       try {
-        const { tests, error } = await adapterFor(framework).list(dir, work)
-        return { id: `${framework}:${relDir}`, framework, dir, relDir, tests, error }
+        const { tests, error, projectFile } = await adapterFor(framework).list(dir, work)
+        return { id: `${framework}:${relDir}`, framework, dir, relDir, tests, error, ...(projectFile ? { projectFile } : {}) }
       } catch (err) {
         return { id: `${framework}:${relDir}`, framework, dir, relDir, tests: [], error: (err as Error).message }
       } finally {

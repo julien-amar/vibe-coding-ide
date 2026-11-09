@@ -45,12 +45,17 @@ test('Go, Rust, .NET, Gradle and Maven projects: discovered, run, opened in the 
   await openProject(page, FIXTURE)
   const panel = page.locator('.tab-panel.visible .tests-panel')
   await page.locator('.tab-panel.visible .side-rail .rail-item.tests').click()
-  // One group per project folder (Java tests are listed from the sources, even without Maven).
-  await expect(panel.locator('.test-row.kind-project')).toHaveText([/\.NET · dotnet/, /Go · go/, /Gradle · gradle/, /Maven · java/, /Rust · rust/], {
+  // One group per project folder (Java tests are listed from the sources, even without Maven); .NET test
+  // projects (named after their project file) under the tab's name.
+  await expect(panel.locator('.test-row.kind-project')).toHaveText([/SampleTests/, /Go · go/, /Gradle · gradle/, /Maven · java/, /Rust · rust/], {
     timeout: 300_000
   })
   await expect(panel.locator('.test-row.kind-project', { hasText: 'Maven' }).locator('.test-count')).toHaveText('5')
   await expect(panel.locator('.test-row.kind-project', { hasText: 'Gradle' }).locator('.test-count')).toHaveText('5')
+  await expect(panel.locator('.test-row.kind-group')).toHaveText(/polyglot-tests/)
+  // .NET: namespaces, then classes (a nested class by its full name).
+  await expect(panel.locator('.test-row.kind-namespace .test-label')).toHaveText(['SampleTests'])
+  await expect(panel.locator('.test-row.kind-class .test-label')).toHaveText(['MathTests', 'MathTests+Nested'])
 
   test.skip(!GO, 'Go is not installed')
   await runGroup(panel, /Go · go/)
@@ -86,7 +91,7 @@ test('Go, Rust, .NET, Gradle and Maven projects: discovered, run, opened in the 
     await panel.locator('.tests-filter').fill('')
   }
   if (DOTNET) {
-    await runGroup(panel, /\.NET · dotnet/)
+    await runGroup(panel, /SampleTests/)
     await expect(testRow('FailsOnPurpose').locator('.test-status')).toHaveClass(/st-failed/)
     await expect(testRow('AddsPairs(a: 1000, b: 2000)').locator('.test-status')).toHaveClass(/st-passed/)
   }

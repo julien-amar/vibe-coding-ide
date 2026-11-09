@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import type { TestProject } from '@shared/types'
-import { aggregateStatus, buildTestTree, filterTestTree, formatDuration, splitLocations, stripAnsi } from './test-tree'
+import {
+  aggregateStatus,
+  buildTestTree,
+  filterTestTree,
+  formatDuration,
+  groupTestTrees,
+  nodeStatus,
+  splitLocations,
+  stripAnsi,
+  type TestTreeNode
+} from './test-tree'
 
 const project: TestProject = {
   id: 'vitest:apps/web',
@@ -78,5 +88,83 @@ describe('Tests panel tree', () => {
     expect(formatDuration(12.4)).toBe('12 ms')
     expect(formatDuration(1534)).toBe('1.53 s')
     expect(formatDuration(undefined)).toBe('')
+  })
+})
+
+describe('Tests panel tree (.NET)', () => {
+  const dotnet = (relDir: string, projectFile: string, names: string[]): TestProject => ({
+    id: `dotnet:${relDir}`,
+    framework: 'dotnet',
+    dir: `/r/${relDir}`,
+    relDir,
+    projectFile,
+    tests: names.map((n) => {
+      const dot = n.lastIndexOf('.')
+      return { id: `${n.slice(0, dot)}::${n.slice(dot + 1)}`, file: n.slice(0, dot), suite: [], name: n.slice(dot + 1) }
+    })
+  })
+  const p1 = dotnet('tests/Project1', 'Project1.csproj', ['namespace1.namespace2.class3.test3'])
+  const p2 = dotnet('tests/Project2', 'Project2.fsproj', ['namespace1.namespace2.namespace3.class1.test1', 'namespace1.namespace2.namespace4.class2.test2'])
+  const vitest = { ...project }
+
+  /** "kind label" lines, indented by depth. */
+  const outline = (n: TestTreeNode, depth = 0): string[] => [`${'  '.repeat(depth)}${n.kind} ${n.label}`, ...n.children.flatMap((c) => outline(c, depth + 1))]
+
+  it('groups the test projects under the tab, then namespaces (single-child chains merged), classes and tests', () => {
+    const trees = groupTestTrees([p1, p2].map(buildTestTree), [p1, p2], 'my-repo')
+    expect(trees).toHaveLength(1)
+    expect(outline(trees[0])).toEqual([
+      'group my-repo',
+      '  project Project1',
+      '    namespace namespace1.namespace2',
+      '      class class3',
+      '        test test3',
+      '  project Project2',
+      '    namespace namespace1.namespace2',
+      '      namespace namespace3',
+      '        class class1',
+      '          test test1',
+      '      namespace namespace4',
+      '        class class2',
+      '          test test2'
+    ])
+    expect(trees[0].testIds).toHaveLength(3)
+  })
+
+  it('runs a merged namespace, a class and a test by their full names', () => {
+    const ns = buildTestTree(p1).children[0]
+    expect(ns.req).toEqual({ projectId: 'dotnet:tests/Project1', file: 'namespace1.namespace2' })
+    expect(ns.children[0].req).toEqual({ projectId: 'dotnet:tests/Project1', file: 'namespace1.namespace2.class3' })
+    expect(ns.children[0].children[0].req).toEqual({
+      projectId: 'dotnet:tests/Project1',
+      file: 'namespace1.namespace2.class3',
+      titlePath: ['test3'],
+      line: undefined
+    })
+  })
+
+  it('keeps other frameworks beside the group; a project without a project file is named after its folder', () => {
+    const noFile = { ...p1, projectFile: undefined }
+    const trees = groupTestTrees([vitest, noFile].map(buildTestTree), [vitest, noFile], 'my-repo')
+    expect(trees.map((t) => `${t.kind} ${t.label}`)).toEqual(['project Vitest · apps/web', 'group my-repo'])
+    expect(trees[1].children[0].label).toBe('Project1')
+  })
+
+  it('combines the statuses of a group, and filters across its projects', () => {
+    const [group] = groupTestTrees([p1, p2].map(buildTestTree), [p1, p2], 'my-repo')
+    const results = {
+      'dotnet:tests/Project1|namespace1.namespace2.class3::test3': { id: 'x', status: 'passed' as const },
+      'dotnet:tests/Project2|namespace1.namespace2.namespace4.class2::test2': { id: 'y', status: 'failed' as const }
+    }
+    expect(nodeStatus(group, results)).toBe('failed')
+    const onlyFailed = filterTestTree(group, (t, projectId) => results[`${projectId}|${t.id}` as keyof typeof results]?.status === 'failed')!
+    expect(outline(onlyFailed)).toEqual([
+      'group my-repo',
+      '  project Project2',
+      '    namespace namespace1.namespace2',
+      '      namespace namespace4',
+      '        class class2',
+      '          test test2'
+    ])
   })
 })

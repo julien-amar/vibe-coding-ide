@@ -161,13 +161,13 @@ export const dotnetAdapter: Adapter = {
     if (!proj) return { tests: [] }
     const r = await runQuiet(dir, programCommand(dir, dotnetTool(dir), ['test', proj, '--list-tests', '--nologo']))
     const names = parseDotnetList(r.stdout)
-    if (names.length === 0 && r.code !== 0) return { tests: [], error: tail(r.output) || `dotnet test failed (exit code ${r.code}).` }
+    if (names.length === 0 && r.code !== 0) return { tests: [], error: tail(r.output) || `dotnet test failed (exit code ${r.code}).`, projectFile: proj }
     const sources = findFiles(dir, ['.cs', '.fs', '.vb'])
     const tests = names.map((n) => {
       const t = dotnetCase(n)
       return { ...t, ...locate(dir, sources, t) }
     })
-    return { tests }
+    return { tests, projectFile: proj }
   },
 
   async run(dir, req, ctx) {

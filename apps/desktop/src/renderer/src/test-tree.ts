@@ -1,9 +1,12 @@
 import type { TestCase, TestProject, TestResult, TestRunRequest, TestStatus } from '@shared/types'
 
-/** A row of the Tests panel tree: a test project, a file, a describe() block or a test. */
+/**
+ * A row of the Tests panel tree: a test project, a file, a describe() block or a test; for .NET, the
+ * project tab's test projects (group), a namespace, a class.
+ */
 export interface TestTreeNode {
   key: string
-  kind: 'project' | 'file' | 'suite' | 'test'
+  kind: 'group' | 'project' | 'file' | 'suite' | 'namespace' | 'class' | 'test'
   label: string
   projectId: string
   children: TestTreeNode[]
@@ -26,8 +29,12 @@ export const FRAMEWORK_LABEL: Record<TestProject['framework'], string> = {
   gradle: 'Gradle'
 }
 
-/** Tree of a test project: files, then nested suites, then tests (in listing order). */
+/** A .NET test project's name: its project file without the extension (else its folder). */
+export const dotnetProjectName = (project: TestProject): string => project.projectFile?.replace(/\.[^.]+$/, '') ?? (project.relDir.split('/').pop() || '.NET')
+
+/** Tree of a test project: files, then nested suites, then tests (in listing order). .NET: see dotnetTree. */
 export function buildTestTree(project: TestProject): TestTreeNode {
+  if (project.framework === 'dotnet') return dotnetTree(project)
   const projectId = project.id
   const rootNode: TestTreeNode = {
     key: projectId,
@@ -89,6 +96,82 @@ export function buildTestTree(project: TestProject): TestTreeNode {
   return rootNode
 }
 
+/**
+ * Tree of a .NET test project (named after its project file): namespaces, then classes, then tests.
+ * A namespace whose only child is another namespace is merged with it ("Company.Product").
+ */
+function dotnetTree(project: TestProject): TestTreeNode {
+  const projectId = project.id
+  const node = (key: string, kind: TestTreeNode['kind'], label: string, req: TestRunRequest): TestTreeNode => ({
+    key,
+    kind,
+    label,
+    projectId,
+    children: [],
+    testIds: [],
+    req
+  })
+  const rootNode = node(projectId, 'project', dotnetProjectName(project), { projectId })
+  const nodes = new Map<string, TestTreeNode>()
+  const child = (parent: TestTreeNode, key: string, make: () => TestTreeNode): TestTreeNode => {
+    let n = nodes.get(key)
+    if (!n) {
+      n = make()
+      nodes.set(key, n)
+      parent.children.push(n)
+    }
+    return n
+  }
+  for (const t of project.tests) {
+    // t.file: the class's full name ("Ns.Sub.Class", "Ns.Class+Nested"; "(tests)": none).
+    const parts = t.file === '(tests)' ? [] : t.file.split('.')
+    const chain: TestTreeNode[] = [rootNode]
+    let parent = rootNode
+    parts.slice(0, -1).forEach((part, i) => {
+      const path = parts.slice(0, i + 1).join('.')
+      parent = child(parent, `${projectId}|ns|${path}`, () => node(`${projectId}|ns|${path}`, 'namespace', part, { projectId, file: path }))
+      chain.push(parent)
+    })
+    parent = child(parent, `${projectId}|${t.file}`, () => node(`${projectId}|${t.file}`, 'class', parts.at(-1) ?? t.file, { projectId, file: t.file }))
+    chain.push(parent)
+    parent.children.push({
+      ...node(`${projectId}|${t.id}`, 'test', t.name, { projectId, file: t.file, titlePath: [...t.suite, t.name], line: t.line }),
+      testIds: [t.id],
+      test: t
+    })
+    for (const n of chain) n.testIds.push(t.id)
+  }
+  const merge = (n: TestTreeNode): TestTreeNode => {
+    let m = n
+    // The merged namespace runs (and is keyed) as its deepest part: the same tests.
+    while (m.kind === 'namespace' && m.children.length === 1 && m.children[0].kind === 'namespace')
+      m = { ...m.children[0], label: `${m.label}.${m.children[0].label}` }
+    return { ...m, children: m.children.map(merge) }
+  }
+  return merge(rootNode)
+}
+
+/**
+ * The trees shown: .NET test projects under one node named after the project tab (where the first
+ * of them is); other test projects as they are.
+ */
+export function groupTestTrees(trees: TestTreeNode[], projects: TestProject[], tabName: string): TestTreeNode[] {
+  const isDotnet = (t: TestTreeNode): boolean => projects.find((p) => p.id === t.projectId)?.framework === 'dotnet'
+  const dotnet = trees.filter(isDotnet)
+  if (dotnet.length === 0) return trees
+  const group: TestTreeNode = {
+    key: 'group:dotnet',
+    kind: 'group',
+    label: tabName,
+    projectId: '',
+    children: dotnet,
+    testIds: dotnet.flatMap((t) => t.testIds),
+    req: { projectId: '' }
+  }
+  const at = trees.findIndex(isDotnet)
+  return [...trees.slice(0, at).filter((t) => !isDotnet(t)), group, ...trees.slice(at).filter((t) => !isDotnet(t))]
+}
+
 type ResultMap = Record<string, TestResult | { status: 'running' }>
 
 /** Combined status of tests: running > failed > passed (all run ones passed) > skipped. */
@@ -106,10 +189,20 @@ export function aggregateStatus(projectId: string, ids: string[], results: Resul
   return failed ? 'failed' : passed ? 'passed' : skipped ? 'skipped' : undefined
 }
 
+/** A node's combined status (a group: of its test projects). */
+export function nodeStatus(node: TestTreeNode, results: ResultMap): TestStatus | undefined {
+  if (node.kind !== 'group') return aggregateStatus(node.projectId, node.testIds, results)
+  const all = node.children.map((c) => nodeStatus(c, results))
+  return (['running', 'failed', 'passed', 'skipped'] as const).find((s) => all.includes(s))
+}
+
 /** Keep the tests matching `keep` and the groups that still contain some. */
-export function filterTestTree(node: TestTreeNode, keep: (t: TestCase) => boolean): TestTreeNode | undefined {
-  if (node.kind === 'test') return keep(node.test!) ? node : undefined
-  const children = node.children.map((c) => filterTestTree(c, keep)).filter((c): c is TestTreeNode => !!c)
+export function filterTestTree(node: TestTreeNode, keep: (t: TestCase, projectId: string) => boolean): TestTreeNode | undefined {
+  if (node.kind === 'test') return keep(node.test!, node.projectId) ? node : undefined
+  const children = node.children
+    .map((c) => filterTestTree(c, keep))
+    // (A test project is kept without tests at the top, for its listing error; not inside a group.)
+    .filter((c): c is TestTreeNode => !!c && (node.kind !== 'group' || c.testIds.length > 0))
   if (children.length === 0 && node.kind !== 'project') return undefined
   const testIds = children.flatMap((c) => c.testIds)
   return { ...node, children, testIds }

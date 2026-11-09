@@ -39,7 +39,7 @@ The short version, with screenshots: [README.md](../README.md).
   | **pytest** | `pytest.ini`, `pyproject.toml`, `setup.cfg`, `tox.ini` | file, class | the project's virtualenv (`.venv`, `venv`, `env`) or Python on PATH |
   | **Go** | `go.mod` | package, test → subtests | `go test` |
   | **Rust** | `Cargo.toml` | source file (lib, integration tests), module | `cargo test` |
-  | **.NET** (xUnit, NUnit, MSTest) | a test project (`*.csproj` / `*.fsproj` referencing a test SDK) | class | `dotnet test` |
+  | **.NET** (xUnit, NUnit, MSTest) | a test project (`*.csproj` / `*.fsproj` referencing a test SDK) | the project tab, then each test project (named after its project file), namespace (single-child chains merged: `Company.Product`), class | `dotnet test` |
   | **Java** (JUnit 4/5, TestNG) | `pom.xml` (Maven) or `build.gradle(.kts)` (Gradle) | class (nested classes too) | `mvnw` / `gradlew` if present, else `mvn` / `gradle` |
 
   Java tests are listed from the sources (test annotations), before any build; Go subtests appear once they have run. **Run all**, or hover any project, file, suite or test and click **▶**; each test turns passed / failed / skipped **as soon as it finishes**, with its duration, and files with failures open automatically. Skipped tests are listed too. Click a test for its error and stack trace; **Output** shows the console output of the runs. Connected filter buttons show **All**, **✓ Passed**, **○ Skipped** or **✗ Failed** tests (with their counts), combined with a name filter; **■ Stop** ends a run. WSL projects run their tests inside the distribution.

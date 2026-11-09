@@ -31,7 +31,7 @@ export interface Adapter {
   detect(dir: string, names: Set<string>): boolean
   /** One build covers the sub-folders (Cargo, Maven, Gradle, .NET project): do not look further down. */
   ownsSubfolders?: boolean
-  list(dir: string, work: WorkDir): Promise<{ tests: TestCase[]; error?: string }>
+  list(dir: string, work: WorkDir): Promise<{ tests: TestCase[]; error?: string; projectFile?: string }>
   run(dir: string, req: TestRunRequest, ctx: RunContext): Promise<Omit<TestRunResult, 'cancelled'>>
 }
 

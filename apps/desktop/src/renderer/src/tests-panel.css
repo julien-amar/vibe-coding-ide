@@ -344,3 +344,40 @@
 .tests-details-head .tests-fix {
   flex-shrink: 0;
 }
+
+/* .NET trees: the project's language, namespaces, classes, tests. */
+
+.test-icon {
+  flex-shrink: 0;
+  margin-right: 5px;
+}
+
+.test-icon-project {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 14px;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  background: #512bd4;
+  border-radius: 3px;
+}
+
+.test-icon-namespace {
+  color: var(--text-muted);
+}
+
+.test-icon-class {
+  color: #d9822b;
+}
+
+.test-icon-test {
+  color: #3b8eea;
+}
+
+.test-row.kind-group {
+  font-weight: 600;
+}

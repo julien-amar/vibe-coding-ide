@@ -36,6 +36,8 @@ export interface TestProject {
   tests: TestCase[]
   /** Discovery failed (output of the listing command). */
   error?: string
+  /** The project file of a .NET test project ("App.Tests.csproj"): its name in the Tests tree. */
+  projectFile?: string
 }
 
 export type TestStatus = 'passed' | 'failed' | 'skipped' | 'running'
