@@ -356,14 +356,54 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
+  min-width: 16px;
   height: 14px;
+  padding: 0 2px;
   font-size: 8px;
   font-weight: 700;
   line-height: 1;
   color: #fff;
   background: #512bd4;
   border-radius: 3px;
+}
+
+/* Each language in its usual colour. */
+.test-icon-project.lang-js {
+  color: #1e1e1e;
+  background: #f0db4f;
+}
+
+.test-icon-project.lang-ts {
+  background: #3178c6;
+}
+
+.test-icon-project.lang-py {
+  background: #3776ab;
+}
+
+.test-icon-project.lang-go {
+  background: #00a7d0;
+}
+
+.test-icon-project.lang-rs {
+  background: #b7410e;
+}
+
+.test-icon-project.lang-java {
+  background: #e76f00;
+}
+
+.test-icon-project.lang-kt {
+  background: #7f52ff;
+}
+
+.test-icon-file,
+.test-icon-suite {
+  color: var(--text-muted);
+}
+
+.test-icon-package {
+  color: #c9a227;
 }
 
 .test-icon-namespace {
