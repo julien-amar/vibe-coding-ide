@@ -56,12 +56,21 @@ export function detectTestProjects(root: string): { framework: TestFramework; di
   return found
 }
 
+/** The tests, each id once (the first). */
+export function uniqueTests<T extends { id: string }>(tests: T[]): T[] {
+  const seen = new Set<string>()
+  return tests.filter((t) => !seen.has(t.id) && !!seen.add(t.id))
+}
+
 export async function discoverTests(root: string): Promise<TestProject[]> {
   const projects = await Promise.all(
     detectTestProjects(root).map(async ({ framework, dir, relDir }) => {
       const work = workDir()
       try {
-        const { tests, error, projectFile } = await adapterFor(framework).list(dir, work)
+        const { tests: listed, error, projectFile } = await adapterFor(framework).list(dir, work)
+        // A test listed more than once (.NET: once per target framework; data-driven cases shown with
+        // the same name) is one test of the panel.
+        const tests = uniqueTests(listed)
         return { id: `${framework}:${relDir}`, framework, dir, relDir, tests, error, ...(projectFile ? { projectFile } : {}) }
       } catch (err) {
         return { id: `${framework}:${relDir}`, framework, dir, relDir, tests: [], error: (err as Error).message }

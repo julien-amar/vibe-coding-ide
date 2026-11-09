@@ -55,7 +55,8 @@ export function buildTestTree(project: TestProject): TestTreeNode {
     }
     return g
   }
-  for (const t of project.tests) {
+  // Each test once: rows are keyed by test id (a duplicate key leaves rows behind on screen).
+  for (const t of uniqueTests(project.tests)) {
     const fileKey = `${projectId}|${t.file}`
     let parent = group(rootNode, fileKey, () => ({
       key: fileKey,
@@ -122,7 +123,8 @@ function dotnetTree(project: TestProject): TestTreeNode {
     }
     return n
   }
-  for (const t of project.tests) {
+  // Each test once: rows are keyed by test id (a duplicate key leaves rows behind on screen).
+  for (const t of uniqueTests(project.tests)) {
     // t.file: the class's full name ("Ns.Sub.Class", "Ns.Class+Nested"; "(tests)": none).
     const parts = t.file === '(tests)' ? [] : t.file.split('.')
     const chain: TestTreeNode[] = [rootNode]
@@ -170,6 +172,12 @@ export function groupTestTrees(trees: TestTreeNode[], projects: TestProject[], t
   }
   const at = trees.findIndex(isDotnet)
   return [...trees.slice(0, at).filter((t) => !isDotnet(t)), group, ...trees.slice(at).filter((t) => !isDotnet(t))]
+}
+
+/** The tests, each id once (the first). */
+function uniqueTests(tests: TestCase[]): TestCase[] {
+  const seen = new Set<string>()
+  return tests.filter((t) => !seen.has(t.id) && !!seen.add(t.id))
 }
 
 type ResultMap = Record<string, TestResult | { status: 'running' }>

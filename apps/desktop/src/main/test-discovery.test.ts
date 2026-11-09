@@ -11,10 +11,9 @@ vi.mock('./tests/go', async (orig) => {
 })
 vi.mock('./tests/cargo', async (orig) => {
   const m = await orig<typeof import('./tests/cargo')>()
-  return {
-    ...m,
-    cargoAdapter: { ...m.cargoAdapter, list: async () => ({ tests: [{ id: 'adds', file: 'src/lib.rs', suite: [], name: 'adds' }] }) }
-  }
+  const adds = { id: 'adds', file: 'src/lib.rs', suite: [], name: 'adds' }
+  // Listed twice (as .NET lists its tests once per target framework).
+  return { ...m, cargoAdapter: { ...m.cargoAdapter, list: async () => ({ tests: [adds, { ...adds }] }) } }
 })
 vi.mock('./tests/dotnet', async (orig) => {
   const m = await orig<typeof import('./tests/dotnet')>()
@@ -29,7 +28,7 @@ describe('test discovery', () => {
     writeFileSync(join(root, f), s)
   }
 
-  it('leaves out projects that list no test, keeping those with tests or a listing error', async () => {
+  it('leaves out projects that list no test, keeping those with tests or a listing error; a test listed twice is one test', async () => {
     w('empty-go/go.mod', 'module example.com/empty\n')
     w('crate/Cargo.toml', '[package]\nname = "crate"\n')
     w('Broken.Tests/Broken.Tests.csproj', '<Project><ItemGroup><PackageReference Include="Microsoft.NET.Test.Sdk" /></ItemGroup></Project>')

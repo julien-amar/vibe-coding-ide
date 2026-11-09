@@ -150,6 +150,14 @@ describe('Tests panel tree (.NET)', () => {
     expect(trees[1].children[0].label).toBe('Project1')
   })
 
+  it('shows a test listed more than once (once per target framework) once: every row key is unique', () => {
+    const twice = { ...p2, tests: [...p2.tests, ...p2.tests.map((t) => ({ ...t }))] }
+    const [group] = groupTestTrees([p1, twice].map(buildTestTree), [p1, twice], 'my-repo')
+    expect(group.testIds).toHaveLength(3)
+    const keys = (n: TestTreeNode): string[] => [n.key, ...n.children.flatMap(keys)]
+    expect(new Set(keys(group)).size).toBe(keys(group).length)
+  })
+
   it('combines the statuses of a group, and filters across its projects', () => {
     const [group] = groupTestTrees([p1, p2].map(buildTestTree), [p1, p2], 'my-repo')
     const results = {
