@@ -247,6 +247,23 @@ describe('test framework detection', () => {
     ])
   })
 
+  it('keeps looking for other frameworks below a Gradle / .NET root, without nesting its own framework', () => {
+    const root = join(base, 'mixed')
+    const w = (f: string, s = ''): void => {
+      mkdirSync(join(root, f, '..'), { recursive: true })
+      writeFileSync(join(root, f), s)
+    }
+    w('build.gradle', "plugins { id 'com.criteo.lifecycle' }")
+    w('App.UTest/App.UTest.csproj', '<Project><ItemGroup><PackageReference Include="Microsoft.NET.Test.Sdk" /></ItemGroup></Project>')
+    w('App.UTest/nested/Other.csproj', '<Project><PackageReference Include="Microsoft.NET.Test.Sdk" /></Project>')
+    w('module/build.gradle')
+    expect(
+      detectTestProjects(root)
+        .map((p) => `${p.framework}:${p.relDir}`)
+        .sort()
+    ).toEqual(['dotnet:App.UTest', 'gradle:'])
+  })
+
   it('finds the framework CLI in a parent node_modules (hoisted install), and a project virtualenv', () => {
     expect(findCli(FIXTURE, 'vitest')).toMatch(/vitest[\\/]vitest\.mjs$/)
     expect(findCli(FIXTURE, 'jest')).toMatch(/jest[\\/]bin[\\/]jest\.js$/)

@@ -29,7 +29,7 @@ const MAX_DEPTH = 4
 /** Folders (up to a few levels deep) with a test framework. */
 export function detectTestProjects(root: string): { framework: TestFramework; dir: string; relDir: string }[] {
   const found: { framework: TestFramework; dir: string; relDir: string }[] = []
-  const walk = (dir: string, depth: number): void => {
+  const walk = (dir: string, depth: number, covered: ReadonlySet<TestFramework>): void => {
     let entries: Dirent[]
     try {
       entries = readdirSync(dir, { withFileTypes: true })
@@ -38,25 +38,26 @@ export function detectTestProjects(root: string): { framework: TestFramework; di
     }
     const names = new Set(entries.filter((e) => e.isFile()).map((e) => e.name))
     const relDir = relative(root, dir).replace(/\\/g, '/')
-    let owned = false
+    // A Cargo / Maven / Gradle / .NET project covers the sub-folders (modules, crates) of its own
+    // framework; other frameworks are still looked for below it (a Gradle build file that only
+    // wraps CI around .NET test projects, for instance).
+    const next = new Set(covered)
     for (const a of ADAPTERS) {
-      if (a.detect(dir, names)) {
-        found.push({ framework: a.framework, dir, relDir })
-        owned ||= !!a.ownsSubfolders
-      }
+      if (covered.has(a.framework) || !a.detect(dir, names)) continue
+      found.push({ framework: a.framework, dir, relDir })
+      if (a.ownsSubfolders) next.add(a.framework)
     }
-    // A Cargo / Maven / Gradle / .NET project covers its sub-folders (modules, crates).
-    if (owned || depth >= MAX_DEPTH) return
+    if (depth >= MAX_DEPTH) return
     for (const e of entries) {
-      if (e.isDirectory() && !SKIP_DIRS.has(e.name) && !e.name.startsWith('.')) walk(join(dir, e.name), depth + 1)
+      if (e.isDirectory() && !SKIP_DIRS.has(e.name) && !e.name.startsWith('.')) walk(join(dir, e.name), depth + 1, next)
     }
   }
-  walk(root, 0)
+  walk(root, 0, new Set())
   return found
 }
 
 export async function discoverTests(root: string): Promise<TestProject[]> {
-  return Promise.all(
+  const projects = await Promise.all(
     detectTestProjects(root).map(async ({ framework, dir, relDir }) => {
       const work = workDir()
       try {
@@ -69,6 +70,8 @@ export async function discoverTests(root: string): Promise<TestProject[]> {
       }
     })
   )
+  // A project without any test (and without a listing error to show) is not worth a node of the tree.
+  return projects.filter((p) => p.tests.length > 0 || p.error)
 }
 
 /** Runs in progress, one per project root. */
