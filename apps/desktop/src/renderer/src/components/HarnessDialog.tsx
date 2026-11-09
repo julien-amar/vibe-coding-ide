@@ -71,7 +71,7 @@ export function HarnessDialog({
         </div>
       )}
       <div className="pane-toolbar harness-toolbar">
-        <div className="segmented" role="tablist">
+        <div className="subtabs" role="tablist" aria-label="Agent settings">
           <button role="tab" aria-selected={view === 'mcp'} className={view === 'mcp' ? 'active' : ''} onClick={() => setView('mcp')}>
             MCP servers <span className="count">{enabledServers}</span>
           </button>
