@@ -205,7 +205,7 @@ export const dotnetAdapter: Adapter = {
     const proj = projectFile(dir)
     if (!proj) return { tests: [] }
     const listTests = (build: boolean): ReturnType<typeof runQuiet> =>
-      runQuiet(dir, programCommand(dir, dotnetTool(dir), ['test', proj, '--list-tests', '--nologo', ...(build ? [] : ['--no-build'])]))
+      runQuiet(dir, programCommand(dir, dotnetTool(dir), ['test', proj, '--list-tests', '--nologo', ...(build ? [] : ['--no-build']), ...RUN_SETTINGS]))
     let r = await listTests(!opts?.prebuilt)
     // Not in what the solution built after all: built on its own.
     if (opts?.prebuilt && r.code !== 0 && parseDotnetList(r.stdout).length === 0) r = await listTests(true)
