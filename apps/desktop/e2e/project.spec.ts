@@ -162,6 +162,62 @@ test('Shift+click selects a range of changed lines, staged at once', async () =>
   await expect.poll(() => git('show', ':range.txt')).toBe('top\none\ntwo\nthree\nbottom\n')
 })
 
+test('dragging over changed lines selects them (from a selected line: unselects them); a click still toggles one', async () => {
+  const { page } = hub
+  const git = (...args: string[]): string => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' })
+  writeFileSync(join(repo, 'range.txt'), 'top\nbottom\n')
+  git('add', 'range.txt')
+  git('commit', '-q', '-m', 'Add range')
+  writeFileSync(join(repo, 'range.txt'), 'top\none\ntwo\nthree\nfour\nbottom\n')
+
+  // Full screen: room for the diff's lines (the mouse moves over them where they are on screen).
+  await panel(page)
+    .locator('.pane', { has: page.locator('.git-panel') })
+    .getByRole('button', { name: 'Full screen' })
+    .click()
+  await view(page, 'Changes')
+  const changes = gitPanel(page).locator('.changes-view')
+  await changes.locator('.file-row', { hasText: 'range.txt' }).click()
+  const diff = changes.locator('.changes-diff')
+  await expect(diff.locator('.diff-line.hunk button', { hasText: 'Stage' })).toBeVisible()
+  await diff.locator('.diff-line', { hasText: 'bottom' }).scrollIntoViewIfNeeded()
+  const line = (text: string) => diff.locator('.diff-line.add', { hasText: text })
+  /** The button pressed on a line, moved over others (up or down), released on the last one. */
+  const drag = async (...texts: string[]): Promise<void> => {
+    const at = async (text: string): Promise<{ x: number; y: number }> => {
+      const b = (await line(text).boundingBox())!
+      return { x: b.x + 40, y: b.y + b.height / 2 }
+    }
+    const first = await at(texts[0])
+    await page.mouse.move(first.x, first.y)
+    await page.mouse.down()
+    for (const t of texts.slice(1)) {
+      const p = await at(t)
+      await page.mouse.move(p.x, p.y, { steps: 4 })
+    }
+    await page.mouse.up()
+  }
+
+  // Downwards: the lines are selected (lines, not text).
+  await drag('+one', '+two', '+three')
+  await expect(diff.locator('.diff-line.line-selected')).toHaveText(['+one', '+two', '+three'])
+  expect(await page.evaluate(() => window.getSelection()?.toString() ?? '')).toBe('')
+  // Starting on a selected line, upwards: the lines moved over are unselected.
+  await drag('+three', '+two')
+  await expect(diff.locator('.diff-line.line-selected')).toHaveText(['+one'])
+  await drag('+four', '+three')
+  await expect(diff.locator('.diff-selection-bar')).toContainText('3 lines selected')
+  await expect(diff.locator('.diff-line.line-selected')).toHaveText(['+one', '+three', '+four'])
+  // A click (no move) still toggles one line.
+  await line('+two').click()
+  await expect(diff.locator('.diff-line.line-selected')).toHaveText(['+one', '+two', '+three', '+four'])
+  await line('+two').click()
+  await expect(diff.locator('.diff-line.line-selected')).toHaveText(['+one', '+three', '+four'])
+
+  await diff.locator('.diff-selection-bar button', { hasText: 'Stage' }).click()
+  await expect.poll(() => git('show', ':range.txt')).toBe('top\none\nthree\nfour\nbottom\n')
+})
+
 test('a pull request is created with gh (branch pushed first), then opened', async () => {
   const { page } = hub
   const git = (...args: string[]): string => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' })

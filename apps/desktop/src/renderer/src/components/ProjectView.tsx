@@ -5,6 +5,7 @@ import type { LayoutNode, PaneType, Profile } from '@shared/types'
 import { parseWslPath } from '@shared/wsl-paths'
 import { useProfiles } from '../profiles'
 import { useTabs, type Tab } from '../store'
+import { useGitRepos } from '../git-repos'
 import { GitPanel } from './GitPanel'
 import { ProfileIcon } from './ProfileIcon'
 import { ProfileSelect } from './ProfileSelect'
@@ -318,6 +319,8 @@ function AddPanelButton({ tab }: { tab: Tab }): React.JSX.Element {
   const menuRef = useRef<HTMLDivElement>(null)
   const addPane = useTabs((s) => s.addPane)
   const open = menuPos !== undefined
+  // The Git panel is offered only for a folder with a git repository.
+  const hasRepo = (useGitRepos(tab.project?.root)?.length ?? 0) > 0
 
   useEffect(() => {
     if (!open) return
@@ -366,9 +369,11 @@ function AddPanelButton({ tab }: { tab: Tab }): React.JSX.Element {
             <button onClick={() => add('agent')}>
               <span className="pane-icon agent">{PANE_ICON.agent}</span> AI agent
             </button>
-            <button onClick={() => add('git')}>
-              <span className="pane-icon git">{PANE_ICON.git}</span> Git
-            </button>
+            {hasRepo && (
+              <button onClick={() => add('git')}>
+                <span className="pane-icon git">{PANE_ICON.git}</span> Git
+              </button>
+            )}
             <button onClick={() => add('tests')}>
               <span className="pane-icon tests">{PANE_ICON.tests}</span> Tests
             </button>

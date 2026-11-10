@@ -50,7 +50,8 @@ const api: IdeApi = {
     forget: (root) => invoke('project:forget', root)
   },
   git: {
-    log: (root) => invoke('git:log', root),
+    log: (root, page) => invoke('git:log', root, page),
+    repos: (root) => invoke('git:repos', root),
     op: (root, req) => invoke('git:op', root, req),
     watch: (root) => send('git:watch', root),
     unwatch: (root) => send('git:unwatch', root),

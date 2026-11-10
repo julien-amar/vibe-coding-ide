@@ -38,6 +38,7 @@ export interface IpcRequests {
   'project:forget': Api['project']['forget']
 
   'git:log': Api['git']['log']
+  'git:repos': Api['git']['repos']
   'git:op': Api['git']['op']
   'git:watch': Api['git']['watch']
   'git:unwatch': Api['git']['unwatch']

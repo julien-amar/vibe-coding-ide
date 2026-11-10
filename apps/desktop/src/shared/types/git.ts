@@ -15,6 +15,22 @@ export interface GitLog {
   error?: string
   branch?: string
   commits: GitCommit[]
+  /** More commits after these (the next page: `skip` = the commits read so far). */
+  hasMore?: boolean
+}
+
+/** A page of the history: the commits after the first `skip` (newest first), at most `limit`. */
+export interface GitLogPage {
+  skip?: number
+  limit?: number
+}
+
+/** A git repository of a project folder. */
+export interface GitRepo {
+  /** Its folder (absolute). */
+  path: string
+  /** Its folder relative to the project folder, with forward slashes ('' = the project folder). */
+  relPath: string
 }
 
 export interface GitStatusFile {

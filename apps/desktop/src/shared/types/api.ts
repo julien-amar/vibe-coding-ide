@@ -12,7 +12,7 @@ import type {
   CreateOptions,
   ImageSuggestion
 } from './containers'
-import type { GitLog, GitOpRequest, GitOpResult } from './git'
+import type { GitLog, GitLogPage, GitOpRequest, GitOpResult, GitRepo } from './git'
 import type { AgentHarnessSupport, Harness, McpCheckResult, McpServer, SkillInfo } from './harness'
 import type { RecentProject, TabSnapshot, WindowInit, WindowTabsState } from './layout'
 import type { Profile, PtyCreateRequest, PtyCreateResult } from './profiles'
@@ -74,7 +74,10 @@ export interface IdeApi {
     forget(root: string): Promise<void>
   }
   git: {
-    log(root: string): Promise<GitLog>
+    /** The history (all branches, newest first), a page at a time (default: the first 1000 commits). */
+    log(root: string, page?: GitLogPage): Promise<GitLog>
+    /** The git repositories of a project folder (itself, and those below it). */
+    repos(root: string): Promise<GitRepo[]>
     /** Status, diffs and repository actions (see GitOpRequest). */
     op(root: string, req: GitOpRequest): Promise<GitOpResult>
     watch(root: string): void

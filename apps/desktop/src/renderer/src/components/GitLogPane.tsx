@@ -78,17 +78,46 @@ function RefBadges({ refs }: { refs: string[] }): React.JSX.Element {
   )
 }
 
-/** History view of the Git panel: all branches with a commit graph. Reloads when `tick` changes; emptied (loading) when `reset` does. */
+/** Commits per page of the history ("Load more" adds a page). */
+const PAGE = 1000
+
+/**
+ * History view of the Git panel: all branches with a commit graph, the last 1000 commits first (a
+ * link below them loads 1000 more). Reloads when `tick` changes; emptied (loading) when `reset` does.
+ */
 export function GitLogPane({ root, visible, tick, reset = 0 }: { root: string; visible: boolean; tick: number; reset?: number }): React.JSX.Element {
   const [log, setLog] = useState<GitLog | null>(null)
   const [selected, setSelected] = useState<string>()
   const [scrollTop, setScrollTop] = useState(0)
   const [viewH, setViewH] = useState(400)
   const scrollRef = useRef<HTMLDivElement>(null)
+  /** Commits to show: the pages loaded so far (a reload reads them all again). */
+  const shown = useRef(PAGE)
+  const [loadingMore, setLoadingMore] = useState(false)
+  /** The latest read of the history: an earlier one finishing after it is dropped. */
+  const latest = useRef(0)
 
   const load = useCallback(() => {
-    void window.ide.git.log(root).then(setLog)
+    const id = ++latest.current
+    void window.ide.git.log(root, { limit: shown.current }).then((l) => {
+      if (id === latest.current) setLog(l)
+    })
   }, [root])
+
+  const loadMore = async (): Promise<void> => {
+    if (!log || loadingMore) return
+    // From now on, a reload (the repository changed meanwhile) reads this page too.
+    shown.current = log.commits.length + PAGE
+    const id = ++latest.current
+    setLoadingMore(true)
+    const next = await window.ide.git.log(root, { skip: log.commits.length, limit: PAGE })
+    setLoadingMore(false)
+    if (id !== latest.current) return
+    if (next.error) return setLog({ ...log, error: next.error })
+    // Commits made meanwhile shift the pages: a commit already shown is not shown twice.
+    const have = new Set(log.commits.map((c) => c.hash))
+    setLog({ ...log, commits: [...log.commits, ...next.commits.filter((c) => !have.has(c.hash))], hasMore: next.hasMore })
+  }
 
   useEffect(() => {
     load()
@@ -141,7 +170,7 @@ export function GitLogPane({ root, visible, tick, reset = 0 }: { root: string; v
 
       {commits.length > 0 && (
         <div className="git-rows" ref={scrollRef} onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}>
-          <div style={{ height: commits.length * ROW_H, position: 'relative' }}>
+          <div style={{ height: (commits.length + (log?.hasMore ? 2 : 0)) * ROW_H, position: 'relative' }}>
             {commits.slice(first, last).map((c, i) => {
               const idx = first + i
               const isHead = c.refs.some((r) => r === 'HEAD' || r.startsWith('HEAD -> '))
@@ -164,6 +193,17 @@ export function GitLogPane({ root, visible, tick, reset = 0 }: { root: string; v
                 </div>
               )
             })}
+            {log?.hasMore && (
+              <div className="git-more" style={{ top: commits.length * ROW_H, height: ROW_H * 2 }}>
+                {loadingMore ? (
+                  <span className="muted busy">Loading…</span>
+                ) : (
+                  <button className="link-button" onClick={() => void loadMore()}>
+                    Load next page
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

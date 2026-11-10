@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, realpathSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { gitLog, gitOp } from './git'
+import { findGitRepos, gitLog, gitOp } from './git'
 
 /**
  * Integration tests: the Git panel operations against a real repository
@@ -156,5 +156,43 @@ describe('git panel operations on a real repository', () => {
     expect((await gitOp(repo, { op: 'createBranch', branch: 'bad..name' })).ok).toBe(false)
     expect((await gitOp(repo, { op: 'commitFiles', hash: 'HEAD; rm -rf /' })).error).toBe('Invalid commit id')
     expect((await gitOp(repo, { op: 'removeWorktree', path: base })).error).toBe('Unknown worktree')
+  })
+})
+
+describe('history pages and the repositories of a project folder', () => {
+  it('reads the history a page at a time', async () => {
+    const all = await gitLog(repo)
+    expect(all.hasMore).toBe(false)
+    const first = await gitLog(repo, { limit: 1 })
+    expect(first.commits.map((c) => c.hash)).toEqual([all.commits[0].hash])
+    expect(first.hasMore).toBe(true)
+    const second = await gitLog(repo, { skip: 1, limit: 1 })
+    expect(second.commits.map((c) => c.hash)).toEqual([all.commits[1].hash])
+    // Invalid values from the renderer: from the newest commit, a page of the default size.
+    expect((await gitLog(repo, { skip: -5, limit: 0 })).commits.map((c) => c.hash)).toEqual(all.commits.map((c) => c.hash))
+    expect((await gitLog(repo, { limit: 2.7 })).commits).toHaveLength(2)
+  })
+
+  it('finds the repositories of a folder: itself, sub-folders (submodules too), not dependencies', async () => {
+    const project = join(base, 'workspace')
+    const init = (dir: string): void => {
+      mkdirSync(dir, { recursive: true })
+      execFileSync('git', ['-C', dir, 'init', '-q'])
+    }
+    init(join(project, 'api'))
+    init(join(project, 'libs', 'shared'))
+    // A submodule / worktree: a .git file.
+    mkdirSync(join(project, 'libs', 'vendored'), { recursive: true })
+    writeFileSync(join(project, 'libs', 'vendored', '.git'), 'gitdir: ../../.git/modules/vendored\n')
+    init(join(project, 'node_modules', 'dep'))
+    init(join(project, '.cache', 'tool'))
+    expect((await findGitRepos(project)).map((r) => r.relPath)).toEqual(['api', 'libs/shared', 'libs/vendored'])
+    // The folder of a repository, or a folder inside one: itself first.
+    expect((await findGitRepos(repo)).map((r) => r.relPath)).toEqual([''])
+    mkdirSync(join(repo, 'src', 'deep'), { recursive: true })
+    expect(await findGitRepos(join(repo, 'src'))).toEqual([{ path: join(repo, 'src'), relPath: '' }])
+    // A folder without any.
+    mkdirSync(join(base, 'empty'))
+    expect(await findGitRepos(join(base, 'empty'))).toEqual([])
   })
 })

@@ -1,17 +1,22 @@
 import { realpathSync } from 'node:fs'
-import type { GitBranch, GitCommit, GitCommitFile, GitLog, GitStatus, GitStatusFile, GitWorktree } from '@shared/types'
+import type { GitBranch, GitCommit, GitCommitFile, GitLog, GitLogPage, GitStatus, GitStatusFile, GitWorktree } from '@shared/types'
 import { parseWslPath } from '@shared/wsl-paths'
 import { git } from './run'
 
 /** Reading a repository (log, status, branches, worktrees, diffs) and validating values from the renderer. */
 
-const MAX_COMMITS = 2000
+/** Commits per page of the history. */
+export const LOG_PAGE = 1000
+/** At most this many commits in one read (a refresh re-reads the pages already shown). */
+const MAX_COMMITS = 100_000
 const FIELD = '\x1f'
 const RECORD = '\x1e'
 
 // ---------- Log ----------
 
-export async function gitLog(root: string): Promise<GitLog> {
+export async function gitLog(root: string, page: GitLogPage = {}): Promise<GitLog> {
+  const skip = Math.max(0, Math.floor(Number(page.skip) || 0))
+  const limit = Math.min(MAX_COMMITS, Math.max(1, Math.floor(Number(page.limit) || LOG_PAGE)))
   try {
     const inside = (await git(root, ['rev-parse', '--is-inside-work-tree'])).trim()
     if (inside !== 'true') return { isRepo: false, commits: [] }
@@ -30,7 +35,15 @@ export async function gitLog(root: string): Promise<GitLog> {
 
   let raw = ''
   try {
-    raw = await git(root, ['log', '--all', '--date-order', `-n${MAX_COMMITS}`, `--format=%H${FIELD}%P${FIELD}%an${FIELD}%at${FIELD}%D${FIELD}%s${RECORD}`])
+    // One more than asked: whether there is a next page.
+    raw = await git(root, [
+      'log',
+      '--all',
+      '--date-order',
+      `--skip=${skip}`,
+      `-n${limit + 1}`,
+      `--format=%H${FIELD}%P${FIELD}%an${FIELD}%at${FIELD}%D${FIELD}%s${RECORD}`
+    ])
   } catch (err) {
     // An empty repository has no log yet.
     if (/does not have any commits|bad default revision/i.test((err as Error).message)) return { isRepo: true, branch, commits: [] }
@@ -51,7 +64,8 @@ export async function gitLog(root: string): Promise<GitLog> {
       subject: subject ?? ''
     })
   }
-  return { isRepo: true, branch, commits }
+  const hasMore = commits.length > limit
+  return { isRepo: true, branch, commits: commits.slice(0, limit), hasMore }
 }
 
 // ---------- Status ----------

@@ -3,6 +3,7 @@ import { appendPane, insertPane, mapPanes, movePane, newPaneId, panesOf, removeP
 import { harnessIsEmpty } from '@shared/harness'
 import type { AppSettings, Harness, LayoutNode, PaneType, Profile, ProjectSnapshot, TabKind, TabSnapshot } from '@shared/types'
 import { parseWslPath } from '@shared/wsl-paths'
+import { useGitReposStore, withoutGitPanes } from './git-repos'
 import { loadProfiles } from './profiles'
 
 export interface Tab {
@@ -240,7 +241,9 @@ export const useTabs = create<State>((set, get) => ({
       if (snap.project) {
         // Restored project: start fresh sessions in the project folder; panes keep their saved output.
         if (parseWslPath(snap.project.root)) await profilesFor(snap.project.root) // agents installed in WSL
-        const layout = await startPaneSessions(snap.project.layout, snap.project.root)
+        // A folder without any git repository (any more): no Git panel.
+        const repos = await useGitReposStore.getState().load(snap.project.root)
+        const layout = await startPaneSessions(repos.length ? snap.project.layout : withoutGitPanes(snap.project.layout), snap.project.root)
         tabs.push({ id: newTabId(), kind: 'project', autoTitle: snap.project.name, customTitle: snap.customTitle, project: { ...snap.project, layout } })
         continue
       }
@@ -311,8 +314,10 @@ export const useTabs = create<State>((set, get) => ({
       set({ activeId: existing.id })
       return
     }
-    const list = await profilesFor(root)
-    const layout = await startPaneSessions(defaultProjectLayout(defaultShell(list, root), defaultAgent(list, root)), root)
+    const [list, repos] = await Promise.all([profilesFor(root), useGitReposStore.getState().load(root)])
+    // A folder without any git repository: no Git panel.
+    const initial = defaultProjectLayout(defaultShell(list, root), defaultAgent(list, root))
+    const layout = await startPaneSessions(repos.length ? initial : withoutGitPanes(initial), root)
     const name = projectName(root)
     const tab: Tab = { id: newTabId(), kind: 'project', autoTitle: name, project: { root, name, layout } }
     window.ide.project.touch(root)
@@ -450,6 +455,8 @@ export const useTabs = create<State>((set, get) => ({
   async addPane(tabId, type, opts = {}) {
     const tab = get().tabs.find((t) => t.id === tabId)
     if (!tab?.project) return
+    // No repository in the folder: no Git panel.
+    if (type === 'git' && !(useGitReposStore.getState().byRoot[tab.project.root] ?? []).length) return
     const list = await profilesFor(tab.project.root)
     const root = tab.project.root
     const profileId =

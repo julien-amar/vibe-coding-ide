@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { app, BrowserWindow, dialog, nativeTheme, shell, type Rectangle, type WebContents } from 'electron'
 import { mapPanes, sessionIdsOf } from '@shared/layout'
 import type {
+  GitLogPage,
   GitOpRequest,
   PackageUpdateInfo,
   PtyCreateRequest,
@@ -15,7 +16,7 @@ import type {
 import pkg from '../../package.json'
 import { applySettings, getSettings, offeredProfiles, resetSettings, updateSettings } from './app-settings'
 import { openInEditor } from './editor'
-import { gitLog, gitOp, GitWatcher } from './git'
+import { findGitRepos, gitLog, gitOp, GitWatcher } from './git'
 import { checkMcpServer, HARNESS_SUPPORT, listSkills, readProjectMcpJson, readSkillFile, sanitizeHarness } from './harness'
 import { profileIcon } from './icons'
 import { isDir, startIn, withAgentSettings } from './launch'
@@ -351,7 +352,10 @@ function registerIpc(): void {
   listen('project:touch', (_e, root: string) => touchProject(String(root)))
   handle('project:forget', (_e, root: string) => forgetProject(String(root)))
 
-  handle('git:log', (_e, root: string) => (isDir(String(root)) ? gitLog(String(root)) : { isRepo: false, error: 'Folder not found', commits: [] }))
+  handle('git:log', (_e, root: string, page?: GitLogPage) =>
+    isDir(String(root)) ? gitLog(String(root), page && typeof page === 'object' ? page : {}) : { isRepo: false, error: 'Folder not found', commits: [] }
+  )
+  handle('git:repos', (_e, root: string) => (isDir(String(root)) ? findGitRepos(String(root)) : []))
   handle('git:op', (_e, root: string, req: GitOpRequest) =>
     isDir(String(root)) ? gitOp(String(root), req ?? { op: 'status' }) : { ok: false, error: 'Folder not found' }
   )

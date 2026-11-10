@@ -356,7 +356,7 @@ button:disabled {
   min-height: 30px;
   padding: 4px 10px;
   font-size: 12px;
-  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
   background: var(--surface-2);
   flex-shrink: 0;
 }
@@ -601,4 +601,34 @@ button:disabled {
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }
+}
+
+/* Several repositories in the project folder: the one shown (left of the views, as a terminal panel's
+   profile); the views then start after it. */
+
+.git-repo-select {
+  margin-left: -4px;
+  font-size: 12px;
+}
+
+.git-repo-select + .subtabs {
+  margin-left: 0;
+}
+
+.repo-icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+/* Below the last page of the history: the next page. */
+
+.git-more {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 12px;
 }

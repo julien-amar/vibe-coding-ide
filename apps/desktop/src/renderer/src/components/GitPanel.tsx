@@ -1,21 +1,72 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { GitOpRequest, GitOpResult, GitStatus } from '@shared/types'
+import { useGitRepos, useGitReposStore } from '../git-repos'
 import { notify } from './Dialogs'
 import { GitLogPane } from './GitLogPane'
 import { BranchesView } from './GitBranches'
 import { ChangesView } from './GitChanges'
 import { pullRequest } from './GitPullRequest'
+import { MenuSelect } from './MenuSelect'
 
 type View = 'history' | 'changes' | 'branches'
+
+/** A repository: a folder with a branch. */
+function RepoIcon(): React.JSX.Element {
+  return (
+    <svg
+      className="profile-icon repo-icon"
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      aria-hidden
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinecap="round"
+    >
+      <circle cx="5" cy="4" r="1.6" />
+      <circle cx="5" cy="12" r="1.6" />
+      <circle cx="11" cy="6" r="1.6" />
+      <path d="M5 5.6v4.8M11 7.6c0 2-2 2.4-4.6 3.4" />
+    </svg>
+  )
+}
 
 /** Runs a git operation with a busy label and a toast; the views refresh afterwards. */
 export type GitRun = (label: string, req: GitOpRequest, success?: string) => Promise<GitOpResult>
 
+/** The repository each project's Git panel shows (kept when the panel is moved or reopened). */
+const chosenRepo = new Map<string, string>()
+
 /**
  * Git panel of a project: History (commit graph), Changes (stage / commit) and
- * Branches (switch, create, merge, feature worktrees), plus fetch / pull / push.
+ * Branches (switch, create, merge, feature worktrees), plus fetch / pull / push. A project folder
+ * with several repositories (itself, sub-folders): one at a time, chosen in the toolbar.
  */
-export function GitPanel({ root, visible, openProject }: { root: string; visible: boolean; openProject: (path: string) => void }): React.JSX.Element {
+export function GitPanel({
+  root: projectRoot,
+  visible,
+  openProject
+}: {
+  root: string
+  visible: boolean
+  openProject: (path: string) => void
+}): React.JSX.Element {
+  const repos = useGitRepos(projectRoot)
+  const [chosen, setChosen] = useState(() => chosenRepo.get(projectRoot))
+  const root = repos?.find((r) => r.path === chosen)?.path ?? repos?.[0]?.path ?? projectRoot
+  const choose = (path: string): void => {
+    chosenRepo.set(projectRoot, path)
+    setChosen(path)
+  }
+  useEffect(() => {
+    if (!repos) void useGitReposStore.getState().load(projectRoot)
+  }, [repos, projectRoot])
+  const projectName =
+    projectRoot
+      .replace(/[\\/]+$/, '')
+      .split(/[\\/]/)
+      .pop() || projectRoot
   const [view, setView] = useState<View>('history')
   /** Bumped when the repository changed (refs, index, actions): every view reloads. */
   const [tick, setTick] = useState(0)
@@ -31,7 +82,11 @@ export function GitPanel({ root, visible, openProject }: { root: string; visible
     setStatus(undefined)
     setReset((r) => r + 1)
     refresh()
+    // Repositories added (git init, a clone) or removed since.
+    void useGitReposStore.getState().load(projectRoot)
   }
+  // Another repository: its status, not the previous one's.
+  useEffect(() => setStatus(undefined), [root])
 
   // Repository changes (commit, checkout, fetch, staging…) from any source refresh every view.
   useEffect(() => {
@@ -78,6 +133,17 @@ export function GitPanel({ root, visible, openProject }: { root: string; visible
   return (
     <div className="git-panel">
       <div className="pane-toolbar git-toolbar">
+        {repos && repos.length > 1 && (
+          <MenuSelect
+            className="git-repo-select"
+            label="Repository"
+            title="The repository shown (the project folder has several)"
+            value={root}
+            placeholder={projectName}
+            choices={repos.map((r) => ({ value: r.path, label: r.relPath || projectName, icon: <RepoIcon />, title: r.path }))}
+            onChange={choose}
+          />
+        )}
         <div className="subtabs" role="tablist" aria-label="Git views">
           {(['history', 'changes', 'branches'] as const).map((v) => (
             <button key={v} role="tab" aria-selected={view === v} className={view === v ? 'active' : ''} onClick={() => setView(v)}>
@@ -133,7 +199,7 @@ export function GitPanel({ root, visible, openProject }: { root: string; visible
           ⟳
         </button>
       </div>
-      <div className="git-view">
+      <div className="git-view" key={root}>
         {view === 'history' && <GitLogPane root={root} visible={visible} tick={tick} reset={reset} />}
         {view === 'changes' && <ChangesView root={root} status={status} run={run} refreshKey={`${tick}:${poll}`} />}
         {view === 'branches' && <BranchesView root={root} status={status} run={run} tick={tick} openProject={openProject} />}
