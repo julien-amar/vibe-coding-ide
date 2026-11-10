@@ -1,5 +1,5 @@
 import { readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, dirname, join, relative, resolve } from 'node:path'
 import type { TestCase, TestResult, TestRunRequest } from '@shared/types'
 import {
   childPath,
@@ -151,15 +151,63 @@ function locate(dir: string, files: string[], test: TestCase): { source?: string
   return {}
 }
 
+/**
+ * The solution (.sln / .slnx) of a test project: the nearest one, from its folder up to the project
+ * root, that lists its project file.
+ */
+export function solutionOf(root: string, dir: string, proj: string): string | undefined {
+  const top = resolve(root)
+  for (let d = resolve(dir); ; d = dirname(d)) {
+    let names: string[] = []
+    try {
+      names = readdirSync(d)
+    } catch {
+      names = []
+    }
+    const sln = names
+      .filter((n) => /\.slnx?$/i.test(n))
+      .sort()
+      .find((n) => readText(join(d, n)).toLowerCase().includes(proj.toLowerCase()))
+    if (sln) return join(d, sln)
+    const rel = relative(top, d)
+    if (!rel || rel.startsWith('..') || dirname(d) === d) return undefined
+  }
+}
+
+/**
+ * Builds the solutions of .NET test projects, each once and one at a time (solutions often share
+ * projects): their test projects are then listed without a build — not each building the projects
+ * they share at the same time. Returns the test project folders whose solution built.
+ */
+export async function buildDotnetSolutions(root: string, dirs: string[]): Promise<Set<string>> {
+  const bySolution = new Map<string, string[]>()
+  for (const dir of dirs) {
+    const proj = projectFile(dir)
+    const sln = proj ? solutionOf(root, dir, proj) : undefined
+    if (sln) bySolution.set(sln, [...(bySolution.get(sln) ?? []), dir])
+  }
+  const built = new Set<string>()
+  for (const [sln, projects] of bySolution) {
+    const slnDir = dirname(sln)
+    const r = await runQuiet(slnDir, programCommand(slnDir, dotnetTool(slnDir), ['build', basename(sln), '--nologo']))
+    if (r.code === 0) for (const d of projects) built.add(d)
+  }
+  return built
+}
+
 export const dotnetAdapter: Adapter = {
   framework: 'dotnet',
   detect: (dir, names) => [...names].some((n) => PROJECT.test(n)) && projectFile(dir) !== undefined,
   ownsSubfolders: true,
 
-  async list(dir) {
+  async list(dir, _work, opts) {
     const proj = projectFile(dir)
     if (!proj) return { tests: [] }
-    const r = await runQuiet(dir, programCommand(dir, dotnetTool(dir), ['test', proj, '--list-tests', '--nologo']))
+    const listTests = (build: boolean): ReturnType<typeof runQuiet> =>
+      runQuiet(dir, programCommand(dir, dotnetTool(dir), ['test', proj, '--list-tests', '--nologo', ...(build ? [] : ['--no-build'])]))
+    let r = await listTests(!opts?.prebuilt)
+    // Not in what the solution built after all: built on its own.
+    if (opts?.prebuilt && r.code !== 0 && parseDotnetList(r.stdout).length === 0) r = await listTests(true)
     const names = parseDotnetList(r.stdout)
     if (names.length === 0 && r.code !== 0) return { tests: [], error: tail(r.output) || `dotnet test failed (exit code ${r.code}).`, projectFile: proj }
     const sources = findFiles(dir, ['.cs', '.fs', '.vb'])

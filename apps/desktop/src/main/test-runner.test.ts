@@ -214,7 +214,7 @@ describe('test framework detection', () => {
   const base = mkdtempSync(join(tmpdir(), 'vibe-coding-ide-detect-'))
   afterAll(() => rmSync(base, { recursive: true, force: true }))
 
-  it('finds configs in sub-folders, packages whose scripts call a framework, and pytest configs, skipping node_modules / venvs', () => {
+  it('finds configs in sub-folders, packages whose scripts call a framework, and pytest configs, skipping node_modules / venvs', async () => {
     const w = (f: string, s = ''): void => {
       mkdirSync(join(base, f, '..'), { recursive: true })
       writeFileSync(join(base, f), s)
@@ -231,9 +231,7 @@ describe('test framework detection', () => {
     w('tools/pytest.ini', '[pytest]\n')
     w('node_modules/dep/vitest.config.ts')
     w('.venv/lib/site/pytest.ini')
-    const found = detectTestProjects(base)
-      .map((p) => `${p.framework}:${p.relDir}`)
-      .sort()
+    const found = (await detectTestProjects(base)).map((p) => `${p.framework}:${p.relDir}`).sort()
     expect(found).toEqual([
       'jest:packages/cfg',
       'jest:packages/old',
@@ -247,7 +245,7 @@ describe('test framework detection', () => {
     ])
   })
 
-  it('keeps looking for other frameworks below a Gradle / .NET root, without nesting its own framework', () => {
+  it('keeps looking for other frameworks below a Gradle / .NET root, without nesting its own framework', async () => {
     const root = join(base, 'mixed')
     const w = (f: string, s = ''): void => {
       mkdirSync(join(root, f, '..'), { recursive: true })
@@ -257,11 +255,7 @@ describe('test framework detection', () => {
     w('App.UTest/App.UTest.csproj', '<Project><ItemGroup><PackageReference Include="Microsoft.NET.Test.Sdk" /></ItemGroup></Project>')
     w('App.UTest/nested/Other.csproj', '<Project><PackageReference Include="Microsoft.NET.Test.Sdk" /></Project>')
     w('module/build.gradle')
-    expect(
-      detectTestProjects(root)
-        .map((p) => `${p.framework}:${p.relDir}`)
-        .sort()
-    ).toEqual(['dotnet:App.UTest', 'gradle:'])
+    expect((await detectTestProjects(root)).map((p) => `${p.framework}:${p.relDir}`).sort()).toEqual(['dotnet:App.UTest', 'gradle:'])
   })
 
   it('finds the framework CLI in a parent node_modules (hoisted install), and a project virtualenv', () => {

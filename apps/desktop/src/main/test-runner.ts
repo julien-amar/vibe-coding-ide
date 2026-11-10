@@ -1,11 +1,12 @@
-import { readdirSync, type Dirent } from 'node:fs'
+import type { Dirent } from 'node:fs'
+import { readdir } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import type { ChildProcess } from 'node:child_process'
 import type { WebContents } from 'electron'
 import type { TestFramework, TestProject, TestResult, TestRunRequest, TestRunResult } from '@shared/types'
 import { cargoAdapter } from './tests/cargo'
-import { exec, killTree, SKIP_DIRS, workDir, type Adapter, type LiveLine, type RunContext } from './tests/core'
-import { dotnetAdapter } from './tests/dotnet'
+import { exec, killTree, SKIP_DIRS, workDir, type Adapter, type ListOptions, type LiveLine, type RunContext } from './tests/core'
+import { buildDotnetSolutions, dotnetAdapter } from './tests/dotnet'
 import { goAdapter } from './tests/go'
 import { jestAdapter, jsLiveResult, jsRunArgs, playwrightAdapter, vitestAdapter, type RunFiles } from './tests/js'
 import { gradleAdapter, mavenAdapter } from './tests/jvm'
@@ -26,13 +27,16 @@ const adapterFor = (f: TestFramework): Adapter => ADAPTERS.find((a) => a.framewo
 
 const MAX_DEPTH = 4
 
-/** Folders (up to a few levels deep) with a test framework. */
-export function detectTestProjects(root: string): { framework: TestFramework; dir: string; relDir: string }[] {
+/**
+ * Folders (up to a few levels deep) with a test framework, in a stable order (depth first, folders
+ * in directory order). Asynchronous: a large folder (or a WSL one) does not hold up the main process.
+ */
+export async function detectTestProjects(root: string): Promise<{ framework: TestFramework; dir: string; relDir: string }[]> {
   const found: { framework: TestFramework; dir: string; relDir: string }[] = []
-  const walk = (dir: string, depth: number, covered: ReadonlySet<TestFramework>): void => {
+  const walk = async (dir: string, depth: number, covered: ReadonlySet<TestFramework>): Promise<void> => {
     let entries: Dirent[]
     try {
-      entries = readdirSync(dir, { withFileTypes: true })
+      entries = await readdir(dir, { withFileTypes: true })
     } catch {
       return
     }
@@ -49,10 +53,10 @@ export function detectTestProjects(root: string): { framework: TestFramework; di
     }
     if (depth >= MAX_DEPTH) return
     for (const e of entries) {
-      if (e.isDirectory() && !SKIP_DIRS.has(e.name) && !e.name.startsWith('.')) walk(join(dir, e.name), depth + 1, next)
+      if (e.isDirectory() && !SKIP_DIRS.has(e.name) && !e.name.startsWith('.')) await walk(join(dir, e.name), depth + 1, next)
     }
   }
-  walk(root, 0, new Set())
+  await walk(root, 0, new Set())
   return found
 }
 
@@ -62,25 +66,52 @@ export function uniqueTests<T extends { id: string }>(tests: T[]): T[] {
   return tests.filter((t) => !seen.has(t.id) && !!seen.add(t.id))
 }
 
-export async function discoverTests(root: string): Promise<TestProject[]> {
+/** Shown in the panel: a project with tests, or with a listing error to show. */
+const worthShowing = (p: TestProject): boolean => p.tests.length > 0 || !!p.error
+
+/**
+ * Lists the tests of every test project of a folder, all at once; `onProject` gets each project
+ * (worth showing) as soon as it is listed, with its place in the detection order. .NET: each
+ * solution is built once first (its test projects are then listed without a build); test projects
+ * without one are listed — and built — one at a time.
+ */
+export async function discoverTests(root: string, onProject?: (project: TestProject, index: number) => void): Promise<TestProject[]> {
+  const found = await detectTestProjects(root)
+  const dotnet = found.filter((p) => p.framework === 'dotnet').map((p) => p.dir)
+  const built = dotnet.length ? buildDotnetSolutions(root, dotnet) : Promise.resolve(new Set<string>())
+  /** .NET test projects listed with a build: one after the other. */
+  let dotnetTurn: Promise<unknown> = Promise.resolve()
+
+  const listOne = async ({ framework, dir, relDir }: (typeof found)[number], opts?: ListOptions): Promise<TestProject> => {
+    const id = `${framework}:${relDir}`
+    const work = workDir()
+    try {
+      const { tests: listed, error, projectFile } = await adapterFor(framework).list(dir, work, opts)
+      // A test listed more than once (.NET: once per target framework; data-driven cases shown with
+      // the same name) is one test of the panel.
+      return { id, framework, dir, relDir, tests: uniqueTests(listed), error, ...(projectFile ? { projectFile } : {}) }
+    } catch (err) {
+      return { id, framework, dir, relDir, tests: [], error: (err as Error).message }
+    } finally {
+      work.cleanup()
+    }
+  }
+
   const projects = await Promise.all(
-    detectTestProjects(root).map(async ({ framework, dir, relDir }) => {
-      const work = workDir()
-      try {
-        const { tests: listed, error, projectFile } = await adapterFor(framework).list(dir, work)
-        // A test listed more than once (.NET: once per target framework; data-driven cases shown with
-        // the same name) is one test of the panel.
-        const tests = uniqueTests(listed)
-        return { id: `${framework}:${relDir}`, framework, dir, relDir, tests, error, ...(projectFile ? { projectFile } : {}) }
-      } catch (err) {
-        return { id: `${framework}:${relDir}`, framework, dir, relDir, tests: [], error: (err as Error).message }
-      } finally {
-        work.cleanup()
+    found.map(async (p, index) => {
+      let project: TestProject
+      if (p.framework !== 'dotnet') project = await listOne(p)
+      else if ((await built).has(p.dir)) project = await listOne(p, { prebuilt: true })
+      else {
+        const turn = dotnetTurn.then(() => listOne(p))
+        dotnetTurn = turn.catch(() => undefined)
+        project = await turn
       }
+      if (worthShowing(project)) onProject?.(project, index)
+      return project
     })
   )
-  // A project without any test (and without a listing error to show) is not worth a node of the tree.
-  return projects.filter((p) => p.tests.length > 0 || p.error)
+  return projects.filter(worthShowing)
 }
 
 /** Runs in progress, one per project root. */
@@ -88,7 +119,7 @@ const running = new Map<string, { child?: ChildProcess; cancelled: boolean }>()
 
 export async function runTests(root: string, req: TestRunRequest, sender: WebContents): Promise<TestRunResult> {
   if (running.has(root)) return { ok: false, error: 'Tests are already running in this project.', results: [], fileErrors: [] }
-  const project = detectTestProjects(root).find((p) => `${p.framework}:${p.relDir}` === req.projectId)
+  const project = (await detectTestProjects(root)).find((p) => `${p.framework}:${p.relDir}` === req.projectId)
   if (!project) return { ok: false, error: 'Test project not found.', results: [], fileErrors: [] }
   const { framework, dir } = project
 

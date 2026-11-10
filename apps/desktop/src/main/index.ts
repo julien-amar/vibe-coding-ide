@@ -364,7 +364,9 @@ function registerIpc(): void {
   })
   listen('git:unwatch', (e, root: string) => gitWatcher.unwatch(String(root), e.sender))
 
-  handle('tests:discover', (_e, root: string) => (isDir(String(root)) ? discoverTests(String(root)) : []))
+  handle('tests:discover', (e, root: string) =>
+    isDir(String(root)) ? discoverTests(String(root), (project, index) => emit(e.sender, 'tests:project', String(root), project, index)) : []
+  )
   handle('tests:run', (e, root: string, req: TestRunRequest) =>
     isDir(String(root))
       ? runTests(String(root), { ...req, projectId: String(req?.projectId ?? '') }, e.sender)

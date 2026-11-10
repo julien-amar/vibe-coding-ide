@@ -25,13 +25,19 @@ export interface RunContext {
   work: WorkDir
 }
 
+/** How to list a project's tests. */
+export interface ListOptions {
+  /** Built already (.NET: its solution was built): list without building. */
+  prebuilt?: boolean
+}
+
 export interface Adapter {
   framework: TestFramework
   /** Is `dir` (holding the files `names`) a test project of this framework? */
   detect(dir: string, names: Set<string>): boolean
   /** One build covers the sub-folders (Cargo, Maven, Gradle, .NET project): do not look further down. */
   ownsSubfolders?: boolean
-  list(dir: string, work: WorkDir): Promise<{ tests: TestCase[]; error?: string; projectFile?: string }>
+  list(dir: string, work: WorkDir, opts?: ListOptions): Promise<{ tests: TestCase[]; error?: string; projectFile?: string }>
   run(dir: string, req: TestRunRequest, ctx: RunContext): Promise<Omit<TestRunResult, 'cancelled'>>
 }
 

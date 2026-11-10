@@ -1,4 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { WebContents } from 'electron'
 import { describe, expect, it } from 'vitest'
@@ -6,8 +8,8 @@ import type { TestResult } from '@shared/types'
 import { which } from '../profiles'
 import { discoverTests, runTests } from '../test-runner'
 import { parseCargoArtifacts, parseCargoList, parseCargoOutput } from './cargo'
-import { lineOf, parseJUnitXml } from './core'
-import { dotnetCase, dotnetFilter, parseDotnetLine, parseDotnetList, parseTrx } from './dotnet'
+import { lineOf, parseJUnitXml, workDir } from './core'
+import { buildDotnetSolutions, dotnetAdapter, dotnetCase, dotnetFilter, parseDotnetLine, parseDotnetList, parseTrx } from './dotnet'
 import { goRunArgs, packageDir, parseGoList } from './go'
 import { jvmFilter, junitId, mergeJUnit, parseJavaTests, surefirePatterns, surefireRuns } from './jvm'
 
@@ -391,5 +393,29 @@ describe('real tools on the fixture projects', () => {
       expect(statusOf(one.results)).toEqual({ 'sample.MathTest::adds': 'passed' })
     },
     900_000
+  )
+
+  it.skipIf(!hasTool('dotnet', ['C:\\Program Files\\dotnet\\dotnet.exe']))(
+    '.NET: a test project of a solution: the solution built once, the project listed without a build',
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'vibe-coding-ide-sln-'))
+      try {
+        const dir = join(root, 'tests', 'SampleTests')
+        cpSync(join(FIXTURE, 'dotnet'), dir, { recursive: true, filter: (p) => !/[\\/](bin|obj)([\\/]|$)/.test(p) })
+        execFileSync('dotnet', ['new', 'sln', '-n', 'Platform', '-o', root], { stdio: 'ignore' })
+        // .sln, or .slnx (the default of recent SDKs).
+        const sln = ['Platform.sln', 'Platform.slnx'].map((n) => join(root, n)).find((p) => existsSync(p))!
+        execFileSync('dotnet', ['sln', sln, 'add', join(dir, 'SampleTests.csproj')], { stdio: 'ignore' })
+        expect([...(await buildDotnetSolutions(root, [dir]))]).toEqual([dir])
+        const work = workDir()
+        const listed = await dotnetAdapter.list(dir, work, { prebuilt: true })
+        work.cleanup()
+        expect(listed.error).toBeUndefined()
+        expect(listed.tests.map((t) => t.name)).toContain('FailsOnPurpose')
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    },
+    300_000
   )
 })

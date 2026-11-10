@@ -66,16 +66,31 @@ export const useTestsStore = create<TestsStore>((set, get) => {
     })
   })
 
+  /** Projects of the discovery in progress, by their place in the panel (as they are listed). */
+  const streamed = new Map<string, { project: TestProject; index: number }[]>()
+  // A project as soon as its tests are listed: shown, in its place, while the others are still listed.
+  window.ide.tests.onProject((root, project, index) => {
+    const got = streamed.get(root)
+    if (!got || !get().byRoot[root]?.discovering) return
+    got.push({ project, index })
+    const projects = [...got].sort((a, b) => a.index - b.index).map((p) => p.project)
+    patch(root, () => ({ projects }))
+  })
+
   return {
     byRoot: {},
 
     async discover(root, opts) {
       if (get().byRoot[root]?.discovering) return
       patch(root, () => ({ discovering: true, lastError: undefined, ...(opts?.reset ? { projects: undefined, results: {}, fileErrors: {} } : {}) }))
+      streamed.set(root, [])
       try {
+        // (Every project, once all are listed: the same as the ones streamed.)
         const projects = await window.ide.tests.discover(root)
+        streamed.delete(root)
         patch(root, () => ({ projects, discovering: false }))
       } catch (err) {
+        streamed.delete(root)
         patch(root, () => ({ discovering: false, lastError: (err as Error).message }))
       }
     },

@@ -95,6 +95,7 @@ export interface IpcEvents {
   'git:changed': Listener<Api['git']['onChanged']>
   'tests:output': Listener<Api['tests']['onOutput']>
   'tests:progress': Listener<Api['tests']['onProgress']>
+  'tests:project': Listener<Api['tests']['onProject']>
   'containers:stream': Listener<Api['containers']['onStream']>
   'settings:changed': Listener<Api['settings']['onChanged']>
   'update:status': Listener<Api['update']['onStatus']>

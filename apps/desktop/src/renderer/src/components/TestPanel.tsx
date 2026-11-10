@@ -182,6 +182,8 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
         >
           ⟳
         </button>
+        {/* Some projects are shown, others are still being listed. */}
+        {st.discovering && st.projects && <Spinner inline label="Finding more tests" />}
         <span className="spacer" />
         <span className="tests-summary">
           {/* (Finding tests: the list's spinner.) */}

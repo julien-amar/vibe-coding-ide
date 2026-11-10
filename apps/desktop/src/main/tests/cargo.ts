@@ -127,12 +127,13 @@ export const cargoAdapter: Adapter = {
   async list(dir) {
     const b = await build(dir)
     if (b.artifacts.length === 0) return { tests: [], error: b.diagnostics.join('\n') || (b.code !== 0 ? tail(b.output) : undefined) }
+    // Each test binary lists its tests: all at once (in the artifacts' order).
+    const lists = await Promise.all(b.artifacts.map((a) => runQuiet(dir, exeCommand(dir, a, ['--list', '--format', 'terse']))))
     const tests: TestCase[] = []
-    for (const a of b.artifacts) {
-      const r = await runQuiet(dir, exeCommand(dir, a, ['--list', '--format', 'terse']))
+    b.artifacts.forEach((a, k) => {
       const file = relFile(dir, a.src)
-      for (const path of parseCargoList(r.stdout)) tests.push(cargoCase(dir, file, a.src, path))
-    }
+      for (const path of parseCargoList(lists[k].stdout)) tests.push(cargoCase(dir, file, a.src, path))
+    })
     return { tests }
   },
 

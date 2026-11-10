@@ -85,8 +85,10 @@ export interface IdeApi {
     onChanged(cb: (root: string) => void): () => void
   }
   tests: {
-    /** Find test frameworks in the project and list their tests. */
+    /** Find test frameworks in the project and list their tests (each project also through onProject, as soon as listed). */
     discover(root: string): Promise<TestProject[]>
+    /** A test project of a discovery in progress, as soon as its tests are listed (`index`: its place in the panel). */
+    onProject(cb: (root: string, project: TestProject, index: number) => void): () => void
     /** Run tests (one run per project root at a time); output streams through onOutput. */
     run(root: string, req: TestRunRequest): Promise<TestRunResult>
     stop(root: string): void
