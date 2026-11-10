@@ -27,6 +27,7 @@ import {
 
 const PROJECT = /\.(cs|fs|vb)proj$/
 const TEST_PROJECT = /Microsoft\.NET\.Test\.Sdk|<IsTestProject>\s*true|\b(xunit|NUnit|MSTest)\b/i
+const RUN_SETTINGS = ['--', 'NUnit.DisplayName=FullName']
 
 const dotnetTool = (dir: string): string =>
   tool(dir, 'dotnet', ['C:\\Program Files\\dotnet\\dotnet.exe', '/usr/local/share/dotnet/dotnet', '/usr/share/dotnet/dotnet'])
@@ -232,7 +233,8 @@ export const dotnetAdapter: Adapter = {
       'trx;LogFilePrefix=results',
       '--logger',
       'console;verbosity=normal',
-      ...filter
+      ...filter,
+      ...RUN_SETTINGS
     ]
     ctx.send(`$ dotnet test ${[proj, ...filter].join(' ')}\n`)
     const reader = new LineReader((line) => {
