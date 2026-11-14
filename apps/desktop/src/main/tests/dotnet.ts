@@ -180,7 +180,8 @@ export function solutionOf(root: string, dir: string, proj: string): string | un
  * projects): their test projects are then listed without a build — not each building the projects
  * they share at the same time. Returns the test project folders whose solution built.
  */
-export async function buildDotnetSolutions(root: string, dirs: string[]): Promise<Set<string>> {
+/** `onBuild`: each solution as its build starts (none: the builds are over). */
+export async function buildDotnetSolutions(root: string, dirs: string[], onBuild?: (solution: string | undefined) => void): Promise<Set<string>> {
   const bySolution = new Map<string, string[]>()
   for (const dir of dirs) {
     const proj = projectFile(dir)
@@ -190,9 +191,11 @@ export async function buildDotnetSolutions(root: string, dirs: string[]): Promis
   const built = new Set<string>()
   for (const [sln, projects] of bySolution) {
     const slnDir = dirname(sln)
+    onBuild?.(sln)
     const r = await runQuiet(slnDir, programCommand(slnDir, dotnetTool(slnDir), ['build', basename(sln), '--nologo']))
     if (r.code === 0) for (const d of projects) built.add(d)
   }
+  onBuild?.(undefined)
   return built
 }
 

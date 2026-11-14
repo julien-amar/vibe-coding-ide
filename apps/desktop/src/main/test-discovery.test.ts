@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import type { TestProject } from '@shared/types'
-import { discoverTests } from './test-runner'
+import { discoverTests, stepLabel } from './test-runner'
 import { solutionOf } from './tests/dotnet'
 
 /** .NET listings of the test: which project, built or not, and how many at once. */
@@ -123,5 +123,32 @@ describe('test discovery', () => {
     expect(solutionOf(root, join(root, 'lonely', 'Lonely.Tests'), 'Lonely.Tests.csproj')).toBeUndefined()
     // Not looked for above the project folder.
     expect(solutionOf(join(root, 'tests'), join(root, 'tests', 'Api.Tests'), 'Api.Tests.csproj')).toBeUndefined()
+  })
+})
+
+describe('test discovery steps', () => {
+  it('names what listing a project does', () => {
+    expect(stepLabel({ framework: 'vitest', relDir: 'apps/web' })).toBe('Discovering Vitest tests in apps/web')
+    expect(stepLabel({ framework: 'cargo', relDir: '' })).toBe('Building and listing Rust tests')
+    expect(stepLabel({ framework: 'dotnet', relDir: 'tests/A.Tests' })).toBe('Building and listing .NET tests in tests/A.Tests')
+    expect(stepLabel({ framework: 'dotnet', relDir: 'tests/A.Tests' }, true)).toBe('Discovering .NET tests in tests/A.Tests')
+  })
+
+  it('tells each step while it runs (several at once: the oldest, and how many more), then that it is over', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'vibe-coding-ide-steps-'))
+    try {
+      mkdirSync(join(root, 'crate'))
+      writeFileSync(join(root, 'crate', 'Cargo.toml'), '[package]\nname = "c"\n')
+      mkdirSync(join(root, 'A.Tests'))
+      writeFileSync(join(root, 'A.Tests', 'A.Tests.csproj'), TEST_PROJECT)
+      const steps: (string | undefined)[] = []
+      await discoverTests(root, undefined, (s) => steps.push(s))
+      expect(steps[0]).toBe('Finding test projects')
+      expect(steps).toContain('Building and listing .NET tests in A.Tests')
+      expect(steps.some((s) => s?.startsWith('Finding test projects (+') || s === 'Building and listing Rust tests in crate')).toBe(true)
+      expect(steps.at(-1)).toBeUndefined()
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })

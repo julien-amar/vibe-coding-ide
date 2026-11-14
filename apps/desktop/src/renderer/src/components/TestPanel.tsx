@@ -183,7 +183,16 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
           ⟳
         </button>
         {/* Some projects are shown, others are still being listed. */}
-        {st.discovering && st.projects && <Spinner inline label="Finding more tests" />}
+        {st.discovering && st.projects && (
+          <>
+            <Spinner inline label="Finding more tests" />
+            {st.step && (
+              <span className="muted tests-step" title={st.step}>
+                {st.step}…
+              </span>
+            )}
+          </>
+        )}
         <span className="spacer" />
         <span className="tests-summary">
           {/* (Finding tests: the list's spinner.) */}
@@ -220,7 +229,7 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
             <p className="muted">Supported: Vitest and Playwright (a vitest / playwright config file, also in sub-folders).</p>
           </div>
         )}
-        {!st.projects && st.discovering && <Spinner label="Finding tests" />}
+        {!st.projects && st.discovering && <Spinner label="Finding tests" caption={st.step ? `${st.step}…` : undefined} />}
         {rows.length === 0 && counts.total > 0 && (
           <div className="tests-empty muted">
             No {statusFilter === 'all' ? '' : `${statusFilter} `}tests{filter.trim() ? ` matching “${filter.trim()}”` : ''}.

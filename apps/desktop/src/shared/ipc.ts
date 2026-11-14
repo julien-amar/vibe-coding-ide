@@ -96,6 +96,7 @@ export interface IpcEvents {
   'tests:output': Listener<Api['tests']['onOutput']>
   'tests:progress': Listener<Api['tests']['onProgress']>
   'tests:project': Listener<Api['tests']['onProject']>
+  'tests:step': Listener<Api['tests']['onStep']>
   'containers:stream': Listener<Api['containers']['onStream']>
   'settings:changed': Listener<Api['settings']['onChanged']>
   'update:status': Listener<Api['update']['onStatus']>

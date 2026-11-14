@@ -421,3 +421,12 @@
 .test-row.kind-group {
   font-weight: 600;
 }
+
+/* What the discovery is doing, next to its spinner (cut when long). */
+.tests-step {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

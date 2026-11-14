@@ -1,6 +1,6 @@
 import type { Dirent } from 'node:fs'
 import { readdir } from 'node:fs/promises'
-import { join, relative } from 'node:path'
+import { basename, join, relative } from 'node:path'
 import type { ChildProcess } from 'node:child_process'
 import type { WebContents } from 'electron'
 import type { TestFramework, TestProject, TestResult, TestRunRequest, TestRunResult } from '@shared/types'
@@ -81,6 +81,25 @@ export function uniqueTests<T extends { id: string }>(tests: T[]): T[] {
   return tests.filter((t) => !seen.has(t.id) && !!seen.add(t.id))
 }
 
+const FRAMEWORK_NAME: Record<TestFramework, string> = {
+  vitest: 'Vitest',
+  jest: 'Jest',
+  playwright: 'Playwright',
+  pytest: 'pytest',
+  go: 'Go',
+  cargo: 'Rust',
+  dotnet: '.NET',
+  maven: 'Maven',
+  gradle: 'Gradle'
+}
+
+/** What listing a project does, told while it runs ("Building and listing Rust tests in crates/core"). */
+export function stepLabel(p: { framework: TestFramework; relDir: string }, prebuilt = false): string {
+  // Go and Rust compile their tests to list them; .NET builds its project (unless its solution was).
+  const builds = p.framework === 'cargo' || p.framework === 'go' || (p.framework === 'dotnet' && !prebuilt)
+  return `${builds ? 'Building and listing' : 'Discovering'} ${FRAMEWORK_NAME[p.framework]} tests${p.relDir ? ` in ${p.relDir}` : ''}`
+}
+
 /** Shown in the panel: a project with tests, or with a listing error to show. */
 const worthShowing = (p: TestProject): boolean => p.tests.length > 0 || !!p.error
 
@@ -91,12 +110,34 @@ const worthShowing = (p: TestProject): boolean => p.tests.length > 0 || !!p.erro
  * test projects are grouped by solution), each solution is built once (its test projects are then
  * listed without a build); test projects without one are listed — and built — one at a time.
  */
-export async function discoverTests(root: string, onProject?: (project: TestProject, order: string) => void): Promise<TestProject[]> {
+export async function discoverTests(
+  root: string,
+  onProject?: (project: TestProject, order: string) => void,
+  onStep?: (step: string | undefined) => void
+): Promise<TestProject[]> {
+  // What is being done (several projects at once: the oldest step still going, and how many more).
+  const steps = new Map<number, string>()
+  let nextStep = 0
+  const tell = (): void => {
+    const all = [...steps.values()]
+    onStep?.(all.length ? `${all[0]}${all.length > 1 ? ` (+${all.length - 1} more)` : ''}` : undefined)
+  }
+  const step = (label: string): (() => void) => {
+    const id = nextStep++
+    steps.set(id, label)
+    tell()
+    return () => {
+      steps.delete(id)
+      tell()
+    }
+  }
+
   /** .NET test projects listed with a build: one after the other. */
   let dotnetTurn: Promise<unknown> = Promise.resolve()
 
   const listOne = async ({ framework, dir, relDir }: FoundProject, opts?: ListOptions): Promise<TestProject> => {
     const id = `${framework}:${relDir}`
+    const done = step(stepLabel({ framework, relDir }, !!opts?.prebuilt))
     const work = workDir()
     try {
       const { tests: listed, error, projectFile } = await adapterFor(framework).list(dir, work, opts)
@@ -107,6 +148,7 @@ export async function discoverTests(root: string, onProject?: (project: TestProj
       return { id, framework, dir, relDir, tests: [], error: (err as Error).message }
     } finally {
       work.cleanup()
+      done()
     }
   }
 
@@ -121,14 +163,21 @@ export async function discoverTests(root: string, onProject?: (project: TestProj
   }
 
   // Listed as soon as found (.NET: after the walk).
+  const walked = step('Finding test projects')
   const found = await detectTestProjects(root, (p) => {
     if (p.framework !== 'dotnet') listed(p, listOne(p))
   })
+  walked()
   const dotnet = found.filter((p) => p.framework === 'dotnet')
   if (dotnet.length) {
+    let building: (() => void) | undefined
     const built = await buildDotnetSolutions(
       root,
-      dotnet.map((p) => p.dir)
+      dotnet.map((p) => p.dir),
+      (sln) => {
+        building?.()
+        building = sln ? step(`Building ${basename(sln)}`) : undefined
+      }
     )
     for (const p of dotnet) {
       if (built.has(p.dir)) listed(p, listOne(p, { prebuilt: true }))
@@ -141,6 +190,7 @@ export async function discoverTests(root: string, onProject?: (project: TestProj
   }
 
   const projects = await Promise.all(listings)
+  onStep?.(undefined)
   // In the panel's order (they finish in any order).
   const order = new Map(found.map((p, i) => [`${p.framework}:${p.relDir}`, i]))
   return projects.filter(worthShowing).sort((a, b) => order.get(a.id)! - order.get(b.id)!)

@@ -63,7 +63,8 @@ const api: IdeApi = {
     stop: (root) => send('tests:stop', root),
     onOutput: (cb) => on('tests:output', cb),
     onProgress: (cb) => on('tests:progress', cb),
-    onProject: (cb) => on('tests:project', cb)
+    onProject: (cb) => on('tests:project', cb),
+    onStep: (cb) => on('tests:step', cb)
   },
   harness: {
     check: (root, server) => invoke('harness:check', root, server),

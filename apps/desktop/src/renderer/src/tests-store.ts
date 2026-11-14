@@ -8,6 +8,8 @@ import type { TestCase, TestProject, TestResult, TestRunRequest, TestRunResult }
 export interface ProjectTestsState {
   projects?: TestProject[]
   discovering: boolean
+  /** What the discovery in progress is doing. */
+  step?: string
   /** Results by `resultKey(projectId, testId)`, plus 'running' while a run includes the test. */
   results: Record<string, TestResult | { status: 'running' }>
   fileErrors: Record<string, TestRunResult['fileErrors']>
@@ -77,6 +79,11 @@ export const useTestsStore = create<TestsStore>((set, get) => {
     patch(root, () => ({ projects }))
   })
 
+  window.ide.tests.onStep((root, step) => {
+    if (!get().byRoot[root]?.discovering) return
+    patch(root, () => ({ step: step ?? undefined }))
+  })
+
   return {
     byRoot: {},
 
@@ -88,10 +95,10 @@ export const useTestsStore = create<TestsStore>((set, get) => {
         // (Every project, once all are listed: the same as the ones streamed.)
         const projects = await window.ide.tests.discover(root)
         streamed.delete(root)
-        patch(root, () => ({ projects, discovering: false }))
+        patch(root, () => ({ projects, discovering: false, step: undefined }))
       } catch (err) {
         streamed.delete(root)
-        patch(root, () => ({ discovering: false, lastError: (err as Error).message }))
+        patch(root, () => ({ discovering: false, step: undefined, lastError: (err as Error).message }))
       }
     },
 
