@@ -69,17 +69,21 @@ describe('test discovery', () => {
   it('reports each project as soon as it is listed, with its place in the panel (projects without tests: not reported)', async () => {
     const root = join(base, 'streamed')
     const w = writer(root)
-    w('a-crate/Cargo.toml', '[package]\nname = "a"\n')
+    // The .NET project first in the folder, the Rust crate deeper: the crate is still listed first.
+    w('a-net/A.Tests/A.Tests.csproj', TEST_PROJECT)
     w('b-empty/go.mod', 'module example.com/empty\n')
-    w('c-net/C.Tests/C.Tests.csproj', TEST_PROJECT)
-    const seen: { id: string; index: number }[] = []
-    const all = await discoverTests(root, (p: TestProject, index: number) => seen.push({ id: p.id, index }))
-    // The Rust crate (listed at once) comes before the .NET project (listed after its delay).
-    expect(seen).toEqual([
-      { id: 'cargo:a-crate', index: 0 },
-      { id: 'dotnet:c-net/C.Tests', index: 2 }
-    ])
-    expect(all.map((p) => p.id)).toEqual(['cargo:a-crate', 'dotnet:c-net/C.Tests'])
+    w('z/deep/crate/Cargo.toml', '[package]\nname = "c"\n')
+    w('m/Cargo.toml', '[package]\nname = "m"\n')
+    const seen: { id: string; order: string }[] = []
+    const all = await discoverTests(root, (p: TestProject, order: string) => seen.push({ id: p.id, order }))
+    // Rust: listed at once (found by the walk); .NET: after the walk, then its listing's delay.
+    // (The crates in whichever order the walk finds them.)
+    expect(new Set(seen.slice(0, 2).map((s) => s.id))).toEqual(new Set(['cargo:m', 'cargo:z/deep/crate']))
+    expect(seen.map((s) => s.id).at(-1)).toBe('dotnet:a-net/A.Tests')
+    // Their order keys sort them as the panel shows them: by folder, a folder before its sub-folders.
+    const panel = ['dotnet:a-net/A.Tests', 'cargo:m', 'cargo:z/deep/crate']
+    expect([...seen].sort((a, b) => (a.order < b.order ? -1 : 1)).map((s) => s.id)).toEqual(panel)
+    expect(all.map((p) => p.id)).toEqual(panel)
   })
 
   it('.NET: projects of a built solution are listed without a build; the others one at a time', async () => {

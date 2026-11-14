@@ -27,12 +27,23 @@ const adapterFor = (f: TestFramework): Adapter => ADAPTERS.find((a) => a.framewo
 
 const MAX_DEPTH = 4
 
+/** A test project found in a folder. */
+type FoundProject = { framework: TestFramework; dir: string; relDir: string }
+
 /**
- * Folders (up to a few levels deep) with a test framework, in a stable order (depth first, folders
- * in directory order). Asynchronous: a large folder (or a WSL one) does not hold up the main process.
+ * A test project's place in the panel: by folder, depth first (a folder before its sub-folders,
+ * folders by name), then by framework (detection order) — the same whatever order they are found in.
  */
-export async function detectTestProjects(root: string): Promise<{ framework: TestFramework; dir: string; relDir: string }[]> {
-  const found: { framework: TestFramework; dir: string; relDir: string }[] = []
+export const projectOrder = (p: { framework: TestFramework; relDir: string }): string =>
+  `${p.relDir ? p.relDir.split('/').join('\u0000') : ''}\u0001${String(ADAPTERS.findIndex((a) => a.framework === p.framework)).padStart(2, '0')}`
+
+/**
+ * Folders (up to a few levels deep) with a test framework, in the panel's order (projectOrder).
+ * Sub-folders are read at the same time, and `onFound` gets each project as soon as it is found.
+ * Asynchronous: a large folder (or a WSL one) does not hold up the main process.
+ */
+export async function detectTestProjects(root: string, onFound?: (project: FoundProject) => void): Promise<FoundProject[]> {
+  const found: FoundProject[] = []
   const walk = async (dir: string, depth: number, covered: ReadonlySet<TestFramework>): Promise<void> => {
     let entries: Dirent[]
     try {
@@ -48,16 +59,20 @@ export async function detectTestProjects(root: string): Promise<{ framework: Tes
     const next = new Set(covered)
     for (const a of ADAPTERS) {
       if (covered.has(a.framework) || !a.detect(dir, names)) continue
-      found.push({ framework: a.framework, dir, relDir })
+      const project = { framework: a.framework, dir, relDir }
+      found.push(project)
+      onFound?.(project)
       if (a.ownsSubfolders) next.add(a.framework)
     }
     if (depth >= MAX_DEPTH) return
-    for (const e of entries) {
-      if (e.isDirectory() && !SKIP_DIRS.has(e.name) && !e.name.startsWith('.')) await walk(join(dir, e.name), depth + 1, next)
-    }
+    // Every sub-folder at once (their reads overlap).
+    await Promise.all(
+      entries.filter((e) => e.isDirectory() && !SKIP_DIRS.has(e.name) && !e.name.startsWith('.')).map((e) => walk(join(dir, e.name), depth + 1, next))
+    )
   }
   await walk(root, 0, new Set())
-  return found
+  const key = new Map(found.map((p) => [p, projectOrder(p)]))
+  return found.sort((a, b) => (key.get(a)! < key.get(b)! ? -1 : key.get(a)! > key.get(b)! ? 1 : 0))
 }
 
 /** The tests, each id once (the first). */
@@ -70,19 +85,17 @@ export function uniqueTests<T extends { id: string }>(tests: T[]): T[] {
 const worthShowing = (p: TestProject): boolean => p.tests.length > 0 || !!p.error
 
 /**
- * Lists the tests of every test project of a folder, all at once; `onProject` gets each project
- * (worth showing) as soon as it is listed, with its place in the detection order. .NET: each
- * solution is built once first (its test projects are then listed without a build); test projects
- * without one are listed — and built — one at a time.
+ * Lists the tests of every test project of a folder: each project (whatever its framework) as soon
+ * as the folder walk finds it, all at the same time; `onProject` gets each one (worth showing) as
+ * soon as it is listed, with its place in the panel (projectOrder). .NET: once the walk is over (its
+ * test projects are grouped by solution), each solution is built once (its test projects are then
+ * listed without a build); test projects without one are listed — and built — one at a time.
  */
-export async function discoverTests(root: string, onProject?: (project: TestProject, index: number) => void): Promise<TestProject[]> {
-  const found = await detectTestProjects(root)
-  const dotnet = found.filter((p) => p.framework === 'dotnet').map((p) => p.dir)
-  const built = dotnet.length ? buildDotnetSolutions(root, dotnet) : Promise.resolve(new Set<string>())
+export async function discoverTests(root: string, onProject?: (project: TestProject, order: string) => void): Promise<TestProject[]> {
   /** .NET test projects listed with a build: one after the other. */
   let dotnetTurn: Promise<unknown> = Promise.resolve()
 
-  const listOne = async ({ framework, dir, relDir }: (typeof found)[number], opts?: ListOptions): Promise<TestProject> => {
+  const listOne = async ({ framework, dir, relDir }: FoundProject, opts?: ListOptions): Promise<TestProject> => {
     const id = `${framework}:${relDir}`
     const work = workDir()
     try {
@@ -97,21 +110,40 @@ export async function discoverTests(root: string, onProject?: (project: TestProj
     }
   }
 
-  const projects = await Promise.all(
-    found.map(async (p, index) => {
-      let project: TestProject
-      if (p.framework !== 'dotnet') project = await listOne(p)
-      else if ((await built).has(p.dir)) project = await listOne(p, { prebuilt: true })
+  const listings: Promise<TestProject>[] = []
+  const listed = (p: FoundProject, listing: Promise<TestProject>): void => {
+    listings.push(
+      listing.then((project) => {
+        if (worthShowing(project)) onProject?.(project, projectOrder(p))
+        return project
+      })
+    )
+  }
+
+  // Listed as soon as found (.NET: after the walk).
+  const found = await detectTestProjects(root, (p) => {
+    if (p.framework !== 'dotnet') listed(p, listOne(p))
+  })
+  const dotnet = found.filter((p) => p.framework === 'dotnet')
+  if (dotnet.length) {
+    const built = await buildDotnetSolutions(
+      root,
+      dotnet.map((p) => p.dir)
+    )
+    for (const p of dotnet) {
+      if (built.has(p.dir)) listed(p, listOne(p, { prebuilt: true }))
       else {
         const turn = dotnetTurn.then(() => listOne(p))
         dotnetTurn = turn.catch(() => undefined)
-        project = await turn
+        listed(p, turn)
       }
-      if (worthShowing(project)) onProject?.(project, index)
-      return project
-    })
-  )
-  return projects.filter(worthShowing)
+    }
+  }
+
+  const projects = await Promise.all(listings)
+  // In the panel's order (they finish in any order).
+  const order = new Map(found.map((p, i) => [`${p.framework}:${p.relDir}`, i]))
+  return projects.filter(worthShowing).sort((a, b) => order.get(a.id)! - order.get(b.id)!)
 }
 
 /** Runs in progress, one per project root. */
