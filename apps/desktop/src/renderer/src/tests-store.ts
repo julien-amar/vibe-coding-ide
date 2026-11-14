@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { TestCase, TestProject, TestResult, TestRunRequest, TestRunResult } from '@shared/types'
+import type { TestCase, TestFramework, TestProject, TestResult, TestRunRequest, TestRunResult, TestsPrefs } from '@shared/types'
 
 /**
  * Tests panel state per project root. Kept outside the panel component so a
@@ -13,7 +13,9 @@ export interface ProjectTestsState {
   /** Results by `resultKey(projectId, testId)`, plus 'running' while a run includes the test. */
   results: Record<string, TestResult | { status: 'running' }>
   fileErrors: Record<string, TestRunResult['fileErrors']>
+  /** Some tests run (runningProjects: the test projects running). */
   running: boolean
+  runningProjects: string[]
   lastError?: string
   output: string
 }
@@ -22,7 +24,7 @@ export const resultKey = (projectId: string, testId: string): string => `${proje
 
 const MAX_OUTPUT = 300_000
 
-const empty = (): ProjectTestsState => ({ discovering: false, results: {}, fileErrors: {}, running: false, output: '' })
+const empty = (): ProjectTestsState => ({ discovering: false, results: {}, fileErrors: {}, running: false, runningProjects: [], output: '' })
 
 /** Rebuild a test from its id (`file::suite > name[::project]`), for tests only a run reports (e.g. Vitest .skip). */
 export function testFromId(id: string): TestCase {
@@ -35,8 +37,13 @@ interface TestsStore {
   byRoot: Record<string, ProjectTestsState>
   /** Find the tests; `reset` (the Refresh button): the list and its results emptied first (a spinner shows). */
   discover(root: string, opts?: { reset?: boolean }): Promise<void>
-  /** Run `req`; `testIds` are the tests it covers (shown as running). */
+  /** Run `req`; `testIds` are the tests it covers (shown as running). Other test projects can run meanwhile. */
   run(root: string, req: TestRunRequest, testIds: string[]): Promise<void>
+  /**
+   * Run every test project: in parallel (`prefs.parallelism` at once; .NET projects one after the
+   * other, they build), or one after the other. Stop ends the runs and the ones not started yet.
+   */
+  runAll(root: string, projects: { req: TestRunRequest; testIds: string[]; framework: TestFramework }[], prefs: TestsPrefs): Promise<void>
   stop(root: string): void
   clearOutput(root: string): void
 }
@@ -67,6 +74,9 @@ export const useTestsStore = create<TestsStore>((set, get) => {
       return { results: { ...cur.results, [key]: result }, projects }
     })
   })
+
+  /** Folders whose runs were stopped: Run all starts none of its remaining projects. */
+  const stopped = new Set<string>()
 
   /** Projects of the discovery in progress, by their place in the panel (as they are listed). */
   const streamed = new Map<string, { project: TestProject; order: string }[]>()
@@ -103,12 +113,19 @@ export const useTestsStore = create<TestsStore>((set, get) => {
     },
 
     async run(root, req, testIds) {
-      if (get().byRoot[root]?.running) return
       const { projectId } = req
+      if (get().byRoot[root]?.runningProjects.includes(projectId)) return
       patch(root, (s) => {
         const results = { ...s.results }
         for (const id of testIds) results[resultKey(projectId, id)] = { status: 'running' }
-        return { running: true, results, lastError: undefined, output: s.output ? s.output + '\n' : '' }
+        return {
+          running: true,
+          runningProjects: [...s.runningProjects, projectId],
+          results,
+          // A new round of runs: the last one's error is not this one's.
+          ...(s.runningProjects.length ? {} : { lastError: undefined }),
+          output: s.output ? s.output + '\n' : ''
+        }
       })
       let res: TestRunResult
       try {
@@ -131,17 +148,40 @@ export const useTestsStore = create<TestsStore>((set, get) => {
           const extra = res.results.filter((r) => !known.has(r.id)).map((r) => testFromId(r.id))
           return extra.length ? { ...p, tests: [...p.tests, ...extra] } : p
         })
+        const runningProjects = s.runningProjects.filter((p) => p !== projectId)
         return {
-          running: false,
+          running: runningProjects.length > 0,
+          runningProjects,
           results,
           projects,
           fileErrors: { ...s.fileErrors, [projectId]: res.fileErrors },
-          lastError: res.cancelled ? 'Run stopped.' : res.error
+          lastError: res.cancelled ? 'Run stopped.' : (res.error ?? s.lastError)
         }
       })
     },
 
+    async runAll(root, projects, prefs) {
+      stopped.delete(root)
+      // Work items: each test project, except the .NET ones, all in one (one after the other: running
+      // them builds them, and they often share projects).
+      const parallel = prefs.runAll === 'parallel'
+      const dotnet = projects.filter((p) => p.framework === 'dotnet')
+      const items = parallel ? [...projects.filter((p) => p.framework !== 'dotnet').map((p) => [p]), ...(dotnet.length ? [dotnet] : [])] : [projects]
+      let next = 0
+      const worker = async (): Promise<void> => {
+        while (next < items.length && !stopped.has(root)) {
+          for (const p of items[next++]) {
+            if (stopped.has(root)) return
+            await get().run(root, p.req, p.testIds)
+          }
+        }
+      }
+      const workers = parallel ? Math.max(1, Math.min(prefs.parallelism, items.length)) : 1
+      await Promise.all(Array.from({ length: workers }, worker))
+    },
+
     stop(root) {
+      stopped.add(root)
       window.ide.tests.stop(root)
     },
 

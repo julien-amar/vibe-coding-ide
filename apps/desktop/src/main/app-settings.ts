@@ -1,8 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { app, BrowserWindow, nativeTheme } from 'electron'
-import type { AppSettings, ContainerBackendId, ContainersPrefs, GitPrefs, Profile } from '@shared/types'
-import { DEFAULT_CONTAINERS_PREFS, DEFAULT_GIT_PREFS } from '@shared/settings-defaults'
+import type { AppSettings, ContainerBackendId, ContainersPrefs, GitPrefs, Profile, TestsPrefs } from '@shared/types'
+import { DEFAULT_CONTAINERS_PREFS, DEFAULT_GIT_PREFS, DEFAULT_TESTS_PREFS } from '@shared/settings-defaults'
 import { setWslEnabled } from './profiles'
 import { emit } from './ipc'
 
@@ -25,7 +25,17 @@ export function sanitizeSettings(input: unknown, base: AppSettings = DEFAULTS): 
     defaultShell: 'defaultShell' in s ? (typeof s.defaultShell === 'string' && s.defaultShell ? s.defaultShell : undefined) : base.defaultShell,
     defaultAgent: 'defaultAgent' in s ? (typeof s.defaultAgent === 'string' && s.defaultAgent ? s.defaultAgent : undefined) : base.defaultAgent,
     containers: 'containers' in s ? sanitizeContainers(s.containers) : base.containers,
-    git: 'git' in s ? sanitizeGit(s.git) : base.git
+    git: 'git' in s ? sanitizeGit(s.git) : base.git,
+    tests: 'tests' in s ? sanitizeTests(s.tests) : base.tests
+  }
+}
+
+function sanitizeTests(v: unknown): TestsPrefs {
+  const t = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>
+  const n = Number(t.parallelism)
+  return {
+    runAll: t.runAll === 'parallel' || t.runAll === 'sequential' ? t.runAll : DEFAULT_TESTS_PREFS.runAll,
+    parallelism: Number.isInteger(n) && n >= 1 && n <= 16 ? n : DEFAULT_TESTS_PREFS.parallelism
   }
 }
 

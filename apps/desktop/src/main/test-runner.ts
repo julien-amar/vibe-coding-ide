@@ -197,16 +197,19 @@ export async function discoverTests(
 }
 
 /** Runs in progress, one per project root. */
-const running = new Map<string, { child?: ChildProcess; cancelled: boolean }>()
+const running = new Map<string, Map<string, { child?: ChildProcess; cancelled: boolean }>>()
 
+/** Runs a test project's tests (several projects of a folder can run at once; one run per project). */
 export async function runTests(root: string, req: TestRunRequest, sender: WebContents): Promise<TestRunResult> {
-  if (running.has(root)) return { ok: false, error: 'Tests are already running in this project.', results: [], fileErrors: [] }
+  const runs = running.get(root) ?? new Map<string, { child?: ChildProcess; cancelled: boolean }>()
+  if (runs.has(req.projectId)) return { ok: false, error: 'These tests are already running.', results: [], fileErrors: [] }
   const project = (await detectTestProjects(root)).find((p) => `${p.framework}:${p.relDir}` === req.projectId)
   if (!project) return { ok: false, error: 'Test project not found.', results: [], fileErrors: [] }
   const { framework, dir } = project
 
   const state: { child?: ChildProcess; cancelled: boolean } = { cancelled: false }
-  running.set(root, state)
+  runs.set(req.projectId, state)
+  running.set(root, runs)
   const work = workDir()
   const send = (text: string): void => {
     emit(sender, 'tests:output', root, text)
@@ -234,23 +237,22 @@ export async function runTests(root: string, req: TestRunRequest, sender: WebCon
   } catch (err) {
     return { ok: false, error: (err as Error).message, results: [], fileErrors: [] }
   } finally {
-    running.delete(root)
+    runs.delete(req.projectId)
+    if (!runs.size) running.delete(root)
     work.cleanup()
   }
 }
 
+/** Stops every run of the folder. */
 export function stopTests(root: string): void {
-  const r = running.get(root)
-  if (!r) return
-  r.cancelled = true
-  if (r.child) killTree(r.child)
-}
-
-export function stopAllTests(): void {
-  for (const r of running.values()) {
+  for (const r of running.get(root)?.values() ?? []) {
     r.cancelled = true
     if (r.child) killTree(r.child)
   }
+}
+
+export function stopAllTests(): void {
+  for (const root of running.keys()) stopTests(root)
 }
 
 // ---------------------------------------------------------------------------

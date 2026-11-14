@@ -17,6 +17,16 @@ export interface AppSettings {
   containers?: ContainersPrefs
   /** The Git panel's options (every project). */
   git?: GitPrefs
+  /** The Tests panel's options (every project). */
+  tests?: TestsPrefs
+}
+
+/** Tests panel options (its ⚙ dialog). */
+export interface TestsPrefs {
+  /** Run all: the test projects in parallel, or one after the other. */
+  runAll: 'parallel' | 'sequential'
+  /** In parallel: how many test projects run at once (.NET ones still one at a time: they build). */
+  parallelism: number
 }
 
 /** Git panel options (its ⚙ dialog). */

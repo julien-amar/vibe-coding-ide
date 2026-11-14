@@ -193,3 +193,30 @@ test('the Details / Output section opens above its bar and can be resized by its
   expect(hide.y - box.y).toBeLessThan(12)
   expect(box.x + box.width - (hide.x + hide.width)).toBeLessThan(12)
 })
+
+test('Tests settings (⚙): Run all runs the test projects in parallel (how many at once), or one after the other', async () => {
+  const { page } = hub
+  await openProject(page, FIXTURE)
+  const panel = page.locator('.tab-panel.visible .tests-panel')
+  await page.locator('.tab-panel.visible .side-rail .rail-item.tests').click()
+  const runAll = panel.getByRole('button', { name: /Run all/ })
+  // By default: in parallel, 4 at once.
+  await expect(runAll).toHaveAttribute('title', /in parallel, 4 at once/)
+
+  await panel.getByRole('button', { name: 'Tests settings' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Tests settings' })
+  await expect(dialog.getByLabel('Run all')).toHaveValue('parallel')
+  await dialog.getByLabel('Projects at once').fill('2')
+  await dialog.getByLabel('Projects at once').press('Enter')
+  await expect(runAll).toHaveAttribute('title', /in parallel, 2 at once/)
+  await dialog.getByLabel('Run all').selectOption('sequential')
+  await expect(dialog.getByLabel('Projects at once')).toBeDisabled()
+  await page.keyboard.press('Escape')
+  await expect(runAll).toHaveAttribute('title', /one after the other/)
+
+  // Run all, one after the other: every project still runs.
+  await expect(panel.locator('.test-row.kind-project')).toHaveCount(PYTEST ? 4 : 3, { timeout: 90_000 })
+  await runAll.click()
+  await expect(panel.locator('.tests-summary .busy')).toHaveCount(0, { timeout: 120_000 })
+  await expect(panel.locator(`.tests-status-filter [data-filter="failed"] .count`)).toHaveText(String(expected.failed))
+})

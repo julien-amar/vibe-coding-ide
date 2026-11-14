@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { TestCase, TestProject, TestResult, TestStatus } from '@shared/types'
+import type { AppSettings, TestCase, TestProject, TestResult, TestsPrefs, TestStatus } from '@shared/types'
+import { DEFAULT_TESTS_PREFS } from '@shared/settings-defaults'
 import { sendToAgent } from '../agent-bridge'
 import { buildFixPrompt, fixPrompt, type Failure } from '../test-prompt'
 import { tabTitle, useTabs } from '../store'
@@ -8,6 +9,7 @@ import { resultKey, useProjectTests, useTestsStore } from '../tests-store'
 import { notify } from './Dialogs'
 import { Spinner } from './Spinner'
 import { TestTreeIcon } from './TestTreeIcon'
+import { TestsSettings } from './TestsSettings'
 
 const STATUS_ICON: Record<TestStatus | 'none', string> = { passed: '✓', failed: '✗', skipped: '○', running: '◌', none: '·' }
 const STATUS_TEXT: Record<TestStatus, string> = { passed: 'Passed', failed: 'Failed', skipped: 'Skipped', running: 'Running' }
@@ -51,6 +53,13 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [selected, setSelected] = useState<string>()
   const [view, setView] = useState<'details' | 'output'>('details')
+  /** The Tests panel's options (every project): how Run all runs the test projects. */
+  const [prefs, setPrefs] = useState<TestsPrefs>(DEFAULT_TESTS_PREFS)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  useEffect(() => {
+    void window.ide.settings.get().then((s) => setPrefs(s.tests ?? DEFAULT_TESTS_PREFS))
+    return window.ide.settings.onChanged((s: AppSettings) => setPrefs(s.tests ?? DEFAULT_TESTS_PREFS))
+  }, [])
   // The details / output area opens when there is something to show (a selected test, the output).
   const [bottomOpen, setBottomOpen] = useState(false)
   /** Height of the opened Details / Output section, dragged by its top edge (remembered; default 45%). */
@@ -157,16 +166,25 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
     if (node.kind === 'group') for (const c of node.children) await useTestsStore.getState().run(root, c.req, c.testIds)
     else await run(root, node.req, node.testIds)
   }
-  const runAll = async (): Promise<void> => {
-    for (const tree of projectTrees) await useTestsStore.getState().run(root, tree.req, tree.testIds)
-  }
+  // Every test project: in parallel or one after the other (the settings).
+  const runAll = (): Promise<void> =>
+    useTestsStore.getState().runAll(
+      root,
+      projectTrees.map((t) => ({ req: t.req, testIds: t.testIds, framework: st.projects?.find((p) => p.id === t.projectId)?.framework ?? 'vitest' })),
+      prefs
+    )
 
   const selectedRow = rows.find((r) => r.node.key === selected)?.node ?? findNode(trees, selected)
 
   return (
     <div className="tests-panel">
       <div className="pane-toolbar tests-toolbar">
-        <button className="tool-button primary" disabled={st.running || counts.total === 0} title="Run every test of the project" onClick={() => void runAll()}>
+        <button
+          className="tool-button primary"
+          disabled={st.running || counts.total === 0}
+          title={`Run every test of the project (${prefs.runAll === 'parallel' ? `test projects in parallel, ${prefs.parallelism} at once` : 'test projects one after the other'})`}
+          onClick={() => void runAll()}
+        >
           ▶ Run all
         </button>
         {st.running && (
@@ -196,8 +214,15 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
         <span className="spacer" />
         <span className="tests-summary">
           {/* (Finding tests: the list's spinner.) */}
-          {st.running && <span className="busy">Running…</span>}
+          {st.running && <span className="busy">Running{st.runningProjects.length > 1 ? ` ${st.runningProjects.length} projects` : ''}…</span>}
         </span>
+        <button className="icon-button" title="Tests settings" aria-label="Tests settings" onClick={() => setSettingsOpen(true)}>
+          <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round">
+            {/* A gear (as the launcher's Settings). */}
+            <path d="M6.8 1.5h2.4l.4 1.9a5 5 0 011.3.75l1.8-.6 1.2 2.1-1.4 1.3a5 5 0 010 1.5l1.4 1.3-1.2 2.1-1.8-.6a5 5 0 01-1.3.75l-.4 1.9H6.8l-.4-1.9a5 5 0 01-1.3-.75l-1.8.6-1.2-2.1 1.4-1.3a5 5 0 010-1.5L2.1 5.65l1.2-2.1 1.8.6a5 5 0 011.3-.75z" />
+            <circle cx="8" cy="8" r="2.1" />
+          </svg>
+        </button>
       </div>
 
       <div className="pane-toolbar tests-filterbar">
@@ -386,6 +411,7 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
           )}
         </div>
       </div>
+      {settingsOpen && <TestsSettings prefs={prefs} onClose={() => setSettingsOpen(false)} />}
     </div>
   )
 }
