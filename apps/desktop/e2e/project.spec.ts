@@ -287,7 +287,13 @@ test('History: Rebase on a branch (the last one used, or chosen in ▾); a stopp
   const before = git('rev-parse', 'HEAD').trim()
   await main.click()
   const rebasing = toolbar.locator('.git-rebasing')
-  await expect(rebasing).toContainText('Rebasing')
+  try {
+    await expect(rebasing).toContainText('Rebasing')
+  } catch (err) {
+    // Not shown: what the panel and git say then.
+    const toasts = JSON.stringify(await page.locator('.toast').allTextContents())
+    throw new Error(`Rebasing not shown.\nToasts: ${toasts}\ngit status:\n${git('status')}`, { cause: err })
+  }
   await rebasing.getByRole('button', { name: 'Abort' }).click()
   await expect(rebasing).toHaveCount(0)
   expect(git('rev-parse', 'HEAD').trim()).toBe(before)
