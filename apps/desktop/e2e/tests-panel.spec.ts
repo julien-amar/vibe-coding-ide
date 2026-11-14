@@ -94,6 +94,8 @@ test('a failed test opens in the editor and is sent to the AI agent with "Fix wi
   await page.locator('.tab-panel.visible .side-rail .rail-item.tests').click()
   const vitest = panel.locator('.test-row.kind-project', { hasText: 'Vitest' })
   await expect(vitest).toBeVisible({ timeout: 90_000 })
+  // Every project listed (they are shown as they come: the rows move until then).
+  await expect(panel.getByRole('status', { name: /Finding/ })).toHaveCount(0, { timeout: 90_000 })
   await vitest.hover()
   await vitest.locator('.test-run').click()
   const failing = panel.locator('.test-row.kind-test', { hasText: 'fails on purpose' }).first()
@@ -148,6 +150,8 @@ test('"Fix with agent" opens an AI agent panel when none is running, and waits f
   await page.locator('.tab-panel.visible .side-rail .rail-item.tests').click()
   const jest = panel.locator('.test-row.kind-project', { hasText: 'Jest' })
   await expect(jest).toBeVisible({ timeout: 90_000 })
+  // Every project listed (they are shown as they come: the rows move until then).
+  await expect(panel.getByRole('status', { name: /Finding/ })).toHaveCount(0, { timeout: 90_000 })
   await jest.hover()
   await jest.locator('.test-run').click()
   const failing = panel.locator('.test-row.kind-test', { hasText: 'fails on purpose' }).first()

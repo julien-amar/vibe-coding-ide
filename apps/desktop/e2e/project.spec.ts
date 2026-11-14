@@ -285,6 +285,10 @@ test('History: Rebase on a branch (the last one used, or chosen in ▾); a stopp
   git('commit', '-q', '-am', 'Upstream-work changes upstream.txt')
   git('switch', '-q', 'main')
   const before = git('rev-parse', 'HEAD').trim()
+  // The panel up to date (main checked out again, the new commits shown) before clicking.
+  await toolbar.locator('button[title="Refresh"]').click()
+  await expect(gitPanel(page).locator('.git-subject', { hasText: 'Upstream-work changes upstream.txt' })).toBeVisible()
+  await expect(main).toHaveText('Rebase on upstream-work')
   await main.click()
   const rebasing = toolbar.locator('.git-rebasing')
   try {
@@ -335,6 +339,9 @@ test('History: a rebase stopped on a conflict continues once it is resolved and 
   await gitPanel(page).locator('.git-toolbar button[title="Refresh"]').click()
 
   const toolbar = gitPanel(page).locator('.git-toolbar')
+  // The panel up to date (main checked out, the new commits shown) before clicking.
+  await expect(gitPanel(page).locator('.git-subject', { hasText: 'Main adds shared.txt' })).toBeVisible()
+  await expect(toolbar.locator('.ref-badge.head')).toHaveText('main')
   await toolbar.locator('.split-button .split-main').click()
   await page.getByRole('listbox', { name: 'Rebase on' }).getByRole('option', { name: 'base-work' }).click()
   const rebasing = toolbar.locator('.git-rebasing')
