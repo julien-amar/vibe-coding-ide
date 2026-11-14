@@ -232,3 +232,27 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* Text and number fields of the settings dialogs, like their selects. */
+.settings-default input {
+  height: 30px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: none;
+}
+
+.settings-default input:focus {
+  border-color: var(--accent);
+}
+
+/* An ⓘ next to a field: its explanation as a tooltip. */
+.info-icon {
+  margin-left: 6px;
+  color: var(--accent);
+  cursor: help;
+}

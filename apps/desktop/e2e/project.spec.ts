@@ -214,6 +214,42 @@ test('the file list and the diff of the Changes view can be resized', async () =
   await expect.poll(width).toBeLessThan(before + 2)
 })
 
+test('Git settings (⚙): context lines and whitespace of diffs, the push command', async () => {
+  const { page } = hub
+  const git = (...args: string[]): string => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' })
+  writeFileSync(join(repo, 'ctx.txt'), 'a\nb\nc\nd\n')
+  git('add', 'ctx.txt')
+  git('commit', '-q', '-m', 'ctx')
+  writeFileSync(join(repo, 'ctx.txt'), 'a\nb  \nc\nD\n')
+  await view(page, 'Changes')
+  const changes = gitPanel(page).locator('.changes-view')
+  await changes.locator('.file-row', { hasText: 'ctx.txt' }).click()
+  const diff = changes.locator('.changes-diff')
+  await expect(diff.locator('.diff-line', { hasText: /^ a$/ })).toHaveCount(1)
+
+  await gitPanel(page).getByRole('button', { name: 'Git settings' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Git settings' })
+  // The push command's ⓘ explains Gerrit's git review.
+  await expect(dialog.getByRole('img', { name: 'About the push command' })).toHaveAttribute('title', /git review/)
+  // No context lines: only the changes.
+  await dialog.getByLabel('Lines around each change').fill('0')
+  await dialog.getByLabel('Lines around each change').press('Enter')
+  await expect(diff.locator('.diff-line', { hasText: /^ a$/ })).toHaveCount(0)
+  await expect(diff.locator('.diff-line.add')).toHaveText(['+b  ', '+D'])
+  // Whitespace ignored: the line with only trailing spaces is not a change; no per-hunk staging.
+  await dialog.getByLabel('Ignore whitespace').selectOption('eol')
+  await expect(diff.locator('.diff-line.add')).toHaveText(['+D'])
+  await expect(diff.locator('.diff-title')).toContainText('whitespace ignored')
+  await expect(diff.locator('.diff-line.hunk button')).toHaveCount(0)
+  // A push command: the button pushes with it (whatever the upstream).
+  await expect(gitPanel(page).locator('.git-toolbar').getByRole('button', { name: 'Publish' })).toBeVisible()
+  await dialog.getByLabel('Push command', { exact: true }).fill('git review')
+  await dialog.getByLabel('Push command', { exact: true }).press('Enter')
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+  await expect(gitPanel(page).locator('.git-toolbar').getByRole('button', { name: 'Push', exact: true })).toHaveAttribute('title', /git review/)
+})
+
 test('Shift+click selects a range of changed lines, staged at once', async () => {
   const { page } = hub
   const git = (...args: string[]): string => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' })

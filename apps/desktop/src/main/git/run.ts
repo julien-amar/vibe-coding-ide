@@ -38,10 +38,10 @@ function gitCommand(root: string, args: string[]): { file: string; args: string[
 }
 
 /**
- * How to run a hosting tool (gh, glab) in the repository: inside the distribution for WSL
+ * How to run a tool (gh, glab; a custom push command) in the repository: inside the distribution for WSL
  * repositories (through a login shell, where its PATH and credentials are), else from PATH.
  */
-export function toolCommand(root: string, program: 'gh' | 'glab', args: string[]): { file: string; args: string[]; cwd?: string } | undefined {
+export function toolCommand(root: string, program: string, args: string[]): { file: string; args: string[]; cwd?: string } | undefined {
   const wsl = process.platform === 'win32' ? parseWslPath(root) : undefined
   if (wsl) {
     return { file: wslExe(), args: wslLogin(wsl.distro, program, args, { cd: wsl.path }) }

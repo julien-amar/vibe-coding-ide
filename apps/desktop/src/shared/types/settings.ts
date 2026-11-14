@@ -15,6 +15,20 @@ export interface AppSettings {
   defaultAgent?: string
   /** The Containers tab's options. */
   containers?: ContainersPrefs
+  /** The Git panel's options (every project). */
+  git?: GitPrefs
+}
+
+/** Git panel options (its ⚙ dialog). */
+export interface GitPrefs {
+  /** Unchanged lines shown around each change in diffs (`git diff -U<n>`). */
+  contextLines: number
+  /** Whitespace changes left out of diffs: none, at line ends, changes in amount, all. */
+  whitespace: 'none' | 'eol' | 'change' | 'all'
+  /** Added / removed blank lines left out of diffs. */
+  ignoreBlankLines: boolean
+  /** The Push button's command, run in the repository (empty: `git push`), e.g. `git review` (Gerrit). */
+  pushCommand: string
 }
 
 /** Containers tab options (its ⚙ dialog). */

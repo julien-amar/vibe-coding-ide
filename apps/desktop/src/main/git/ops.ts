@@ -1,9 +1,12 @@
-import type { GitOpRequest, GitOpResult } from '@shared/types'
+import type { GitOpRequest, GitOpResult, GitPrefs } from '@shared/types'
+import { DEFAULT_GIT_PREFS, ignoresWhitespace } from '@shared/settings-defaults'
 import { partialPatch, partialUnsupported } from '@shared/git-patch'
 import { parseWslPath } from '@shared/wsl-paths'
 import { createPr, prInfo } from './pull-requests'
 import {
+  commandWords,
   DIFF_FLAGS,
+  diffFlags,
   fileDiff,
   gitBranches,
   gitStatus,
@@ -17,14 +20,16 @@ import {
   validHash,
   worktreeDir
 } from './repo'
-import { git, NETWORK } from './run'
+import { git, NETWORK, run, toolCommand } from './run'
 
 /**
  * All write/read actions the Git panel can perform. Each maps to a fixed git
  * command line; user-provided values are validated and passed after `--`
  * where git allows it, so a renderer can never inject arbitrary git options.
  */
-export async function gitOp(root: string, req: GitOpRequest): Promise<GitOpResult> {
+/** `prefs`: the Git panel's options (how diffs are shown, the push command). */
+export async function gitOp(root: string, req: GitOpRequest, prefs: GitPrefs = DEFAULT_GIT_PREFS): Promise<GitOpResult> {
+  const shown = diffFlags(prefs)
   try {
     switch (req.op) {
       case 'status':
@@ -32,8 +37,8 @@ export async function gitOp(root: string, req: GitOpRequest): Promise<GitOpResul
       case 'diff': {
         const path = pathList(req.path)[0]
         let text: string
-        if (req.untracked) text = await git(root, ['diff', ...DIFF_FLAGS, '--no-index', '--', '/dev/null', path], { okCodes: [1] })
-        else text = await fileDiff(root, path, !!req.staged)
+        if (req.untracked) text = await git(root, ['diff', ...DIFF_FLAGS, ...shown, '--no-index', '--', '/dev/null', path], { okCodes: [1] })
+        else text = await fileDiff(root, path, !!req.staged, shown)
         return { ok: true, text }
       }
       case 'applyLines': {
@@ -42,7 +47,10 @@ export async function gitOp(root: string, req: GitOpRequest): Promise<GitOpResul
         const staged = !!req.staged
         const action = req.action
         if (staged ? action !== 'unstage' : action !== 'stage' && action !== 'discard') throw new Error('Invalid action')
-        const diff = await fileDiff(root, path, staged)
+        // A diff without some whitespace changes is not the file's real change: not a patch to apply.
+        if (ignoresWhitespace(prefs)) throw new Error('Lines cannot be staged separately while diffs ignore whitespace (Git settings).')
+        // The diff shown (its context lines): the one the lines were chosen in.
+        const diff = await fileDiff(root, path, staged, shown)
         if (diff !== req.diffText) throw new Error('The file changed meanwhile: check its changes again.')
         const why = partialUnsupported(diff)
         if (why) throw new Error(`The lines of a ${why} cannot be ${action === 'discard' ? 'discarded' : `${action}d`} separately.`)
@@ -58,6 +66,8 @@ export async function gitOp(root: string, req: GitOpRequest): Promise<GitOpResul
           ...(action === 'stage' ? [] : ['--reverse']),
           '--recount',
           '--whitespace=nowarn',
+          // Hunks without context lines (0 asked for).
+          ...(prefs.contextLines === 0 ? ['--unidiff-zero'] : []),
           '-'
         ]
         await git(root, args, { input: patch })
@@ -144,8 +154,8 @@ export async function gitOp(root: string, req: GitOpRequest): Promise<GitOpResul
         const hash = validHash(req.hash)
         const paths = [pathList(req.path)[0], ...(req.origPath ? [String(req.origPath)] : [])]
         const text = req.parent
-          ? await git(root, ['diff', '--no-color', '-M', validHash(req.parent), hash, '--', ...paths])
-          : await git(root, ['show', '--no-color', '--format=', hash, '--', ...paths])
+          ? await git(root, ['diff', '--no-color', ...shown, '-M', validHash(req.parent), hash, '--', ...paths])
+          : await git(root, ['show', '--no-color', ...shown, '--format=', hash, '--', ...paths])
         return { ok: true, text }
       }
       case 'merge': {
@@ -161,6 +171,17 @@ export async function gitOp(root: string, req: GitOpRequest): Promise<GitOpResul
         return { ok: true, text: out }
       }
       case 'push': {
+        // A push command of the options (e.g. `git review` for Gerrit), run in the repository.
+        const custom = commandWords(prefs.pushCommand)
+        if (custom.length) {
+          if (custom[0] === 'git') await git(root, custom.slice(1), NETWORK)
+          else {
+            const cmd = toolCommand(root, custom[0], custom.slice(1))
+            if (!cmd) throw new Error(`${custom[0]} was not found (the push command of the Git settings).`)
+            await run(cmd, custom[0], NETWORK)
+          }
+          return { ok: true }
+        }
         const status = await gitStatus(root)
         // First push of a branch: publish it and set its upstream.
         const args = status.upstream ? ['push'] : ['push', '--set-upstream', 'origin', 'HEAD']

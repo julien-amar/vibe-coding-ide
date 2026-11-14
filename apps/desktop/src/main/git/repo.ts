@@ -1,5 +1,5 @@
 import { realpathSync } from 'node:fs'
-import type { GitBranch, GitCommit, GitCommitFile, GitLog, GitLogPage, GitStatus, GitStatusFile, GitWorktree } from '@shared/types'
+import type { GitBranch, GitCommit, GitCommitFile, GitLog, GitLogPage, GitPrefs, GitStatus, GitStatusFile, GitWorktree } from '@shared/types'
 import { parseWslPath } from '@shared/wsl-paths'
 import { git } from './run'
 
@@ -247,6 +247,19 @@ export function worktreeDir(root: string, feature: string): string {
  */
 export const DIFF_FLAGS = ['--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/']
 
-/** A file's unstaged (worktree vs index) or staged (index vs HEAD) diff. */
-export const fileDiff = (root: string, path: string, staged: boolean): Promise<string> =>
-  git(root, ['diff', ...DIFF_FLAGS, ...(staged ? ['--cached'] : []), '--', path])
+/** A file's unstaged (worktree vs index) or staged (index vs HEAD) diff; `flags`: how it is shown (diffFlags). */
+export const fileDiff = (root: string, path: string, staged: boolean, flags: string[] = []): Promise<string> =>
+  git(root, ['diff', ...DIFF_FLAGS, ...flags, ...(staged ? ['--cached'] : []), '--', path])
+
+/** How diffs are shown (the Git panel's options): context lines, whitespace left out. */
+export function diffFlags(p: GitPrefs): string[] {
+  const ws = { none: [], eol: ['--ignore-space-at-eol'], change: ['--ignore-space-change'], all: ['--ignore-all-space'] }[p.whitespace]
+  return [`-U${p.contextLines}`, ...ws, ...(p.ignoreBlankLines ? ['--ignore-blank-lines'] : [])]
+}
+
+/** A command line in words: spaces separate them, quotes ("…" or '…') keep spaces in one. */
+export function commandWords(line: string): string[] {
+  const words: string[] = []
+  for (const m of line.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)) words.push(m[1] ?? m[2] ?? m[3])
+  return words
+}

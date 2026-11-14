@@ -30,6 +30,7 @@ The short version, with screenshots: [README.md](../README.md).
   - *Branches* — switch, create, rename, merge into the current branch, delete (with a confirmation for unmerged branches), check out remote branches.
   - **New feature…** — creates `feature/<name>` in its own folder next to the repository (a git worktree) and opens it as a new project with its own terminal and agent, so you can work on it in parallel. Worktrees can be reopened or removed from the Branches view.
   - Fetch / Pull / Push (Publish for a branch without upstream), ahead/behind counts. Refreshes automatically when the repository changes.
+  - **⚙ Git settings** (every project): lines around each change in diffs, whitespace / blank lines left out of diffs (then changes are staged per file, not per hunk or line), and the **push command** (empty: `git push`; e.g. `git review` for Gerrit, where changes are pushed for review).
   - **Pull request** — opens the branch's open pull (merge) request, or creates one: pushes the branch first, then creates it with **GitHub CLI** (`gh`) or **glab** when installed and logged in (title, Markdown description, target branch, draft), otherwise opens the host's "new pull request" page (GitHub, GitLab, Bitbucket, Azure DevOps). WSL projects use the `gh` / `glab` of the distribution.
 - **Tests panel:** finds the project's tests, also in sub-folders of a monorepo, and lists them by file and `describe()` block / module / class:
 

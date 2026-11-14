@@ -1,8 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { app, BrowserWindow, nativeTheme } from 'electron'
-import type { AppSettings, ContainerBackendId, ContainersPrefs, Profile } from '@shared/types'
-import { DEFAULT_CONTAINERS_PREFS } from '@shared/settings-defaults'
+import type { AppSettings, ContainerBackendId, ContainersPrefs, GitPrefs, Profile } from '@shared/types'
+import { DEFAULT_CONTAINERS_PREFS, DEFAULT_GIT_PREFS } from '@shared/settings-defaults'
 import { setWslEnabled } from './profiles'
 import { emit } from './ipc'
 
@@ -24,7 +24,28 @@ export function sanitizeSettings(input: unknown, base: AppSettings = DEFAULTS): 
     // A profile id, or null / '' for "the first found".
     defaultShell: 'defaultShell' in s ? (typeof s.defaultShell === 'string' && s.defaultShell ? s.defaultShell : undefined) : base.defaultShell,
     defaultAgent: 'defaultAgent' in s ? (typeof s.defaultAgent === 'string' && s.defaultAgent ? s.defaultAgent : undefined) : base.defaultAgent,
-    containers: 'containers' in s ? sanitizeContainers(s.containers) : base.containers
+    containers: 'containers' in s ? sanitizeContainers(s.containers) : base.containers,
+    git: 'git' in s ? sanitizeGit(s.git) : base.git
+  }
+}
+
+const WHITESPACE = ['none', 'eol', 'change', 'all'] as const
+
+function sanitizeGit(v: unknown): GitPrefs {
+  const g = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>
+  const context = Number(g.contextLines)
+  return {
+    contextLines: Number.isInteger(context) && context >= 0 && context <= 50 ? context : DEFAULT_GIT_PREFS.contextLines,
+    whitespace: WHITESPACE.includes(g.whitespace as GitPrefs['whitespace']) ? (g.whitespace as GitPrefs['whitespace']) : DEFAULT_GIT_PREFS.whitespace,
+    ignoreBlankLines: typeof g.ignoreBlankLines === 'boolean' ? g.ignoreBlankLines : DEFAULT_GIT_PREFS.ignoreBlankLines,
+    // One line (a command, not a script).
+    pushCommand:
+      typeof g.pushCommand === 'string'
+        ? g.pushCommand
+            .replace(/[\r\n]+/g, ' ')
+            .trim()
+            .slice(0, 500)
+        : DEFAULT_GIT_PREFS.pushCommand
   }
 }
 

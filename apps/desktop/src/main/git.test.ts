@@ -1,9 +1,11 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, realpathSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, existsSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { findGitRepos, gitLog, gitOp } from './git'
+import type { GitPrefs } from '@shared/types'
+import { DEFAULT_GIT_PREFS } from '@shared/settings-defaults'
+import { commandWords, diffFlags, findGitRepos, gitLog, gitOp } from './git'
 
 /**
  * Integration tests: the Git panel operations against a real repository
@@ -194,5 +196,63 @@ describe('history pages and the repositories of a project folder', () => {
     // A folder without any.
     mkdirSync(join(base, 'empty'))
     expect(await findGitRepos(join(base, 'empty'))).toEqual([])
+  })
+})
+
+describe('Git panel settings: how diffs are shown, the push command', () => {
+  const prefs = (p: Partial<GitPrefs>): GitPrefs => ({ ...DEFAULT_GIT_PREFS, ...p })
+
+  it('turns the settings into diff flags, and a command line into words', () => {
+    expect(diffFlags(DEFAULT_GIT_PREFS)).toEqual(['-U3'])
+    expect(diffFlags(prefs({ contextLines: 0, whitespace: 'all', ignoreBlankLines: true }))).toEqual(['-U0', '--ignore-all-space', '--ignore-blank-lines'])
+    expect(diffFlags(prefs({ whitespace: 'eol' }))).toEqual(['-U3', '--ignore-space-at-eol'])
+    expect(commandWords(`git review -t "my topic" 'a b'`)).toEqual(['git', 'review', '-t', 'my topic', 'a b'])
+    expect(commandWords('   ')).toEqual([])
+  })
+
+  it('shows diffs with the context asked for (0: only the changes), and stages lines of such a diff', async () => {
+    write('ctx.txt', 'a\nb\nc\nd\ne\nf\ng\n')
+    run('add', 'ctx.txt')
+    run('commit', '-q', '-m', 'ctx')
+    write('ctx.txt', 'a\nb\nc\nD\ne\nf\nG\n')
+    const zero = prefs({ contextLines: 0 })
+    const diff = (await gitOp(repo, { op: 'diff', path: 'ctx.txt' }, zero)).text!
+    expect(diff).not.toMatch(/^ c$/m)
+    expect((await gitOp(repo, { op: 'diff', path: 'ctx.txt' })).text).toMatch(/^ c$/m)
+    // Stage the first change only (its lines in this diff).
+    const lines = diff.split('\n')
+    const first = [lines.indexOf('-d'), lines.indexOf('+D')]
+    expect(await gitOp(repo, { op: 'applyLines', path: 'ctx.txt', staged: false, action: 'stage', lines: first, diffText: diff }, zero)).toEqual({ ok: true })
+    expect(run('show', ':ctx.txt')).toBe('a\nb\nc\nD\ne\nf\ng\n')
+    run('reset', '-q', '--', 'ctx.txt')
+  })
+
+  it('leaves whitespace changes out when asked; lines are then not staged separately', async () => {
+    write('ws.txt', 'one\ntwo\n')
+    run('add', 'ws.txt')
+    run('commit', '-q', '-m', 'ws')
+    write('ws.txt', 'one  \ntwo\nthree\n')
+    const ignore = prefs({ whitespace: 'all' })
+    const diff = (await gitOp(repo, { op: 'diff', path: 'ws.txt' }, ignore)).text!
+    expect(diff).toContain('+three')
+    expect(diff).not.toContain('-one')
+    const r = await gitOp(repo, { op: 'applyLines', path: 'ws.txt', staged: false, action: 'stage', lines: [1], diffText: diff }, ignore)
+    expect(r.ok).toBe(false)
+    expect(r.error).toMatch(/ignore whitespace/)
+  })
+
+  it('pushes with the push command of the settings (git … or another program, run in the repository)', async () => {
+    expect(await gitOp(repo, { op: 'push' }, prefs({ pushCommand: 'git tag pushed-by-command' }))).toEqual({ ok: true })
+    expect(run('tag', '--list', 'pushed-by-command').trim()).toBe('pushed-by-command')
+    const node = process.execPath.includes('node') ? 'node' : undefined
+    if (node) {
+      expect(await gitOp(repo, { op: 'push' }, prefs({ pushCommand: `node -e "require('fs').writeFileSync('pushed.txt', 'by the push command')"` }))).toEqual({
+        ok: true
+      })
+      expect(readFileSync(join(repo, 'pushed.txt'), 'utf8')).toBe('by the push command')
+    }
+    const missing = await gitOp(repo, { op: 'push' }, prefs({ pushCommand: 'no-such-push-tool-xyz' }))
+    expect(missing.ok).toBe(false)
+    expect(missing.error).toMatch(/was not found/)
   })
 })

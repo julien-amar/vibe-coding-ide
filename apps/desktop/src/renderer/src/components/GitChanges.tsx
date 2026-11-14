@@ -55,7 +55,20 @@ function FileRow({
 }
 
 /** A selected file's diff (its own title), with partial staging (not for untracked files: stage them whole). */
-function FileDiff({ root, file, run, refreshKey }: { root: string; file: Selection; run: Run; refreshKey: string }): React.JSX.Element {
+function FileDiff({
+  root,
+  file,
+  run,
+  refreshKey,
+  partialStaging
+}: {
+  root: string
+  file: Selection
+  run: Run
+  refreshKey: string
+  /** Hunks and lines can be staged (not while diffs ignore whitespace). */
+  partialStaging: boolean
+}): React.JSX.Element {
   const [diff, setDiff] = useState({ text: '', loading: true })
 
   useEffect(() => {
@@ -70,7 +83,7 @@ function FileDiff({ root, file, run, refreshKey }: { root: string; file: Selecti
   }, [root, file.path, file.staged, file.untracked, refreshKey])
 
   const lineActions: DiffLineActions | undefined =
-    !file.untracked && !diff.loading
+    partialStaging && !file.untracked && !diff.loading
       ? {
           staged: file.staged,
           apply: async (action, lines) => {
@@ -93,6 +106,11 @@ function FileDiff({ root, file, run, refreshKey }: { root: string; file: Selecti
       <div className="diff-title">
         <span className="file-name">{file.path}</span>
         <span className="muted">{file.staged ? 'staged' : file.untracked ? 'untracked' : 'not staged'}</span>
+        {!partialStaging && (
+          <span className="muted diff-note" title="The diff leaves whitespace out (Git settings): hunks and lines cannot be staged separately.">
+            whitespace ignored
+          </span>
+        )}
       </div>
       <DiffView text={diff.text} loading={diff.loading} actions={lineActions} />
     </div>
@@ -174,12 +192,15 @@ export function ChangesView({
   root,
   status,
   run,
-  refreshKey
+  refreshKey,
+  partialStaging = true
 }: {
   root: string
   status: GitStatus | null | undefined
   run: Run
   refreshKey: string
+  /** Hunks and lines can be staged (not while diffs ignore whitespace). */
+  partialStaging?: boolean
 }): React.JSX.Element {
   const [message, setMessage] = useState('')
   const [amend, setAmend] = useState(false)
@@ -362,12 +383,14 @@ export function ChangesView({
       <ListResizer onWidth={setListWidth} onHeight={setListHeight} />
       <div className={`changes-diff${selected.length > 1 ? ' multi' : ''}`}>
         {selected.length === 0 && <div className="pane-message">Select a file to see its changes (Ctrl+click or Shift+click: several).</div>}
-        {selected.length === 1 && <FileDiff key={keyOf(selected[0])} root={root} file={selected[0]} run={run} refreshKey={refreshKey} />}
+        {selected.length === 1 && (
+          <FileDiff key={keyOf(selected[0])} root={root} file={selected[0]} run={run} refreshKey={refreshKey} partialStaging={partialStaging} />
+        )}
         {selected.length > 1 && (
           // Several files: their diffs one below the other, in one scroll.
           <div className="file-diffs">
             {selected.map((s) => (
-              <FileDiff key={keyOf(s)} root={root} file={s} run={run} refreshKey={refreshKey} />
+              <FileDiff key={keyOf(s)} root={root} file={s} run={run} refreshKey={refreshKey} partialStaging={partialStaging} />
             ))}
           </div>
         )}

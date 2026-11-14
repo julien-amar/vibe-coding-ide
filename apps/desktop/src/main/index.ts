@@ -357,7 +357,7 @@ function registerIpc(): void {
   )
   handle('git:repos', (_e, root: string) => (isDir(String(root)) ? findGitRepos(String(root)) : []))
   handle('git:op', (_e, root: string, req: GitOpRequest) =>
-    isDir(String(root)) ? gitOp(String(root), req ?? { op: 'status' }) : { ok: false, error: 'Folder not found' }
+    isDir(String(root)) ? gitOp(String(root), req ?? { op: 'status' }, getSettings().git) : { ok: false, error: 'Folder not found' }
   )
   listen('git:watch', (e, root: string) => {
     if (isDir(String(root))) gitWatcher.watch(String(root), e.sender)
