@@ -113,11 +113,12 @@ button:disabled {
 
 /* Changes */
 
+/* The file list, the bar that resizes it (its width: --list-width), the diff. */
 .changes-view {
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template-columns: minmax(260px, 38%) 1fr;
+  grid-template-columns: var(--list-width, minmax(260px, 38%)) 5px 1fr;
 }
 
 /* Narrow panel: file list on top (up to ~60% of the height), diff below; a short panel scrolls as a
@@ -125,15 +126,18 @@ button:disabled {
 @container (max-width: 720px) {
   .changes-view {
     grid-template-columns: 1fr;
-    /* (A scrolling column counts as 0 high in an auto row: give the file list a floor.) */
-    grid-template-rows: minmax(220px, auto) minmax(200px, 1fr);
+    /* (A scrolling column counts as 0 high in an auto row: give the file list a floor.) Resized: its height (--list-height). */
+    grid-template-rows: var(--list-height, minmax(220px, auto)) 5px minmax(200px, 1fr);
     overflow-y: auto;
   }
 
   .changes-side {
-    max-height: max(62cqh, 220px);
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
+    max-height: var(--list-height, max(62cqh, 220px));
+  }
+
+  .changes-resizer {
+    cursor: row-resize;
+    background: linear-gradient(var(--border), var(--border)) center / 100% 1px no-repeat;
   }
 
   .commit-box textarea {
@@ -147,7 +151,17 @@ button:disabled {
   min-height: 0;
   /* A short panel: the column scrolls, the file lists keep their room. */
   overflow-y: auto;
-  border-right: 1px solid var(--border);
+}
+
+/* Between the file list and the diff: a line, a wider grip (dragged: resizes the list). */
+.changes-resizer {
+  cursor: col-resize;
+  background: linear-gradient(var(--border), var(--border)) center / 1px 100% no-repeat;
+  touch-action: none;
+}
+
+.changes-resizer:hover {
+  background-color: color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .commit-box {

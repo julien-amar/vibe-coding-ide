@@ -99,6 +99,77 @@ function FileDiff({ root, file, run, refreshKey }: { root: string; file: Selecti
   )
 }
 
+/** The file list's size, remembered: its width (list beside the diff), or its height (list above). */
+const SIZE_KEYS = { width: 'git-changes-list-width', height: 'git-changes-list-height' } as const
+const savedSize = (key: string): number | undefined => {
+  try {
+    return Number(localStorage.getItem(key)) || undefined
+  } catch {
+    return undefined
+  }
+}
+const saveSize = (key: string, value: number | undefined): void => {
+  try {
+    if (value) localStorage.setItem(key, String(value))
+    else localStorage.removeItem(key)
+  } catch {
+    /* not remembered */
+  }
+}
+
+/**
+ * The bar between the file list and the diff: dragged, it resizes the list (its width beside the
+ * diff, its height above it in a narrow panel); double-clicked, the list gets its default size.
+ */
+function ListResizer({ onWidth, onHeight }: { onWidth: (px: number | undefined) => void; onHeight: (px: number | undefined) => void }): React.JSX.Element {
+  const start = (e: React.PointerEvent<HTMLDivElement>): void => {
+    e.preventDefault()
+    const handle = e.currentTarget
+    const view = handle.parentElement!
+    const side = view.querySelector<HTMLElement>('.changes-side')!
+    const bar = handle.getBoundingClientRect()
+    // A bar wider than high: the list is above the diff (narrow panel).
+    const stacked = bar.width > bar.height
+    const from = stacked ? e.clientY : e.clientX
+    const size0 = stacked ? side.getBoundingClientRect().height : side.getBoundingClientRect().width
+    const viewRect = view.getBoundingClientRect()
+    let size = size0
+    handle.setPointerCapture(e.pointerId)
+    document.body.classList.add(stacked ? 'resizing-row' : 'resizing-col')
+    const onMove = (ev: PointerEvent): void => {
+      const delta = (stacked ? ev.clientY : ev.clientX) - from
+      // The list keeps 200 px (120 px high); the diff keeps 260 px.
+      size = Math.round(stacked ? Math.max(120, size0 + delta) : Math.min(Math.max(200, size0 + delta), viewRect.width - 260))
+      ;(stacked ? onHeight : onWidth)(size)
+    }
+    const onUp = (): void => {
+      handle.removeEventListener('pointermove', onMove)
+      handle.removeEventListener('pointerup', onUp)
+      handle.removeEventListener('pointercancel', onUp)
+      document.body.classList.remove('resizing-row', 'resizing-col')
+      saveSize(stacked ? SIZE_KEYS.height : SIZE_KEYS.width, size)
+    }
+    handle.addEventListener('pointermove', onMove)
+    handle.addEventListener('pointerup', onUp)
+    handle.addEventListener('pointercancel', onUp)
+  }
+  return (
+    <div
+      className="changes-resizer"
+      role="separator"
+      aria-label="Resize the file list"
+      title="Drag to resize (double-click: default size)"
+      onPointerDown={start}
+      onDoubleClick={() => {
+        onWidth(undefined)
+        onHeight(undefined)
+        saveSize(SIZE_KEYS.width, undefined)
+        saveSize(SIZE_KEYS.height, undefined)
+      }}
+    />
+  )
+}
+
 export function ChangesView({
   root,
   status,
@@ -128,6 +199,9 @@ export function ChangesView({
   const [selected, setSelected] = useState<Selection[]>([])
   /** Where a Shift+click range starts: the last file clicked (or Ctrl+clicked). */
   const anchor = useRef<string | undefined>(undefined)
+  /** The file list's size set by its resizer (else the layout's default). */
+  const [listWidth, setListWidth] = useState(() => savedSize(SIZE_KEYS.width))
+  const [listHeight, setListHeight] = useState(() => savedSize(SIZE_KEYS.height))
 
   const files = status?.files ?? []
   const staged = files.filter((f) => f.index !== ' ' && f.index !== '?')
@@ -195,8 +269,13 @@ export function ChangesView({
 
   const canCommit = (staged.length > 0 || amend) && (message.trim().length > 0 || amend)
 
+  const sizes = {
+    ...(listWidth ? { '--list-width': `${listWidth}px` } : {}),
+    ...(listHeight ? { '--list-height': `${listHeight}px` } : {})
+  } as React.CSSProperties
+
   return (
-    <div className="changes-view">
+    <div className="changes-view" style={sizes}>
       <div className="changes-side">
         <div className="commit-box">
           <textarea
@@ -280,6 +359,7 @@ export function ChangesView({
           {unstaged.length === 0 && <div className="file-empty">Working tree clean</div>}
         </div>
       </div>
+      <ListResizer onWidth={setListWidth} onHeight={setListHeight} />
       <div className={`changes-diff${selected.length > 1 ? ' multi' : ''}`}>
         {selected.length === 0 && <div className="pane-message">Select a file to see its changes (Ctrl+click or Shift+click: several).</div>}
         {selected.length === 1 && <FileDiff key={keyOf(selected[0])} root={root} file={selected[0]} run={run} refreshKey={refreshKey} />}

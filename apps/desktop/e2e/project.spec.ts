@@ -188,6 +188,32 @@ test('several changed files can be selected (Ctrl+click, Shift+click): their dif
   await expect(titles).toHaveText(['gamma.txt'])
 })
 
+test('the file list and the diff of the Changes view can be resized', async () => {
+  const { page } = hub
+  await page.setViewportSize({ width: 1300, height: 800 })
+  await panel(page)
+    .locator('.pane', { has: page.locator('.git-panel') })
+    .getByRole('button', { name: 'Full screen' })
+    .click()
+  await view(page, 'Changes')
+  const changes = gitPanel(page).locator('.changes-view')
+  const side = changes.locator('.changes-side')
+  const width = async (): Promise<number> => (await side.boundingBox())!.width
+  const before = await width()
+  const bar = (await changes.getByRole('separator', { name: 'Resize the file list' }).boundingBox())!
+  await page.mouse.move(bar.x + bar.width / 2, bar.y + bar.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(bar.x + bar.width / 2 + 150, bar.y + bar.height / 2, { steps: 5 })
+  await page.mouse.up()
+  await expect.poll(width).toBeGreaterThan(before + 140)
+  // The diff takes the rest.
+  const diff = (await changes.locator('.changes-diff').boundingBox())!
+  expect(diff.x).toBeGreaterThan(bar.x + 140)
+  // Double-click: the default size.
+  await changes.getByRole('separator', { name: 'Resize the file list' }).dblclick()
+  await expect.poll(width).toBeLessThan(before + 2)
+})
+
 test('Shift+click selects a range of changed lines, staged at once', async () => {
   const { page } = hub
   const git = (...args: string[]): string => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' })
