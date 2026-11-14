@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TestCase, TestProject, TestResult, TestStatus } from '@shared/types'
 import { sendToAgent } from '../agent-bridge'
-import { fixPrompt, type Failure } from '../test-prompt'
+import { buildFixPrompt, fixPrompt, type Failure } from '../test-prompt'
 import { tabTitle, useTabs } from '../store'
 import { buildTestTree, filterTestTree, formatDuration, groupTestTrees, nodeStatus, splitLocations, stripAnsi, type TestTreeNode } from '../test-tree'
 import { resultKey, useProjectTests, useTestsStore } from '../tests-store'
@@ -297,7 +297,12 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
                   ▶
                 </button>
               </div>
-              {node.kind === 'project' && project?.error && <pre className="tests-error">{stripAnsi(project.error)}</pre>}
+              {node.kind === 'project' && project?.error && (
+                <div className="tests-error-box">
+                  <pre className="tests-error">{stripAnsi(project.error)}</pre>
+                  <BuildFixButton tabId={tabId} project={project} />
+                </div>
+              )}
             </div>
           )
         })}
@@ -445,6 +450,27 @@ function FixButton({ tabId, project, failures }: { tabId: string; project?: Test
       }}
     >
       ✦ {sending ? 'Sending…' : label}
+    </button>
+  )
+}
+
+/** A test project whose tests could not be listed (it does not build): its output sent to the AI agent. */
+function BuildFixButton({ tabId, project }: { tabId: string; project: TestProject }): React.JSX.Element {
+  const [sending, setSending] = useState(false)
+  return (
+    <button
+      className="tool-button primary tests-fix"
+      disabled={sending}
+      title="Send the build output to the project's AI agent panel (opens one if needed), to fix the build"
+      onClick={async (e) => {
+        e.stopPropagation()
+        setSending(true)
+        const r = await sendToAgent(tabId, buildFixPrompt(project))
+        setSending(false)
+        notify(r.ok ? 'Sent to the AI agent' : (r.error ?? 'Could not reach the AI agent'), r.ok ? 'success' : 'error')
+      }}
+    >
+      ✦ {sending ? 'Sending…' : 'Fix the build with agent'}
     </button>
   )
 }

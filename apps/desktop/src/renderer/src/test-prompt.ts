@@ -102,3 +102,37 @@ export function fixPrompt(project: TestProject, failures: Failure[]): string {
     files.length === 1 ? runCommand(project, undefined, files[0]) : runCommand(project)
   ].join('\n')
 }
+
+/** Shell command that builds a test project (and lists its tests), from the project root. */
+export function buildCommand(project: TestProject): string {
+  const cmd = {
+    vitest: 'npx vitest list',
+    jest: 'npx jest --listTests',
+    playwright: 'npx playwright test --list',
+    pytest: 'python -m pytest --collect-only -q',
+    go: 'go test -list . ./...',
+    cargo: 'cargo test --no-run',
+    dotnet: project.projectFile ? `dotnet build ${quote(project.projectFile)}` : 'dotnet build',
+    maven: 'mvn test-compile',
+    gradle: 'gradle testClasses'
+  }[project.framework]
+  return project.relDir ? `cd ${quote(project.relDir)} && ${cmd}` : cmd
+}
+
+/** Prompt asking the agent to fix a test project that does not build (its tests could not be listed). */
+export function buildFixPrompt(project: TestProject): string {
+  const fw = FRAMEWORK_LABEL[project.framework]
+  const name = project.projectFile ?? (project.relDir || 'the project folder')
+  return [
+    `This ${fw} test project does not build: its tests cannot be listed. Please fix the build.`,
+    '',
+    `Project: ${name}${project.relDir ? ` (in ${project.relDir})` : ''}`,
+    '',
+    'Output:',
+    clip(stripAnsi(project.error ?? '(no output)').trim(), MAX_MESSAGE),
+    '',
+    'Find the cause and fix it (not by disabling or deleting tests).',
+    'Then check that it builds:',
+    buildCommand(project)
+  ].join('\n')
+}

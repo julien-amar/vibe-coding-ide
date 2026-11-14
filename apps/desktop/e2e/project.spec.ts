@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { expect, test, type Page } from '@playwright/test'
@@ -297,6 +297,21 @@ test('History: Rebase on a branch (the last one used, or chosen in ▾); a stopp
   await gitPanel(page).locator('.git-toolbar button[title="Refresh"]').click()
   await expect(main).toHaveText('Rebase on upstream-work')
   await expect(toggle).toHaveCount(0)
+})
+
+test('Tests: a project whose tests cannot be listed offers to fix its build with the AI agent', async () => {
+  const { page } = hub
+  // A Vitest project without Vitest installed: its tests cannot be listed.
+  mkdirSync(join(repo, 'web'))
+  writeFileSync(join(repo, 'web', 'package.json'), '{ "name": "web", "devDependencies": { "vitest": "*" } }\n')
+  writeFileSync(join(repo, 'web', 'vitest.config.ts'), 'export default {}\n')
+  await panel(page).locator('.side-rail .rail-item.tests').click()
+  const tests = panel(page).locator('.tests-panel')
+  const box = tests.locator('.tests-error-box')
+  await expect(box.locator('.tests-error')).toContainText('not installed')
+  await box.getByRole('button', { name: /Fix the build with agent/ }).click()
+  await expect.poll(() => readLog(hub.agentLog), { timeout: 20_000 }).toContain('This Vitest test project does not build')
+  expect(readLog(hub.agentLog)).toContain(`cd 'web' && npx vitest list`)
 })
 
 test('Shift+click selects a range of changed lines, staged at once', async () => {

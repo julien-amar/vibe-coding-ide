@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TestCase, TestProject } from '@shared/types'
-import { fixPrompt, runCommand } from './test-prompt'
+import { buildCommand, buildFixPrompt, fixPrompt, runCommand } from './test-prompt'
 
 const project = (framework: TestProject['framework'], relDir = 'apps/web'): TestProject => ({
   id: `${framework}:${relDir}`,
@@ -65,5 +65,22 @@ describe('Fix with agent prompts', () => {
     expect(p).toContain('… and 2 more.')
     expect(p).toContain('… (truncated)')
     expect(p.trim().split('\n').pop()).toBe(`npx jest 'src/a.test.ts'`)
+  })
+})
+
+describe('Fix the build with agent', () => {
+  it('sends the project, its output and the command that checks it builds', () => {
+    const net: TestProject = {
+      ...project('dotnet', 'tests/Api.Tests'),
+      projectFile: 'Api.Tests.csproj',
+      error: 'error CS1002: ; expected\n\x1b[31mBuild FAILED.\x1b[0m'
+    }
+    const p = buildFixPrompt(net)
+    expect(p).toContain('This .NET test project does not build')
+    expect(p).toContain('Project: Api.Tests.csproj (in tests/Api.Tests)')
+    expect(p).toContain('error CS1002: ; expected\nBuild FAILED.')
+    expect(p.trim().split('\n').pop()).toBe(`cd 'tests/Api.Tests' && dotnet build 'Api.Tests.csproj'`)
+    expect(buildCommand(project('cargo', ''))).toBe('cargo test --no-run')
+    expect(buildCommand(project('gradle', 'java'))).toBe(`cd 'java' && gradle testClasses`)
   })
 })

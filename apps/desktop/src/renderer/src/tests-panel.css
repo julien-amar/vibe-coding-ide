@@ -212,8 +212,18 @@
   background: var(--hover);
 }
 
+/* A project whose tests could not be listed: its output, and a button to fix the build with the agent. */
+.tests-error-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 2px 12px 8px 34px;
+}
+
 .tests-error {
-  margin: 2px 12px 6px 34px;
+  align-self: stretch;
+  margin: 0;
   padding: 6px 8px;
   max-height: 120px;
   overflow: auto;
