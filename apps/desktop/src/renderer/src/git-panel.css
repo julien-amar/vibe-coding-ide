@@ -632,3 +632,46 @@ button:disabled {
   gap: 10px;
   font-size: 12px;
 }
+
+/* A selected file's diff: its title, then the diff (one file: they fill the panel). */
+
+.file-diff {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Several files: their diffs one below the other, in one scroll; each title stays in view over its diff. */
+
+.file-diffs {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.file-diffs .file-diff {
+  flex: none;
+  min-height: auto;
+}
+
+.file-diffs .diff-title {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--pane-header);
+}
+
+.file-diffs .diff-wrap {
+  flex: none;
+}
+
+.file-diffs .diff {
+  flex: none;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.file-diffs .file-diff + .file-diff {
+  border-top: 1px solid var(--border);
+}

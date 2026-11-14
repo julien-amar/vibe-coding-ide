@@ -155,6 +155,39 @@ test('hunks and single lines can be staged, unstaged and discarded (in a small w
   await expect.poll(() => git('show', ':list.txt')).toBe(original.replace('line 11\n', ''))
 })
 
+test('several changed files can be selected (Ctrl+click, Shift+click): their diffs are shown together', async () => {
+  const { page } = hub
+  const git = (...args: string[]): string => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' })
+  for (const f of ['alpha.txt', 'beta.txt', 'gamma.txt']) writeFileSync(join(repo, f), `${f} v1\n`)
+  git('add', '.')
+  git('commit', '-q', '-m', 'Three files')
+  for (const f of ['alpha.txt', 'beta.txt', 'gamma.txt']) writeFileSync(join(repo, f), `${f} v2\n`)
+  git('add', 'alpha.txt') // staged: alpha; not staged: beta, gamma
+
+  await view(page, 'Changes')
+  const changes = gitPanel(page).locator('.changes-view')
+  const row = (name: string) => changes.locator('.file-row', { hasText: name })
+  const titles = changes.locator('.changes-diff .diff-title .file-name')
+
+  await row('beta.txt').click()
+  await expect(titles).toHaveText(['beta.txt'])
+  // Ctrl+click: added (the diffs in the lists' order), or removed.
+  await row('alpha.txt').click({ modifiers: ['ControlOrMeta'] })
+  await expect(titles).toHaveText(['alpha.txt', 'beta.txt'])
+  await expect(changes.locator('.changes-diff .file-diff', { hasText: 'alpha.txt' }).locator('.diff-line.add')).toHaveText('+alpha.txt v2')
+  await expect(changes.locator('.changes-diff .file-diff', { hasText: 'beta.txt' }).locator('.diff-line.add')).toHaveText('+beta.txt v2')
+  await row('beta.txt').click({ modifiers: ['ControlOrMeta'] })
+  await expect(titles).toHaveText(['alpha.txt'])
+  // Shift+click: the files from the last one clicked (across the Staged and Changes lists).
+  await row('alpha.txt').click()
+  await row('gamma.txt').click({ modifiers: ['Shift'] })
+  await expect(changes.locator('.file-row.selected')).toHaveCount(3)
+  await expect(titles).toHaveText(['alpha.txt', 'beta.txt', 'gamma.txt'])
+  // A plain click: that file alone.
+  await row('gamma.txt').click()
+  await expect(titles).toHaveText(['gamma.txt'])
+})
+
 test('Shift+click selects a range of changed lines, staged at once', async () => {
   const { page } = hub
   const git = (...args: string[]): string => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' })

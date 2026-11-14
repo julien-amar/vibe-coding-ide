@@ -7,11 +7,14 @@ import { Spinner } from './Spinner'
 
 /** The Git panel's Changes view: staged / unstaged files, diffs with partial staging, commit. */
 
+/** A selected file: in the Staged list or the Changes list. */
 interface Selection {
   path: string
   staged: boolean
   untracked: boolean
 }
+
+const keyOf = (s: { path: string; staged: boolean }): string => `${s.staged ? 's' : 'u'}:${s.path}`
 
 function FileRow({
   file,
@@ -23,7 +26,7 @@ function FileRow({
   file: GitStatusFile
   code: string
   selected: boolean
-  onSelect: () => void
+  onSelect: (e: React.MouseEvent) => void
   actions: React.ReactNode
 }): React.JSX.Element {
   const [letter, label] = STATUS_LABEL[code] ?? [code, 'changed']
@@ -31,7 +34,14 @@ function FileRow({
   const name = file.path.slice(slash + 1)
   const dir = slash >= 0 ? file.path.slice(0, slash) : ''
   return (
-    <div className={`file-row${selected ? ' selected' : ''}`} onClick={onSelect} title={file.origPath ? `${file.origPath} → ${file.path}` : file.path}>
+    <div
+      className={`file-row${selected ? ' selected' : ''}`}
+      aria-selected={selected}
+      onClick={onSelect}
+      // Shift+click selects a range of files, not text.
+      onMouseDown={(e) => e.shiftKey && e.preventDefault()}
+      title={`${file.origPath ? `${file.origPath} → ${file.path}` : file.path}\n(Ctrl+click: add to the selection, Shift+click: a range)`}
+    >
       <span className={`file-status s-${label.replace(' ', '-')}`} title={label}>
         {letter}
       </span>
@@ -40,6 +50,51 @@ function FileRow({
       <span className="file-actions" onClick={(e) => e.stopPropagation()}>
         {actions}
       </span>
+    </div>
+  )
+}
+
+/** A selected file's diff (its own title), with partial staging (not for untracked files: stage them whole). */
+function FileDiff({ root, file, run, refreshKey }: { root: string; file: Selection; run: Run; refreshKey: string }): React.JSX.Element {
+  const [diff, setDiff] = useState({ text: '', loading: true })
+
+  useEffect(() => {
+    let alive = true
+    setDiff((d) => ({ ...d, loading: d.text === '' }))
+    void window.ide.git.op(root, { op: 'diff', path: file.path, staged: file.staged, untracked: file.untracked }).then((r) => {
+      if (alive) setDiff({ text: r.ok ? (r.text ?? '') : (r.error ?? ''), loading: false })
+    })
+    return () => {
+      alive = false
+    }
+  }, [root, file.path, file.staged, file.untracked, refreshKey])
+
+  const lineActions: DiffLineActions | undefined =
+    !file.untracked && !diff.loading
+      ? {
+          staged: file.staged,
+          apply: async (action, lines) => {
+            const n = lines.length
+            if (
+              action === 'discard' &&
+              !(await confirmDialog('Discard changes?', `Your changes on ${n} line${n > 1 ? 's' : ''} of ${file.path} will be lost.`, 'Discard', true))
+            ) {
+              return false
+            }
+            const label = action === 'stage' ? 'Staging' : action === 'unstage' ? 'Unstaging' : 'Discarding'
+            const r = await run(label, { op: 'applyLines', path: file.path, staged: file.staged, action, lines, diffText: diff.text })
+            return r.ok
+          }
+        }
+      : undefined
+
+  return (
+    <div className="file-diff">
+      <div className="diff-title">
+        <span className="file-name">{file.path}</span>
+        <span className="muted">{file.staged ? 'staged' : file.untracked ? 'untracked' : 'not staged'}</span>
+      </div>
+      <DiffView text={diff.text} loading={diff.loading} actions={lineActions} />
     </div>
   )
 }
@@ -69,35 +124,52 @@ export function ChangesView({
       if (r.ok && r.text && !message.trim()) setMessage(r.text)
     } else if (message === lastMessage.current) setMessage('')
   }
-  const [selected, setSelected] = useState<Selection>()
-  const [diff, setDiff] = useState({ text: '', loading: false })
+  /** The selected files, in the order of the lists (their diffs are shown in that order). */
+  const [selected, setSelected] = useState<Selection[]>([])
+  /** Where a Shift+click range starts: the last file clicked (or Ctrl+clicked). */
+  const anchor = useRef<string | undefined>(undefined)
 
   const files = status?.files ?? []
   const staged = files.filter((f) => f.index !== ' ' && f.index !== '?')
   const unstaged = files.filter((f) => f.worktree !== ' ')
+  /** Every row, Staged then Changes (a range can span both lists). */
+  const rows: Selection[] = [
+    ...staged.map((f) => ({ path: f.path, staged: true, untracked: false })),
+    ...unstaged.map((f) => ({ path: f.path, staged: false, untracked: f.worktree === '?' }))
+  ]
+  const rowKeys = rows.map(keyOf)
 
-  // Drop the selection when its file is no longer in that list.
+  // Files no longer in their list are dropped from the selection; an untracked file that got
+  // committed / added since (or the reverse) shows its real diff.
   useEffect(() => {
-    if (!selected) return
-    const list = selected.staged ? staged : unstaged
-    const file = list.find((f) => f.path === selected.path)
-    if (!file) setSelected(undefined)
-    // An untracked file that got committed / added since (or the reverse): show its real diff.
-    else if (!selected.staged && (file.worktree === '?') !== selected.untracked) setSelected({ ...selected, untracked: file.worktree === '?' })
+    if (!selected.length) return
+    const now = new Map(rows.map((r) => [keyOf(r), r]))
+    const next = selected.flatMap((s) => {
+      const r = now.get(keyOf(s))
+      return r ? [r] : []
+    })
+    if (next.length !== selected.length || next.some((r, i) => r.untracked !== selected[i].untracked)) setSelected(next)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the selection is checked again when the status changes, not when it is changed here
   }, [status])
 
-  useEffect(() => {
-    if (!selected) return
-    let alive = true
-    setDiff((d) => ({ ...d, loading: d.text === '' }))
-    void window.ide.git.op(root, { op: 'diff', path: selected.path, staged: selected.staged, untracked: selected.untracked }).then((r) => {
-      if (alive) setDiff({ text: r.ok ? (r.text ?? '') : (r.error ?? ''), loading: false })
-    })
-    return () => {
-      alive = false
+  /** A click on a file: it alone; Ctrl (⌘): added / removed; Shift: the files from the last one clicked. */
+  const select = (row: Selection, e: React.MouseEvent): void => {
+    const key = keyOf(row)
+    const byOrder = (list: Selection[]): Selection[] => list.sort((a, b) => rowKeys.indexOf(keyOf(a)) - rowKeys.indexOf(keyOf(b)))
+    if (e.shiftKey && anchor.current && rowKeys.includes(anchor.current)) {
+      window.getSelection()?.removeAllRanges()
+      const [a, b] = [rowKeys.indexOf(anchor.current), rowKeys.indexOf(key)].sort((x, y) => x - y)
+      setSelected(rows.slice(a, b + 1))
+      return
     }
-  }, [root, selected, refreshKey])
+    anchor.current = key
+    if (e.ctrlKey || e.metaKey) {
+      setSelected((cur) => (cur.some((s) => keyOf(s) === key) ? cur.filter((s) => keyOf(s) !== key) : byOrder([...cur, row])))
+      return
+    }
+    setSelected([row])
+  }
+  const isSelected = (row: { path: string; staged: boolean }): boolean => selected.some((s) => keyOf(s) === keyOf(row))
 
   const commit = async (): Promise<void> => {
     const r = await run(amend ? 'Amending' : 'Committing', { op: 'commit', message, amend }, amend ? 'Commit amended' : 'Committed')
@@ -117,26 +189,6 @@ export function ChangesView({
     )
     if (ok) await run('Discarding', { op: 'discard', paths: [f.path], untracked })
   }
-
-  /** Partial staging of the selected file's diff (not for untracked files: stage them whole). */
-  const lineActions: DiffLineActions | undefined =
-    selected && !selected.untracked && !diff.loading
-      ? {
-          staged: selected.staged,
-          apply: async (action, lines) => {
-            const n = lines.length
-            if (
-              action === 'discard' &&
-              !(await confirmDialog('Discard changes?', `Your changes on ${n} line${n > 1 ? 's' : ''} of ${selected.path} will be lost.`, 'Discard', true))
-            ) {
-              return false
-            }
-            const label = action === 'stage' ? 'Staging' : action === 'unstage' ? 'Unstaging' : 'Discarding'
-            const r = await run(label, { op: 'applyLines', path: selected.path, staged: selected.staged, action, lines, diffText: diff.text })
-            return r.ok
-          }
-        }
-      : undefined
 
   if (status === undefined) return <Spinner />
   if (!status) return <div className="pane-message">This folder is not a git repository.</div>
@@ -169,7 +221,7 @@ export function ChangesView({
           </div>
         </div>
 
-        <div className="file-lists">
+        <div className="file-lists" role="listbox" aria-multiselectable aria-label="Changed files">
           <div className="file-group-header">
             <span>Staged</span>
             <span className="count">{staged.length}</span>
@@ -185,8 +237,8 @@ export function ChangesView({
               key={`s:${f.path}`}
               file={f}
               code={f.index}
-              selected={selected?.staged === true && selected.path === f.path}
-              onSelect={() => setSelected({ path: f.path, staged: true, untracked: false })}
+              selected={isSelected({ path: f.path, staged: true })}
+              onSelect={(e) => select({ path: f.path, staged: true, untracked: false }, e)}
               actions={
                 <button className="icon-button" title="Unstage" onClick={() => void run('Unstaging', { op: 'unstage', paths: [f.path] })}>
                   −
@@ -211,8 +263,8 @@ export function ChangesView({
               key={`u:${f.path}`}
               file={f}
               code={f.worktree}
-              selected={selected?.staged === false && selected.path === f.path}
-              onSelect={() => setSelected({ path: f.path, staged: false, untracked: f.worktree === '?' })}
+              selected={isSelected({ path: f.path, staged: false })}
+              onSelect={(e) => select({ path: f.path, staged: false, untracked: f.worktree === '?' }, e)}
               actions={
                 <>
                   <button className="icon-button" title={f.worktree === '?' ? 'Delete file' : 'Discard changes'} onClick={() => void discard(f)}>
@@ -228,17 +280,16 @@ export function ChangesView({
           {unstaged.length === 0 && <div className="file-empty">Working tree clean</div>}
         </div>
       </div>
-      <div className="changes-diff">
-        {selected ? (
-          <>
-            <div className="diff-title">
-              <span className="file-name">{selected.path}</span>
-              <span className="muted">{selected.staged ? 'staged' : selected.untracked ? 'untracked' : 'not staged'}</span>
-            </div>
-            <DiffView text={diff.text} loading={diff.loading} actions={lineActions} />
-          </>
-        ) : (
-          <div className="pane-message">Select a file to see its changes.</div>
+      <div className={`changes-diff${selected.length > 1 ? ' multi' : ''}`}>
+        {selected.length === 0 && <div className="pane-message">Select a file to see its changes (Ctrl+click or Shift+click: several).</div>}
+        {selected.length === 1 && <FileDiff key={keyOf(selected[0])} root={root} file={selected[0]} run={run} refreshKey={refreshKey} />}
+        {selected.length > 1 && (
+          // Several files: their diffs one below the other, in one scroll.
+          <div className="file-diffs">
+            {selected.map((s) => (
+              <FileDiff key={keyOf(s)} root={root} file={s} run={run} refreshKey={refreshKey} />
+            ))}
+          </div>
         )}
       </div>
     </div>
