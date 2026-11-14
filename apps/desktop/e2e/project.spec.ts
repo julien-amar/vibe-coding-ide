@@ -3,7 +3,7 @@ import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { expect, test, type Page } from '@playwright/test'
-import { cleanup, closeApp, createRepo, launch, openProject, readLog, tempDir, type TestApp } from './app'
+import { cleanup, closeApp, createRepo, launch, openProject, readLog, tempDir, terminalText, type TestApp } from './app'
 
 let hub: TestApp
 let profile: string
@@ -30,6 +30,21 @@ test.afterEach(async () => {
   await closeApp(hub)
   cleanup(profile)
   cleanup(work)
+})
+
+test('Ctrl+V in the AI agent panel pastes once', async () => {
+  const { page } = hub
+  await hub.app.evaluate(({ clipboard }) => clipboard.writeText('PASTED-ONCE'))
+  const agent = panel(page)
+    .locator('.pane', { has: page.locator('.pane-header .agent-settings') })
+    .locator('.terminal-host')
+  await expect.poll(() => terminalText(page, agent)).toContain('Fake agent ready')
+  await agent.click()
+  await page.keyboard.press('ControlOrMeta+v')
+  await expect.poll(() => readLog(hub.agentLog)).toContain('PASTED-ONCE')
+  // Not a second time (the browser's own paste, handled by the terminal too).
+  await page.waitForTimeout(1000)
+  expect(readLog(hub.agentLog).match(/PASTED-ONCE/g)).toHaveLength(1)
 })
 
 test('a project shows the git history with the branch graph and a terminal in the folder', async () => {

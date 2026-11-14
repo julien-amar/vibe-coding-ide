@@ -123,6 +123,8 @@ export function TerminalView({ sessionId, restoredScrollback, visible, autoFocus
         return false
       }
       if (ctrl && key === 'v') {
+        // Not also the browser's own paste (a `paste` event xterm would handle too: pasted twice).
+        e.preventDefault()
         void paste(term)
         return false
       }
