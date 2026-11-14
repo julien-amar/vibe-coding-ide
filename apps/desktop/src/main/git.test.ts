@@ -295,3 +295,33 @@ describe('rebase on a branch', () => {
     run('switch', '-q', 'main')
   })
 })
+
+describe('rebase continued after resolving its conflicts', () => {
+  it('continues a rebase stopped on a conflict once the files are resolved and staged (no editor waited for)', async () => {
+    run('switch', '-q', 'main')
+    run('switch', '-q', '-c', 'continue/base')
+    write('shared.txt', 'base version\n')
+    run('add', 'shared.txt')
+    run('commit', '-q', '-m', 'Base adds shared.txt')
+    run('switch', '-q', 'main')
+    run('switch', '-q', '-c', 'continue/topic')
+    write('shared.txt', 'topic version\n')
+    run('add', 'shared.txt')
+    run('commit', '-q', '-m', 'Topic adds shared.txt')
+
+    expect((await gitOp(repo, { op: 'rebase', branch: 'continue/base' })).ok).toBe(false)
+    expect((await gitOp(repo, { op: 'status' })).status?.rebasing).toBe(true)
+    // Not resolved yet: continuing fails, the rebase is still there.
+    expect((await gitOp(repo, { op: 'rebaseContinue' })).ok).toBe(false)
+    expect((await gitOp(repo, { op: 'status' })).status?.rebasing).toBe(true)
+
+    // Resolved and staged: the rebase ends, the topic commit (its message kept) on top of the base.
+    write('shared.txt', 'both versions\n')
+    run('add', 'shared.txt')
+    expect(await gitOp(repo, { op: 'rebaseContinue' })).toEqual({ ok: true })
+    expect((await gitOp(repo, { op: 'status' })).status?.rebasing).toBeUndefined()
+    expect(run('log', '--format=%s', '-2').trim().split('\n')).toEqual(['Topic adds shared.txt', 'Base adds shared.txt'])
+    expect(run('show', 'HEAD:shared.txt')).toBe('both versions\n')
+    run('switch', '-q', 'main')
+  })
+})

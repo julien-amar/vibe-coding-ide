@@ -314,6 +314,42 @@ test('Tests: a project whose tests cannot be listed offers to fix its build with
   expect(readLog(hub.agentLog)).toContain(`cd 'web' && npx vitest list`)
 })
 
+test('History: a rebase stopped on a conflict continues once it is resolved and staged', async () => {
+  const { page } = hub
+  const git = (...args: string[]): string => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' })
+  // Both branches add the same file differently.
+  git('switch', '-q', '-c', 'base-work')
+  writeFileSync(join(repo, 'shared.txt'), 'base version\n')
+  git('add', 'shared.txt')
+  git('commit', '-q', '-m', 'Base adds shared.txt')
+  git('switch', '-q', 'main')
+  writeFileSync(join(repo, 'shared.txt'), 'main version\n')
+  git('add', 'shared.txt')
+  git('commit', '-q', '-m', 'Main adds shared.txt')
+  await gitPanel(page).locator('.git-toolbar button[title="Refresh"]').click()
+
+  const toolbar = gitPanel(page).locator('.git-toolbar')
+  await toolbar.locator('.split-button .split-main').click()
+  await page.getByRole('listbox', { name: 'Rebase on' }).getByRole('option', { name: 'base-work' }).click()
+  const rebasing = toolbar.locator('.git-rebasing')
+  await expect(rebasing).toContainText('Rebasing')
+
+  // Not resolved yet: Continue fails, the rebase is still there.
+  await rebasing.getByRole('button', { name: 'Continue' }).click()
+  await expect(page.locator('.toast.error').first()).toBeVisible()
+  await expect(rebasing).toContainText('Rebasing')
+
+  // Resolved and staged: Continue ends the rebase.
+  writeFileSync(join(repo, 'shared.txt'), 'both versions\n')
+  git('add', 'shared.txt')
+  await rebasing.getByRole('button', { name: 'Continue' }).click()
+  await expect(rebasing).toHaveCount(0)
+  expect(git('log', '--format=%s', '-2').trim().split('\n')).toEqual(['Main adds shared.txt', 'Base adds shared.txt'])
+  expect(git('show', 'HEAD:shared.txt')).toBe('both versions\n')
+  // The Rebase button is back.
+  await expect(toolbar.locator('.split-button .split-main')).toHaveText('Rebase on base-work')
+})
+
 test('Shift+click selects a range of changed lines, staged at once', async () => {
   const { page } = hub
   const git = (...args: string[]): string => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' })
