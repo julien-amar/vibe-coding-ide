@@ -256,3 +256,42 @@ describe('Git panel settings: how diffs are shown, the push command', () => {
     expect(missing.error).toMatch(/was not found/)
   })
 })
+
+describe('rebase on a branch', () => {
+  it('rebases the current branch (local changes set aside, then put back); a conflict leaves a rebase to continue or abort', async () => {
+    run('switch', '-q', 'main')
+    run('switch', '-q', '-c', 'rebase/base')
+    write('base.txt', 'base\n')
+    run('add', 'base.txt')
+    run('commit', '-q', '-m', 'Base work')
+    run('switch', '-q', 'main')
+    run('switch', '-q', '-c', 'rebase/topic')
+    write('topic.txt', 'topic\n')
+    run('add', 'topic.txt')
+    run('commit', '-q', '-m', 'Topic work')
+    // An uncommitted change: kept through the rebase.
+    write('README.md', 'hello, edited\n')
+
+    expect((await gitOp(repo, { op: 'rebase', branch: 'rebase/base' })).ok).toBe(true)
+    expect(run('log', '--format=%s', '-2').trim().split('\n')).toEqual(['Topic work', 'Base work'])
+    expect(readFileSync(join(repo, 'README.md'), 'utf8')).toBe('hello, edited\n')
+    expect((await gitOp(repo, { op: 'status' })).status?.rebasing).toBeUndefined()
+    run('checkout', '-q', '--', 'README.md')
+
+    // Both branches change the same line: the rebase stops.
+    run('switch', '-q', 'rebase/base')
+    write('topic.txt', 'base side\n')
+    run('add', 'topic.txt')
+    run('commit', '-q', '-m', 'Base changes topic.txt')
+    run('switch', '-q', 'rebase/topic')
+    const r = await gitOp(repo, { op: 'rebase', branch: 'rebase/base' })
+    expect(r.ok).toBe(false)
+    expect((await gitOp(repo, { op: 'status' })).status?.rebasing).toBe(true)
+    expect(await gitOp(repo, { op: 'rebaseAbort' })).toEqual({ ok: true })
+    expect((await gitOp(repo, { op: 'status' })).status?.rebasing).toBeUndefined()
+    expect(run('log', '--format=%s', '-1').trim()).toBe('Topic work')
+    // Not a branch name: refused.
+    expect((await gitOp(repo, { op: 'rebase', branch: '--onto' })).ok).toBe(false)
+    run('switch', '-q', 'main')
+  })
+})

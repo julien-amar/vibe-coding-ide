@@ -689,3 +689,60 @@ button:disabled {
 .file-diffs .file-diff + .file-diff {
   border-top: 1px solid var(--border);
 }
+
+/* A split button: its main part, and ▾ for its choices (a menu below). */
+
+.split-button {
+  position: relative;
+  display: inline-flex;
+  /* In a crowded toolbar it gives up room first (its label cut), so the buttons after it stay in view. */
+  flex: 0 1 auto;
+  min-width: 72px;
+}
+
+.split-button .split-main {
+  /* A long branch name: cut (the whole name in its tooltip), the toolbar's other buttons stay in view. */
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.split-button .split-toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  padding: 0;
+  margin-left: -1px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.split-button .split-main:only-child {
+  border-radius: 6px;
+}
+
+.split-menu {
+  left: auto;
+  right: 0;
+}
+
+.split-menu .launcher-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+/* A rebase stopped halfway: its badge, Continue, Abort. */
+.git-rebasing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

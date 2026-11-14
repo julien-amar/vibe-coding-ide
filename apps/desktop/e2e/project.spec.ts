@@ -250,6 +250,55 @@ test('Git settings (⚙): context lines and whitespace of diffs, the push comman
   await expect(gitPanel(page).locator('.git-toolbar').getByRole('button', { name: 'Push', exact: true })).toHaveAttribute('title', /git review/)
 })
 
+test('History: Rebase on a branch (the last one used, or chosen in ▾); a stopped rebase can be aborted', async () => {
+  const { page } = hub
+  const git = (...args: string[]): string => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' })
+  const branches = git('branch', '--format=%(refname:short)').trim().split('\n')
+  // Another branch with a commit of its own (main is checked out).
+  git('switch', '-q', '-c', 'upstream-work')
+  writeFileSync(join(repo, 'upstream.txt'), 'from upstream-work\n')
+  git('add', 'upstream.txt')
+  git('commit', '-q', '-m', 'Upstream work')
+  git('switch', '-q', 'main')
+  await gitPanel(page).locator('.git-toolbar button[title="Refresh"]').click()
+
+  const toolbar = gitPanel(page).locator('.git-toolbar')
+  const main = toolbar.locator('.split-button .split-main')
+  const toggle = toolbar.getByRole('button', { name: 'Choose the branch to rebase on' })
+  // Several branches, none used yet: the button asks which.
+  await expect(main).toHaveText('Rebase…')
+  await main.click()
+  const menu = page.getByRole('listbox', { name: 'Rebase on' })
+  await expect(menu.getByRole('option')).toHaveCount(branches.length) // every branch but main, + upstream-work
+  await menu.getByRole('option', { name: 'upstream-work' }).click()
+  // main now has upstream-work's commit below its own.
+  await expect.poll(() => git('log', '--format=%s', 'main').split('\n')).toContain('Upstream work')
+  // Remembered: the button now rebases on it.
+  await expect(main).toHaveText('Rebase on upstream-work')
+  await expect(toggle).toBeVisible()
+
+  // A conflict: the rebase stops; Abort brings the branch back.
+  writeFileSync(join(repo, 'upstream.txt'), 'changed on main\n')
+  git('commit', '-q', '-am', 'Main changes upstream.txt')
+  git('switch', '-q', 'upstream-work')
+  writeFileSync(join(repo, 'upstream.txt'), 'changed on upstream-work\n')
+  git('commit', '-q', '-am', 'Upstream-work changes upstream.txt')
+  git('switch', '-q', 'main')
+  const before = git('rev-parse', 'HEAD').trim()
+  await main.click()
+  const rebasing = toolbar.locator('.git-rebasing')
+  await expect(rebasing).toContainText('Rebasing')
+  await rebasing.getByRole('button', { name: 'Abort' }).click()
+  await expect(rebasing).toHaveCount(0)
+  expect(git('rev-parse', 'HEAD').trim()).toBe(before)
+
+  // Only one other branch: no ▾.
+  for (const name of branches.filter((b) => b !== 'main')) git('branch', '-q', '-D', name)
+  await gitPanel(page).locator('.git-toolbar button[title="Refresh"]').click()
+  await expect(main).toHaveText('Rebase on upstream-work')
+  await expect(toggle).toHaveCount(0)
+})
+
 test('Shift+click selects a range of changed lines, staged at once', async () => {
   const { page } = hub
   const git = (...args: string[]): string => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' })

@@ -49,6 +49,8 @@ export interface GitStatus {
   ahead: number
   behind: number
   files: GitStatusFile[]
+  /** A rebase stopped halfway (conflicts): to continue or abort. */
+  rebasing?: boolean
 }
 
 export interface GitBranch {
@@ -99,6 +101,9 @@ export type GitOp =
   | 'lastMessage'
   | 'prInfo'
   | 'createPr'
+  | 'rebase'
+  | 'rebaseContinue'
+  | 'rebaseAbort'
 
 /** Where the repository is hosted and how pull requests are made (prInfo). */
 export interface GitPullRequestInfo {

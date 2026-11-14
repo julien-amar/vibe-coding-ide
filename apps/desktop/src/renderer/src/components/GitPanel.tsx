@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { AppSettings, GitOpRequest, GitOpResult, GitPrefs, GitStatus } from '@shared/types'
+import type { AppSettings, GitBranch, GitOpRequest, GitOpResult, GitPrefs, GitStatus } from '@shared/types'
 import { DEFAULT_GIT_PREFS, ignoresWhitespace } from '@shared/settings-defaults'
 import { useGitRepos, useGitReposStore } from '../git-repos'
 import { notify } from './Dialogs'
@@ -7,6 +7,7 @@ import { GitLogPane } from './GitLogPane'
 import { BranchesView } from './GitBranches'
 import { ChangesView } from './GitChanges'
 import { pullRequest } from './GitPullRequest'
+import { RebaseButton } from './GitRebase'
 import { GitSettings } from './GitSettings'
 import { MenuSelect } from './MenuSelect'
 
@@ -140,6 +141,17 @@ export function GitPanel({
 
   const changes = status?.files.length ?? 0
 
+  // The branches (History's Rebase button), reloaded with the views.
+  const [branches, setBranches] = useState<GitBranch[]>([])
+  useEffect(() => {
+    if (view !== 'history') return
+    let alive = true
+    void window.ide.git.op(root, { op: 'branches' }).then((r) => alive && setBranches(r.ok ? (r.branches ?? []) : []))
+    return () => {
+      alive = false
+    }
+  }, [root, view, tick])
+
   return (
     <div className="git-panel">
       <div className="pane-toolbar git-toolbar">
@@ -174,6 +186,31 @@ export function GitPanel({
         )}
         <span className="spacer" />
         {busy && <span className="muted busy">{busy}…</span>}
+        {status?.rebasing && (
+          // A rebase stopped halfway: resolve the conflicts (Changes), then continue — or abort it.
+          <span className="git-rebasing" role="status">
+            <span className="ref-badge head" title="A rebase stopped on conflicts: resolve them in Changes (stage the files), then continue">
+              Rebasing
+            </span>
+            <button
+              className="tool-button"
+              disabled={!!busy}
+              title="Continue the rebase (the conflicts resolved and staged)"
+              onClick={() => void run('Continuing the rebase', { op: 'rebaseContinue' }, 'Rebased')}
+            >
+              Continue
+            </button>
+            <button
+              className="tool-button"
+              disabled={!!busy}
+              title="Abort the rebase: the branch as it was before"
+              onClick={() => void run('Aborting the rebase', { op: 'rebaseAbort' }, 'Rebase aborted')}
+            >
+              Abort
+            </button>
+          </span>
+        )}
+        {view === 'history' && status && !status.rebasing && status.branch && <RebaseButton root={root} branches={branches} busy={!!busy} run={run} />}
         {status && (
           <>
             <button className="tool-button" disabled={!!busy} title="Fetch all remotes" onClick={() => void run('Fetching', { op: 'fetch' }, 'Fetched')}>

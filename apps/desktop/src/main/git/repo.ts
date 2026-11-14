@@ -1,4 +1,4 @@
-import { realpathSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 import type { GitBranch, GitCommit, GitCommitFile, GitLog, GitLogPage, GitPrefs, GitStatus, GitStatusFile, GitWorktree } from '@shared/types'
 import { parseWslPath } from '@shared/wsl-paths'
 import { git } from './run'
@@ -102,7 +102,21 @@ export function parseStatus(raw: string): GitStatus {
 }
 
 export async function gitStatus(root: string): Promise<GitStatus> {
-  return parseStatus(await git(root, ['status', '--porcelain=v1', '-z', '--branch', '--untracked-files=all']))
+  const [raw, rebasing] = await Promise.all([git(root, ['status', '--porcelain=v1', '-z', '--branch', '--untracked-files=all']), isRebasing(root)])
+  return { ...parseStatus(raw), ...(rebasing ? { rebasing } : {}) }
+}
+
+/** Whether a rebase stopped halfway (git's rebase-merge / rebase-apply folder is there). */
+export async function isRebasing(root: string): Promise<boolean> {
+  try {
+    const dirs = await git(root, ['rev-parse', '--path-format=absolute', '--git-path', 'rebase-merge', '--git-path', 'rebase-apply'])
+    return dirs
+      .split('\n')
+      .map((d) => d.trim())
+      .some((d) => d && existsSync(toProjectPath(root, d)))
+  } catch {
+    return false
+  }
 }
 
 // ---------- Branches & worktrees ----------

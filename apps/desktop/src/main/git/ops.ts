@@ -22,6 +22,9 @@ import {
 } from './repo'
 import { git, NETWORK, run, toolCommand } from './run'
 
+/** A rebase never waits for an editor (commit messages kept as they are). */
+const NO_EDITOR = { GIT_EDITOR: 'true', GIT_SEQUENCE_EDITOR: 'true' }
+
 /**
  * All write/read actions the Git panel can perform. Each maps to a fixed git
  * command line; user-provided values are validated and passed after `--`
@@ -158,6 +161,18 @@ export async function gitOp(root: string, req: GitOpRequest, prefs: GitPrefs = D
           : await git(root, ['show', '--no-color', ...shown, '--format=', hash, '--', ...paths])
         return { ok: true, text }
       }
+      case 'rebase': {
+        // The branch's commits on top of another (local changes set aside meanwhile, then put back).
+        const onto = await validBranch(root, req.branch)
+        const out = await git(root, ['rebase', '--autostash', onto], { timeout: 120000, env: NO_EDITOR })
+        return { ok: true, text: out }
+      }
+      case 'rebaseContinue':
+        await git(root, ['rebase', '--continue'], { timeout: 120000, env: NO_EDITOR })
+        return { ok: true }
+      case 'rebaseAbort':
+        await git(root, ['rebase', '--abort'], { timeout: 60000 })
+        return { ok: true }
       case 'merge': {
         const name = await validBranch(root, req.branch)
         const out = await git(root, ['merge', '--no-edit', name], { timeout: 60000 })
