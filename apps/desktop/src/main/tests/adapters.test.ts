@@ -8,7 +8,7 @@ import type { TestResult } from '@shared/types'
 import { which } from '../profiles'
 import { discoverTests, runTests } from '../test-runner'
 import { parseCargoArtifacts, parseCargoList, parseCargoOutput } from './cargo'
-import { lineOf, parseJUnitXml, workDir } from './core'
+import { isCompleteReport, lineOf, parseJUnitXml, workDir } from './core'
 import { buildDotnetSolutions, dotnetAdapter, dotnetCase, dotnetFilter, parseDotnetLine, parseDotnetList, parseTrx } from './dotnet'
 import { goRunArgs, packageDir, parseGoList } from './go'
 import { jvmFilter, junitId, mergeJUnit, parseJavaTests, surefirePatterns, surefireRuns } from './jvm'
@@ -147,6 +147,17 @@ describe('Java (Maven / Gradle)', () => {
       '}'
     ].join('\n')
     expect(parseJavaTests(tricky).map((t) => `${t.cls}#${t.method}`)).toEqual(['a.b.T#real', 'a.b.T#junit4'])
+  })
+
+  it('tells a JUnit report written to the end from one still being written', () => {
+    const report =
+      '<?xml version="1.0"?>\n<testsuite name="sample.MathTest$Inner">\n  <testcase name="works()" classname="sample.MathTest$Inner"/>\n</testsuite>\n'
+    expect(isCompleteReport(report)).toBe(true)
+    expect(isCompleteReport('<testsuites>\n<testsuite name="a"></testsuite>\n</testsuites>')).toBe(true)
+    // Cut while Surefire writes it: read again later.
+    expect(isCompleteReport(report.slice(0, report.indexOf('</testsuite>')))).toBe(false)
+    expect(isCompleteReport(report.slice(0, 40))).toBe(false)
+    expect(isCompleteReport('')).toBe(false)
   })
 
   it('reads JUnit XML (merging parameterized cases) and builds filters', () => {

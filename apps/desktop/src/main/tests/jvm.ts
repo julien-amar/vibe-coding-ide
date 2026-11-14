@@ -1,7 +1,7 @@
 import { readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import type { TestCase, TestResult, TestRunRequest } from '@shared/types'
-import { findFiles, findUp, isWslDir, parseJUnitXml, programCommand, readText, testId, tool, type Adapter, type JUnitCase } from './core'
+import { findFiles, findUp, isCompleteReport, isWslDir, parseJUnitXml, programCommand, readText, testId, tool, type Adapter, type JUnitCase } from './core'
 
 /**
  * Java with Maven or Gradle (JUnit 4/5, TestNG). Neither tool lists tests
@@ -264,8 +264,12 @@ function adapter(framework: JvmFramework): Adapter {
         for (const f of reportFiles(dir, framework)) {
           const mtime = mtimeOf(f)
           if (mtime === undefined || seen.get(f) === mtime) continue
+          // A report still being written: read again next time (its time may not change when it is
+          // finished — Windows updates it lazily —, so it is not marked as read).
+          const xml = readText(join(dir, f))
+          if (!isCompleteReport(xml)) continue
           seen.set(f, mtime)
-          for (const r of mergeJUnit(parseJUnitXml(readText(join(dir, f))), known)) {
+          for (const r of mergeJUnit(parseJUnitXml(xml), known)) {
             results.set(r.id, r)
             ctx.result(r)
           }

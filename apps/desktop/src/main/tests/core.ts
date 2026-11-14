@@ -436,6 +436,9 @@ export interface JUnitCase {
 }
 
 /** Test cases of a JUnit XML report. */
+/** A JUnit XML report written to the end (its root element closed), not one still being written. */
+export const isCompleteReport = (xml: string): boolean => /<\/testsuites?>\s*$/.test(xml)
+
 export function parseJUnitXml(xml: string): JUnitCase[] {
   const out: JUnitCase[] = []
   for (const m of xml.matchAll(/<testcase\b([^>]*?)(\/>|>([\s\S]*?)<\/testcase>)/g)) {
