@@ -70,8 +70,17 @@ button:disabled {
   container-type: size;
 }
 
+/* A narrow panel: the buttons that do not fit go to a second line (never over the next panel). */
 .git-toolbar {
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  height: auto;
+  min-height: 30px;
+}
+
+/* (The views' tabs keep the bar's height, their accent bar at its bottom.) */
+.git-toolbar .subtabs {
+  min-height: 30px;
 }
 
 .segmented {
