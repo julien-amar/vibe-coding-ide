@@ -305,7 +305,7 @@ test('History: Rebase on a branch (the last one used, or chosen in ▾); a stopp
   await gitPanel(page).locator('.git-toolbar button[title="Refresh"]').click()
 
   const toolbar = gitPanel(page).locator('.git-toolbar')
-  const main = toolbar.locator('.split-button .split-main')
+  const main = toolbar.locator('.rebase-button .split-main')
   const toggle = toolbar.getByRole('button', { name: 'Choose the branch to rebase on' })
   // Several branches, none used yet: the button asks which.
   await expect(main).toHaveText('Rebase')
@@ -367,6 +367,26 @@ test('Tests: a project whose tests cannot be listed offers to fix its build with
   expect(readLog(hub.agentLog)).toContain(`cd 'web' && npx vitest list`)
 })
 
+test('Pull: from a branch chosen in ▾ (then remembered, shown as its tag)', async () => {
+  const { page } = hub
+  const git = (...args: string[]): string => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' })
+  git('switch', '-q', '-c', 'side')
+  writeFileSync(join(repo, 'side.txt'), 'side\n')
+  git('add', 'side.txt')
+  git('commit', '-q', '-m', 'Side work')
+  git('switch', '-q', 'main')
+  const toolbar = gitPanel(page).locator('.git-toolbar')
+  await toolbar.locator('button[title="Refresh"]').click()
+  await expect(gitPanel(page).locator('.git-subject', { hasText: 'Side work' })).toBeVisible()
+
+  const pull = toolbar.locator('.pull-button .split-main')
+  await toolbar.getByRole('button', { name: 'Choose the branch to pull from' }).click()
+  await page.getByRole('listbox', { name: 'Pull from' }).getByRole('option', { name: 'side' }).click()
+  await expect.poll(() => git('log', '--format=%s', '-1', 'main').trim()).toBe('Side work')
+  await expect(pull).toHaveAccessibleName('Pull from side')
+  await expect(pull.locator('.ref-badge')).toHaveText('side')
+})
+
 test('History: a rebase stopped on a conflict continues once it is resolved and staged', async () => {
   const { page } = hub
   const git = (...args: string[]): string => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' })
@@ -385,7 +405,7 @@ test('History: a rebase stopped on a conflict continues once it is resolved and 
   // The panel up to date (main checked out, the new commits shown) before clicking.
   await expect(gitPanel(page).locator('.git-subject', { hasText: 'Main adds shared.txt' })).toBeVisible()
   await expect(toolbar.locator('.ref-badge.head')).toHaveText('main')
-  await toolbar.locator('.split-button .split-main').click()
+  await toolbar.locator('.rebase-button .split-main').click()
   await page.getByRole('listbox', { name: 'Rebase on' }).getByRole('option', { name: 'base-work' }).click()
   const rebasing = toolbar.locator('.git-rebasing')
   await expect(rebasing).toContainText('Rebasing')
@@ -403,7 +423,7 @@ test('History: a rebase stopped on a conflict continues once it is resolved and 
   expect(git('log', '--format=%s', '-2').trim().split('\n')).toEqual(['Main adds shared.txt', 'Base adds shared.txt'])
   expect(git('show', 'HEAD:shared.txt')).toBe('both versions\n')
   // The Rebase button is back.
-  await expect(toolbar.locator('.split-button .split-main')).toHaveAccessibleName('Rebase on base-work')
+  await expect(toolbar.locator('.rebase-button .split-main')).toHaveAccessibleName('Rebase on base-work')
 })
 
 test('Shift+click selects a range of changed lines, staged at once', async () => {

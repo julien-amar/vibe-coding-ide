@@ -8,7 +8,7 @@ import { GitLogPane } from './GitLogPane'
 import { BranchesView } from './GitBranches'
 import { ChangesView } from './GitChanges'
 import { pullRequest } from './GitPullRequest'
-import { RebaseButton } from './GitRebase'
+import { PullButton, RebaseButton } from './GitRebase'
 import { MenuSelect } from './MenuSelect'
 
 type View = 'history' | 'changes' | 'branches'
@@ -136,16 +136,15 @@ export function GitPanel({
 
   const changes = status?.files.length ?? 0
 
-  // The branches (History's Rebase button), reloaded with the views.
+  // The branches (the Rebase and Pull buttons), reloaded with the views.
   const [branches, setBranches] = useState<GitBranch[]>([])
   useEffect(() => {
-    if (view !== 'history') return
     let alive = true
     void window.ide.git.op(root, { op: 'branches' }).then((r) => alive && setBranches(r.ok ? (r.branches ?? []) : []))
     return () => {
       alive = false
     }
-  }, [root, view, tick])
+  }, [root, tick])
 
   return (
     <div className="git-panel">
@@ -211,14 +210,7 @@ export function GitPanel({
             <button className="tool-button" disabled={!!busy} title="Fetch all remotes" onClick={() => void run('Fetching', { op: 'fetch' }, 'Fetched')}>
               Fetch
             </button>
-            <button
-              className="tool-button"
-              disabled={!!busy || !status.upstream}
-              title="Pull from upstream"
-              onClick={() => void run('Pulling', { op: 'pull' }, 'Pulled')}
-            >
-              Pull
-            </button>
+            <PullButton root={root} branches={branches} upstream={status.upstream} busy={!!busy} run={run} />
             {prefs.pushCommand ? (
               // The push command of the settings (e.g. git review): whatever the upstream.
               <button

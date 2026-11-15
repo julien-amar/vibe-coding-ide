@@ -325,3 +325,30 @@ describe('rebase continued after resolving its conflicts', () => {
     run('switch', '-q', 'main')
   })
 })
+
+describe('pull from a chosen branch', () => {
+  it('merges a local branch in, pulls a remote one from its remote; a name that is not a branch is refused', async () => {
+    run('switch', '-q', 'main')
+    run('switch', '-q', '-c', 'pull/side')
+    write('side.txt', 'side\n')
+    run('add', 'side.txt')
+    run('commit', '-q', '-m', 'Side work')
+    run('switch', '-q', 'main')
+    expect((await gitOp(repo, { op: 'pull', branch: 'pull/side', remote: false })).ok).toBe(true)
+    expect(run('log', '--format=%s', '-1').trim()).toBe('Side work')
+
+    // A remote branch: the repository as its own remote ("self").
+    run('switch', '-q', '-c', 'pull/remote-work')
+    write('remote.txt', 'from the remote\n')
+    run('add', 'remote.txt')
+    run('commit', '-q', '-m', 'Remote work')
+    run('switch', '-q', 'main')
+    run('remote', 'add', 'self', repo)
+    run('fetch', '-q', 'self')
+    expect((await gitOp(repo, { op: 'pull', branch: 'self/pull/remote-work', remote: true })).ok).toBe(true)
+    expect(run('log', '--format=%s', '-1').trim()).toBe('Remote work')
+    expect((await gitOp(repo, { op: 'pull', branch: 'nowhere/main', remote: true })).ok).toBe(false)
+    expect((await gitOp(repo, { op: 'pull', branch: '--rebase' })).ok).toBe(false)
+    run('remote', 'remove', 'self')
+  })
+})

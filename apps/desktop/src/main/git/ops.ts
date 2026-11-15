@@ -182,7 +182,18 @@ export async function gitOp(root: string, req: GitOpRequest, prefs: GitPrefs = D
         await git(root, ['fetch', '--all', '--prune'], NETWORK)
         return { ok: true }
       case 'pull': {
-        const out = await git(root, ['pull', '--no-edit'], NETWORK)
+        // No branch: the upstream. A remote branch ("origin/main"): from that remote; a local one: merged in.
+        let from: string[] = []
+        if (req.branch !== undefined) {
+          const name = await validBranch(root, req.branch)
+          if (req.remote) {
+            const remotes = (await git(root, ['remote'])).split('\n').map((r) => r.trim())
+            const remote = remotes.filter(Boolean).find((r) => name.startsWith(`${r}/`))
+            if (!remote) throw new Error(`No remote for ${name}`)
+            from = [remote, name.slice(remote.length + 1)]
+          } else from = ['.', name]
+        }
+        const out = await git(root, ['pull', '--no-edit', ...from], NETWORK)
         return { ok: true, text: out }
       }
       case 'push': {
