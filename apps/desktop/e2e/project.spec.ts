@@ -227,7 +227,12 @@ test('Git settings (⚙): context lines and whitespace of diffs, the push comman
   const diff = changes.locator('.changes-diff')
   await expect(diff.locator('.diff-line', { hasText: /^ a$/ })).toHaveCount(1)
 
-  await gitPanel(page).getByRole('button', { name: 'Git settings' }).click()
+  // In the panel's header, next to Full screen.
+  const header = panel(page)
+    .locator('.pane', { has: page.locator('.git-panel') })
+    .locator('.pane-header')
+  await expect(header.getByRole('button', { name: 'Git settings' }).locator('xpath=following-sibling::button[1]')).toHaveAttribute('aria-label', 'Full screen')
+  await header.getByRole('button', { name: 'Git settings' }).click()
   const dialog = page.getByRole('dialog', { name: 'Git settings' })
   // The push command's ⓘ explains Gerrit's git review.
   await expect(dialog.getByRole('img', { name: 'About the push command' })).toHaveAttribute('title', /git review/)

@@ -7,6 +7,7 @@ import { useProfiles } from '../profiles'
 import { useTabs, type Tab } from '../store'
 import { useGitRepos } from '../git-repos'
 import { GitPanel } from './GitPanel'
+import { GitSettingsButton } from './GitSettings'
 import { ProfileIcon } from './ProfileIcon'
 import { ProfileSelect } from './ProfileSelect'
 import { SplitView } from './SplitView'
@@ -285,6 +286,7 @@ function GitPane({ tab, pane, visible }: { tab: Tab; pane: PaneNode; visible: bo
           <span className="pane-title">Git</span>
         </>
       }
+      actions={<GitSettingsButton />}
     >
       <GitPanel root={tab.project!.root} visible={visible} openProject={(path) => void useTabs.getState().openProject(path)} />
     </PaneFrame>

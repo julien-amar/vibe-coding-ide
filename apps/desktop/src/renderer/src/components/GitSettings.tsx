@@ -1,7 +1,27 @@
 import { useState } from 'react'
 import type { GitPrefs } from '@shared/types'
+import { useGitPrefs } from '../prefs'
 import { Modal } from './Modal'
 import { Switch } from './Switch'
+
+/** The ⚙ of the Git panel's header: its settings. */
+export function GitSettingsButton(): React.JSX.Element {
+  const prefs = useGitPrefs()
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <button
+        className="icon-button pane-action"
+        title="Git settings: diffs, the push command (every project)"
+        aria-label="Git settings"
+        onClick={() => setOpen(true)}
+      >
+        ⚙
+      </button>
+      {open && <GitSettings prefs={prefs} onClose={() => setOpen(false)} />}
+    </>
+  )
+}
 
 /** The Git panel's settings (⚙), for every project: how diffs are shown, the push command. */
 export function GitSettings({ prefs, onClose }: { prefs: GitPrefs; onClose: () => void }): React.JSX.Element {

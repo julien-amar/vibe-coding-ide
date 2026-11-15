@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { AppSettings, GitBranch, GitOpRequest, GitOpResult, GitPrefs, GitStatus } from '@shared/types'
-import { DEFAULT_GIT_PREFS, ignoresWhitespace } from '@shared/settings-defaults'
+import type { GitBranch, GitOpRequest, GitOpResult, GitStatus } from '@shared/types'
+import { ignoresWhitespace } from '@shared/settings-defaults'
+import { useGitPrefs } from '../prefs'
 import { useGitRepos, useGitReposStore } from '../git-repos'
 import { notify } from './Dialogs'
 import { GitLogPane } from './GitLogPane'
@@ -8,7 +9,6 @@ import { BranchesView } from './GitBranches'
 import { ChangesView } from './GitChanges'
 import { pullRequest } from './GitPullRequest'
 import { RebaseButton } from './GitRebase'
-import { GitSettings } from './GitSettings'
 import { MenuSelect } from './MenuSelect'
 
 type View = 'history' | 'changes' | 'branches'
@@ -71,13 +71,8 @@ export function GitPanel({
       .split(/[\\/]/)
       .pop() || projectRoot
   const [view, setView] = useState<View>('history')
-  /** The Git panel's options (every project); changed: the views reload (diffs shown differently). */
-  const [prefs, setPrefs] = useState<GitPrefs>(DEFAULT_GIT_PREFS)
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  useEffect(() => {
-    void window.ide.settings.get().then((s) => setPrefs(s.git ?? DEFAULT_GIT_PREFS))
-    return window.ide.settings.onChanged((s: AppSettings) => setPrefs(s.git ?? DEFAULT_GIT_PREFS))
-  }, [])
+  /** The Git panel's options (every project; ⚙ in the panel's header); changed: the views reload (diffs shown differently). */
+  const prefs = useGitPrefs()
   const prefsKey = `${prefs.contextLines}:${prefs.whitespace}:${prefs.ignoreBlankLines}`
   /** Bumped when the repository changed (refs, index, actions): every view reloads. */
   const [tick, setTick] = useState(0)
@@ -257,23 +252,6 @@ export function GitPanel({
         <button className="icon-button" title="Refresh" onClick={reload}>
           ⟳
         </button>
-        <button className="icon-button" title="Git settings" aria-label="Git settings" onClick={() => setSettingsOpen(true)}>
-          <svg
-            width="15"
-            height="15"
-            viewBox="0 0 16 16"
-            aria-hidden
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            {/* A gear (as the launcher's Settings). */}
-            <path d="M6.8 1.5h2.4l.4 1.9a5 5 0 011.3.75l1.8-.6 1.2 2.1-1.4 1.3a5 5 0 010 1.5l1.4 1.3-1.2 2.1-1.8-.6a5 5 0 01-1.3.75l-.4 1.9H6.8l-.4-1.9a5 5 0 01-1.3-.75l-1.8.6-1.2-2.1 1.4-1.3a5 5 0 010-1.5L2.1 5.65l1.2-2.1 1.8.6a5 5 0 011.3-.75z" />
-            <circle cx="8" cy="8" r="2.1" />
-          </svg>
-        </button>
       </div>
       <div className="git-view" key={root}>
         {view === 'history' && <GitLogPane root={root} visible={visible} tick={tick} reset={reset} />}
@@ -282,7 +260,6 @@ export function GitPanel({
         )}
         {view === 'branches' && <BranchesView root={root} status={status} run={run} tick={tick} openProject={openProject} />}
       </div>
-      {settingsOpen && <GitSettings prefs={prefs} onClose={() => setSettingsOpen(false)} />}
     </div>
   )
 }
