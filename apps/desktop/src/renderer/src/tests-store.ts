@@ -16,6 +16,8 @@ export interface ProjectTestsState {
   /** Some tests run (runningProjects: the test projects running). */
   running: boolean
   runningProjects: string[]
+  /** The runs in progress: tests executed (a result in) out of the tests they cover. */
+  progress?: { done: number; total: number }
   lastError?: string
   output: string
 }
@@ -73,10 +75,42 @@ export const useTestsStore = create<TestsStore>((set, get) => {
       const projects = listed ? cur.projects : cur.projects?.map((p) => (p.id === projectId ? { ...p, tests: [...p.tests, testFromId(result.id)] } : p))
       return { results: { ...cur.results, [key]: result }, projects }
     })
+    markDone(root, [key])
   })
 
   /** Folders whose runs were stopped: Run all starts none of its remaining projects. */
   const stopped = new Set<string>()
+
+  /**
+   * Per folder, the round of runs in progress (Run all: every project's tests from the start; a single
+   * run: its tests; a run started meanwhile: added): the tests it covers, those with a result.
+   */
+  const rounds = new Map<string, { keys: Set<string>; done: Set<string>; all: boolean }>()
+  const showProgress = (root: string): void => {
+    const r = rounds.get(root)
+    patch(root, () => ({ progress: r ? { done: r.done.size, total: r.keys.size } : undefined }))
+  }
+  const addToRound = (root: string, keys: string[], all = false): void => {
+    let r = rounds.get(root)
+    if (!r) rounds.set(root, (r = { keys: new Set(), done: new Set(), all }))
+    for (const k of keys) r.keys.add(k)
+    showProgress(root)
+  }
+  const markDone = (root: string, keys: string[]): void => {
+    const r = rounds.get(root)
+    if (!r) return
+    let changed = false
+    for (const k of keys) {
+      if (!r.keys.has(k) || r.done.has(k)) continue
+      r.done.add(k)
+      changed = true
+    }
+    if (changed) showProgress(root)
+  }
+  const endRound = (root: string): void => {
+    rounds.delete(root)
+    showProgress(root)
+  }
 
   /** Projects of the discovery in progress, by their place in the panel (as they are listed). */
   const streamed = new Map<string, { project: TestProject; order: string }[]>()
@@ -115,6 +149,10 @@ export const useTestsStore = create<TestsStore>((set, get) => {
     async run(root, req, testIds) {
       const { projectId } = req
       if (get().byRoot[root]?.runningProjects.includes(projectId)) return
+      addToRound(
+        root,
+        testIds.map((id) => resultKey(projectId, id))
+      )
       patch(root, (s) => {
         const results = { ...s.results }
         for (const id of testIds) results[resultKey(projectId, id)] = { status: 'running' }
@@ -158,10 +196,23 @@ export const useTestsStore = create<TestsStore>((set, get) => {
           lastError: res.cancelled ? 'Run stopped.' : (res.error ?? s.lastError)
         }
       })
+      // Every test of the run is executed now (a result, or none: not run); the round ends with its last run.
+      markDone(
+        root,
+        testIds.map((id) => resultKey(projectId, id))
+      )
+      if (!get().byRoot[root]?.running && !rounds.get(root)?.all) endRound(root)
     },
 
     async runAll(root, projects, prefs) {
       stopped.delete(root)
+      // A round of every project's tests (counted from the start, the queued ones too).
+      rounds.delete(root)
+      addToRound(
+        root,
+        projects.flatMap((p) => p.testIds.map((id) => resultKey(p.req.projectId, id))),
+        true
+      )
       // Work items: each test project, except the .NET ones, all in one (one after the other: running
       // them builds them, and they often share projects).
       const parallel = prefs.runAll === 'parallel'
@@ -178,6 +229,7 @@ export const useTestsStore = create<TestsStore>((set, get) => {
       }
       const workers = parallel ? Math.max(1, Math.min(prefs.parallelism, items.length)) : 1
       await Promise.all(Array.from({ length: workers }, worker))
+      endRound(root)
     },
 
     stop(root) {

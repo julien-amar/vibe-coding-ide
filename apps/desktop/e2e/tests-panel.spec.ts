@@ -59,6 +59,8 @@ test('the Tests panel discovers and runs Vitest, Jest, Playwright and pytest tes
   await panel.getByRole('button', { name: /Run all/ }).click()
   await expect(panel.locator('.tests-bottom-bar').getByRole('status', { name: 'Running tests' })).toBeVisible()
   await expect(panel).not.toContainText('Running')
+  // Next to it: the tests executed out of all those to run.
+  await expect(panel.locator('.tests-bottom-bar .tests-progress')).toHaveText(new RegExp(`^\\d+ / ${expected.all}$`))
   await expect(panel.getByRole('status', { name: 'Running tests' })).toHaveCount(0, { timeout: 180_000 })
   await expect(count('failed')).toHaveText(String(expected.failed))
   await expect(count('passed')).toHaveText(String(expected.passed))

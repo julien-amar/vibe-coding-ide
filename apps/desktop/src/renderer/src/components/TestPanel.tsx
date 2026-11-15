@@ -417,6 +417,11 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
           {/* Tests running: the spinner alone (how many projects: its tooltip). */}
           {!st.discovering && st.running && (
             <span className="tests-finding" title={`Running the tests of ${st.runningProjects.length} project${st.runningProjects.length > 1 ? 's' : ''}`}>
+              {st.progress && (
+                <span className="muted tests-progress" aria-label="Tests executed">
+                  {st.progress.done} / {st.progress.total}
+                </span>
+              )}
               <Spinner inline label="Running tests" />
             </span>
           )}

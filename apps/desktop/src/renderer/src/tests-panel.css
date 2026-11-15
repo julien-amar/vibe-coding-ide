@@ -469,3 +469,10 @@
   min-width: 0;
   overflow: hidden;
 }
+
+/* Tests running: executed / total, next to the spinner. */
+.tests-progress {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

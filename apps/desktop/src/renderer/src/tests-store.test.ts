@@ -1,9 +1,11 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import type { TestFramework, TestRunRequest, TestRunResult } from '@shared/types'
+import type { TestFramework, TestResult, TestRunRequest, TestRunResult } from '@shared/types'
 
 /** The main process, faked: each run takes a moment; what runs at once is recorded. */
 const runs = { started: [] as string[], active: new Set<string>(), max: 0, dotnetAtOnce: 0, stopped: false }
 let finish: ((id: string) => void) | undefined
+/** A test's result as the main process reports it while a run goes on (the store's listener). */
+let report: ((root: string, projectId: string, result: TestResult) => void) | undefined
 
 beforeAll(() => {
   const noop = (): (() => void) => () => undefined
@@ -11,7 +13,10 @@ beforeAll(() => {
     ide: {
       tests: {
         onOutput: noop,
-        onProgress: noop,
+        onProgress: (cb: typeof report) => {
+          report = cb
+          return () => undefined
+        },
         onProject: noop,
         onStep: noop,
         discover: async () => [],
@@ -82,5 +87,46 @@ describe('Tests panel: Run all', () => {
     await useTestsStore.getState().runAll('/r3', projects, { runAll: 'parallel', parallelism: 2 })
     expect(runs.stopped).toBe(true)
     expect(runs.started).toHaveLength(2)
+  })
+})
+
+describe('Tests panel: progress of the runs', () => {
+  const withTests = (id: string, n: number): { req: TestRunRequest; testIds: string[]; framework: TestFramework } => ({
+    ...project(id),
+    testIds: Array.from({ length: n }, (_, i) => `t${i}`)
+  })
+
+  it('counts every project’s tests from the start; a project’s tests are done when its run ends; none after', async () => {
+    const { useTestsStore } = await import('./tests-store')
+    reset()
+    const seen: (string | undefined)[] = []
+    const progress = (): string | undefined => {
+      const p = useTestsStore.getState().byRoot['/p1']?.progress
+      return p && `${p.done}/${p.total}`
+    }
+    finish = () => seen.push(progress())
+    await useTestsStore.getState().runAll('/p1', [withTests('vitest:a', 3), withTests('jest:b', 2)], { runAll: 'sequential', parallelism: 1 })
+    expect(seen).toEqual(['0/5', '3/5'])
+    expect(progress()).toBeUndefined()
+  })
+
+  it('counts a test as soon as its result is reported (not one outside the run)', async () => {
+    const { useTestsStore } = await import('./tests-store')
+    reset()
+    const progress = (): string | undefined => {
+      const p = useTestsStore.getState().byRoot['/p2']?.progress
+      return p && `${p.done}/${p.total}`
+    }
+    const counts: (string | undefined)[] = []
+    finish = (projectId) => {
+      report?.('/p2', projectId, { id: 't0', status: 'passed' })
+      counts.push(progress())
+      // Another project's test: not one of this run.
+      report?.('/p2', 'go:other', { id: 't9', status: 'passed' })
+      counts.push(progress())
+    }
+    await useTestsStore.getState().run('/p2', { projectId: 'vitest:a' }, ['t0', 't1', 't2', 't3'])
+    expect(counts).toEqual(['1/4', '1/4'])
+    expect(progress()).toBeUndefined()
   })
 })
