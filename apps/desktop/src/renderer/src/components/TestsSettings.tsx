@@ -69,10 +69,6 @@ export function TestsSettings({ prefs, onClose }: { prefs: TestsPrefs; onClose: 
               </label>
             )}
           </div>
-          <p className="muted settings-note">
-            In parallel, .NET test projects still run one after the other (running them builds them, and they often share projects), alongside the other
-            frameworks' projects. Their output is mixed in the Output.
-          </p>
         </section>
       </div>
     </Modal>
