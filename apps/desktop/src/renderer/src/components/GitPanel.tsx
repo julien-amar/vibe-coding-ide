@@ -3,6 +3,8 @@ import type { GitBranch, GitOpRequest, GitOpResult, GitStatus } from '@shared/ty
 import { ignoresWhitespace } from '@shared/settings-defaults'
 import { useGitPrefs } from '../prefs'
 import { useGitRepos, useGitReposStore } from '../git-repos'
+import { sendToAgent } from '../agent-bridge'
+import { conflictedFiles, rebaseConflictPrompt } from '../git-prompt'
 import { notify } from './Dialogs'
 import { GitIcon } from './GitIcons'
 import { GitLogPane } from './GitLogPane'
@@ -49,10 +51,13 @@ const chosenRepo = new Map<string, string>()
  */
 export function GitPanel({
   root: projectRoot,
+  tabId,
   visible,
   openProject
 }: {
   root: string
+  /** The project tab (its AI agent panel: conflicts resolved by the agent). */
+  tabId: string
   visible: boolean
   openProject: (path: string) => void
 }): React.JSX.Element {
@@ -215,6 +220,18 @@ export function GitPanel({
               onClick={() => void run('Aborting the rebase', { op: 'rebaseAbort' }, 'Rebase aborted')}
             >
               <GitIcon name="abort" />
+            </button>
+            <button
+              className="tool-button primary"
+              disabled={!!busy}
+              title="Send the conflicts to the project's AI agent panel (opens one if needed): it merges them and continues the rebase"
+              onClick={async () => {
+                const repo = repos?.find((r) => r.path === root)?.relPath ?? ''
+                const r = await sendToAgent(tabId, rebaseConflictPrompt(repo, conflictedFiles(status.files)))
+                notify(r.ok ? 'Sent to the AI agent' : (r.error ?? 'Could not reach the AI agent'), r.ok ? 'success' : 'error')
+              }}
+            >
+              ✦ Merge with AI
             </button>
           </span>
         )}

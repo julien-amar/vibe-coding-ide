@@ -426,6 +426,11 @@ test('History: a rebase stopped on a conflict continues once it is resolved and 
   const rebasing = toolbar.locator('.git-rebasing')
   await expect(rebasing).toContainText('Rebasing')
 
+  // Merge with AI: the conflicts are sent to the project's AI agent panel.
+  await rebasing.getByRole('button', { name: /Merge with AI/ }).click()
+  await expect.poll(() => readLog(hub.agentLog), { timeout: 20_000 }).toContain('A git rebase stopped on conflicts.')
+  expect(readLog(hub.agentLog)).toContain('- shared.txt')
+
   // Not resolved yet: Continue fails, the rebase is still there.
   await rebasing.getByRole('button', { name: 'Continue' }).click()
   await expect(page.locator('.toast.error').first()).toBeVisible()

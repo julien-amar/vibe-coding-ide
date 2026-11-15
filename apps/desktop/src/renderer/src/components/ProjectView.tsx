@@ -289,7 +289,7 @@ function GitPane({ tab, pane, visible }: { tab: Tab; pane: PaneNode; visible: bo
       }
       actions={<GitSettingsButton />}
     >
-      <GitPanel root={tab.project!.root} visible={visible} openProject={(path) => void useTabs.getState().openProject(path)} />
+      <GitPanel root={tab.project!.root} tabId={tab.id} visible={visible} openProject={(path) => void useTabs.getState().openProject(path)} />
     </PaneFrame>
   )
 }
