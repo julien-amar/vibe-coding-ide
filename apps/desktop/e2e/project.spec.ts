@@ -308,7 +308,7 @@ test('History: Rebase on a branch (the last one used, or chosen in ▾); a stopp
   const main = toolbar.locator('.split-button .split-main')
   const toggle = toolbar.getByRole('button', { name: 'Choose the branch to rebase on' })
   // Several branches, none used yet: the button asks which.
-  await expect(main).toHaveText('Rebase…')
+  await expect(main).toHaveText('Rebase')
   await main.click()
   const menu = page.getByRole('listbox', { name: 'Rebase on' })
   await expect(menu.getByRole('option')).toHaveCount(branches.length) // every branch but main, + upstream-work

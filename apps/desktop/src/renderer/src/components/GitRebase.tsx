@@ -64,7 +64,7 @@ export function RebaseButton({ root, branches, busy, run }: { root: string; bran
         title={target ? `Rebase the current branch on ${target}` : 'Rebase the current branch on another (choose it)'}
         onClick={() => (target ? rebase(target) : setOpen(true))}
       >
-        {target ? `Rebase on ${target}` : 'Rebase…'}
+        {target ? `Rebase on ${target}` : 'Rebase'}
       </button>
       {choices.length > 1 && (
         <button
