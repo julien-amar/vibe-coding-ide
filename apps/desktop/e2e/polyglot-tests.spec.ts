@@ -34,9 +34,12 @@ test.afterEach(async () => {
 /** Run a framework's tests from its group row; resolves when the run is over. */
 async function runGroup(panel: Locator, label: RegExp): Promise<void> {
   const row = panel.locator('.test-row.kind-project', { hasText: label })
-  await row.hover()
-  await row.locator('.test-run').click()
-  await expect(panel.locator('.tests-summary .busy')).toHaveCount(0, { timeout: 300_000 })
+  // Its ▶ shows while the row is hovered: hovered (again, if a re-render ended it) until clicked.
+  await expect(async () => {
+    await row.hover()
+    await row.locator('.test-run').click({ timeout: 2000 })
+  }).toPass({ timeout: 30_000 })
+  await expect(panel.getByRole('status', { name: 'Running tests' })).toHaveCount(0, { timeout: 300_000 })
 }
 
 test('Go, Rust, .NET, Gradle and Maven projects: discovered, run, opened in the editor and sent to the agent', async () => {

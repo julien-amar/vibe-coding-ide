@@ -55,9 +55,11 @@ test('the Tests panel discovers and runs Vitest, Jest, Playwright and pytest tes
   await expect(count('all')).toHaveText(String(expected.all))
   await expect(panel.getByRole('status', { name: /Finding/ })).toHaveCount(0)
 
-  // Run everything.
+  // Run everything: the small spinner in the bottom bar while it runs (no "Running…" text).
   await panel.getByRole('button', { name: /Run all/ }).click()
-  await expect(panel.locator('.tests-summary .busy')).toHaveCount(0, { timeout: 180_000 })
+  await expect(panel.locator('.tests-bottom-bar').getByRole('status', { name: 'Running tests' })).toBeVisible()
+  await expect(panel).not.toContainText('Running')
+  await expect(panel.getByRole('status', { name: 'Running tests' })).toHaveCount(0, { timeout: 180_000 })
   await expect(count('failed')).toHaveText(String(expected.failed))
   await expect(count('passed')).toHaveText(String(expected.passed))
   await expect(count('skipped')).toHaveText(String(expected.skipped))
@@ -261,6 +263,6 @@ test('Tests settings (⚙): Run all runs the test projects in parallel (how many
   // Run all, one after the other: every project still runs.
   await expect(panel.locator('.test-row.kind-project')).toHaveCount(PYTEST ? 4 : 3, { timeout: 90_000 })
   await runAll.click()
-  await expect(panel.locator('.tests-summary .busy')).toHaveCount(0, { timeout: 120_000 })
+  await expect(panel.getByRole('status', { name: 'Running tests' })).toHaveCount(0, { timeout: 120_000 })
   await expect(panel.locator(`.tests-status-filter [data-filter="failed"] .count`)).toHaveText(String(expected.failed))
 })

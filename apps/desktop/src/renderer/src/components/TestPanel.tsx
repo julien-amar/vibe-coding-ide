@@ -200,10 +200,6 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
         >
           ⟳
         </button>
-        <span className="spacer" />
-        <span className="tests-summary">
-          {st.running && <span className="busy">Running{st.runningProjects.length > 1 ? ` ${st.runningProjects.length} projects` : ''}…</span>}
-        </span>
       </div>
 
       <div className="pane-toolbar tests-filterbar">
@@ -416,6 +412,12 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
                 </span>
               )}
               <Spinner inline label={st.projects ? 'Finding more tests' : 'Finding tests'} />
+            </span>
+          )}
+          {/* Tests running: the spinner alone (how many projects: its tooltip). */}
+          {!st.discovering && st.running && (
+            <span className="tests-finding" title={`Running the tests of ${st.runningProjects.length} project${st.runningProjects.length > 1 ? 's' : ''}`}>
+              <Spinner inline label="Running tests" />
             </span>
           )}
         </div>

@@ -66,13 +66,6 @@
   font: inherit;
 }
 
-.tests-summary {
-  display: flex;
-  gap: 10px;
-  color: var(--text-muted);
-  overflow: hidden;
-}
-
 .tests-tree {
   flex: 1;
   min-height: 0;

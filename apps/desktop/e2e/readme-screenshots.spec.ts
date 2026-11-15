@@ -188,7 +188,7 @@ test('README: the Tests panel', async () => {
     .getByRole('button', { name: 'Full screen' })
     .click()
   await panel.getByRole('button', { name: /Run all/ }).click()
-  await expect(panel.locator('.tests-summary .busy')).toHaveCount(0, { timeout: 180_000 })
+  await expect(panel.getByRole('status', { name: 'Running tests' })).toHaveCount(0, { timeout: 180_000 })
   // A failed test, with its failure in the details.
   await panel
     .locator('.test-row', { has: page.locator('.test-status.st-failed') })
