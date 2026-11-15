@@ -242,14 +242,15 @@
   border-top: 1px solid var(--border);
 }
 
-/* Room for the hide button in the top right corner. */
+/* Room for the expand and hide buttons in the top right corner. */
 .tests-bottom .tests-details-head,
 .tests-bottom .tests-output {
-  padding-right: 40px;
+  padding-right: 72px;
 }
 
 /* Hiding the opened section: its top right corner. */
-.tests-bottom-hide {
+.tests-bottom-hide,
+.tests-bottom-max {
   position: absolute;
   top: 4px;
   right: 6px;
@@ -260,11 +261,20 @@
   border: 1px solid var(--border);
 }
 
+.tests-bottom-max {
+  right: 36px;
+}
+
 .tests-bottom.open {
   height: 45%;
   min-height: 110px;
-  /* The test list above keeps some room, whatever height was dragged. */
-  max-height: calc(100% - 120px);
+  /* Above it, whatever height was dragged: the toolbars and a row of the test list (BOTTOM_ROOM). */
+  max-height: calc(100% - 96px);
+}
+
+/* Expanded (⤢): as tall as it can be. */
+.tests-bottom.open.expanded {
+  height: calc(100% - 96px);
 }
 
 /* Its top edge: drag to resize (double-click: default height). */
@@ -280,6 +290,23 @@
 
 .tests-bottom-resizer:hover {
   background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* Its grip, always shown: the edge can be dragged. */
+.tests-bottom-resizer::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 50%;
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  transform: translateX(-50%);
+}
+
+.tests-bottom-resizer:hover::after {
+  background: var(--accent);
 }
 
 /* The bar stays at the bottom: open, the content sits above it, separated by the bar's top border. */

@@ -23,6 +23,9 @@ function StatusIcon({ status }: { status?: TestStatus }): React.JSX.Element {
 
 type StatusFilter = 'all' | 'passed' | 'skipped' | 'failed'
 
+/** Above the Details / Output section at its tallest: the toolbars and a row of the test list (px; the CSS too). */
+const BOTTOM_ROOM = 96
+
 const STATUS_FILTERS: { value: StatusFilter; label: string; title: string }[] = [
   { value: 'all', label: 'All', title: 'Show all tests' },
   { value: 'passed', label: 'Passed', title: 'Show passed tests' },
@@ -64,6 +67,8 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
       return undefined
     }
   })
+  /** Expanded (⤢): the section takes the panel but its toolbars and a row of the test list. */
+  const [bottomMax, setBottomMax] = useState(false)
   const resizeBottom = (e: React.PointerEvent<HTMLDivElement>): void => {
     e.preventDefault()
     const section = e.currentTarget.parentElement!
@@ -74,9 +79,10 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
     handle.setPointerCapture(e.pointerId)
     document.body.classList.add('resizing-row')
     let height = startHeight
+    setBottomMax(false)
     const onMove = (ev: PointerEvent): void => {
-      // At least 110 px; the test list keeps 120 px.
-      height = Math.round(Math.min(Math.max(startHeight - (ev.clientY - startY), 110), panel.getBoundingClientRect().height - 120))
+      // At least 110 px; above it, the toolbars and a row of the test list (BOTTOM_ROOM).
+      height = Math.round(Math.min(Math.max(startHeight - (ev.clientY - startY), 110), panel.getBoundingClientRect().height - BOTTOM_ROOM))
       setBottomHeight(height)
     }
     const onUp = (): void => {
@@ -321,16 +327,20 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
       </div>
 
       {/* Details / Output: the bar stays at the bottom, the content opens above it. */}
-      <div className={`tests-bottom${bottomOpen ? ' open' : ''}`} style={bottomOpen && bottomHeight ? { height: bottomHeight } : undefined}>
+      <div
+        className={`tests-bottom${bottomOpen ? ' open' : ''}${bottomOpen && bottomMax ? ' expanded' : ''}`}
+        style={bottomOpen && bottomHeight && !bottomMax ? { height: bottomHeight } : undefined}
+      >
         {bottomOpen && (
           <div
             className="tests-bottom-resizer"
             role="separator"
             aria-orientation="horizontal"
             aria-label="Resize details"
-            title="Drag to resize"
+            title="Drag to resize (double-click: default height)"
             onPointerDown={resizeBottom}
             onDoubleClick={() => {
+              setBottomMax(false)
               setBottomHeight(undefined)
               try {
                 localStorage.removeItem('tests-bottom-height')
@@ -339,6 +349,17 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
               }
             }}
           />
+        )}
+        {bottomOpen && (
+          <button
+            className="icon-button pane-action tests-bottom-max"
+            title={bottomMax ? 'Restore the height' : `Expand the ${view === 'output' ? 'output' : 'details'} (more to read)`}
+            aria-label={bottomMax ? 'Restore the height' : 'Expand'}
+            aria-pressed={bottomMax}
+            onClick={() => setBottomMax(!bottomMax)}
+          >
+            {bottomMax ? '⤡' : '⤢'}
+          </button>
         )}
         {bottomOpen && (
           <button

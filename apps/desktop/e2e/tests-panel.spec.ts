@@ -180,7 +180,7 @@ test('the Details / Output section opens above its bar and can be resized by its
   const height = async () => (await section.boundingBox())!.height
   const before = await height()
 
-  // Drag the top edge up by 40 px: the section grows by as much (the test list keeps 120 px).
+  // Drag the top edge up by 40 px: the section grows by as much.
   const edge = (await panel.locator('.tests-bottom-resizer').boundingBox())!
   await page.mouse.move(edge.x + edge.width / 2, edge.y + edge.height / 2)
   await page.mouse.down()
@@ -196,6 +196,23 @@ test('the Details / Output section opens above its bar and can be resized by its
   const box = (await section.boundingBox())!
   expect(hide.y - box.y).toBeLessThan(12)
   expect(box.x + box.width - (hide.x + hide.width)).toBeLessThan(12)
+
+  // Expand (⤢): the section takes the panel but its toolbars and a row of the test list; again: back.
+  const panelBox = (await panel.boundingBox())!
+  await section.getByRole('button', { name: 'Expand' }).click()
+  await expect.poll(height).toBeGreaterThan(panelBox.height - 100)
+  await expect(panel.locator('.tests-toolbar')).toBeInViewport()
+  await section.getByRole('button', { name: 'Restore the height' }).click()
+  await expect.poll(async () => Math.abs((await height()) - before)).toBeLessThan(3)
+
+  // Dragged far up: as tall as when expanded, not more.
+  const top = (await panel.locator('.tests-bottom-resizer').boundingBox())!
+  await page.mouse.move(top.x + top.width / 2, top.y + top.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(top.x + top.width / 2, panelBox.y - 200, { steps: 8 })
+  await page.mouse.up()
+  await expect.poll(height).toBeGreaterThan(panelBox.height - 100)
+  expect(await height()).toBeLessThanOrEqual(panelBox.height - 96 + 1)
 })
 
 test('Tests settings (⚙): Run all runs the test projects in parallel (how many at once), or one after the other', async () => {
