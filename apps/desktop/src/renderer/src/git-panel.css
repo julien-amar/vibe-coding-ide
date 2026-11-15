@@ -755,3 +755,17 @@ button:disabled {
   align-items: center;
   gap: 6px;
 }
+
+/* A split button's branch: its tag, after the action (cut when long). */
+.split-button .split-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.split-button .split-main .ref-badge {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

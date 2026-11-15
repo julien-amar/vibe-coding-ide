@@ -47,7 +47,8 @@ export function RebaseButton({ root, branches, busy, run }: { root: string; bran
   // Any other branch (local ones first).
   const choices = branches.filter((b) => !b.current).sort((a, b) => Number(a.remote) - Number(b.remote))
   if (choices.length === 0) return null
-  const target = choices.find((b) => b.name === last)?.name ?? (choices.length === 1 ? choices[0].name : undefined)
+  const targetBranch = choices.find((b) => b.name === last) ?? (choices.length === 1 ? choices[0] : undefined)
+  const target = targetBranch?.name
 
   const rebase = (branch: string): void => {
     setOpen(false)
@@ -62,9 +63,12 @@ export function RebaseButton({ root, branches, busy, run }: { root: string; bran
         className="tool-button split-main"
         disabled={busy}
         title={target ? `Rebase the current branch on ${target}` : 'Rebase the current branch on another (choose it)'}
+        aria-label={target ? `Rebase on ${target}` : 'Rebase'}
         onClick={() => (target ? rebase(target) : setOpen(true))}
       >
-        {target ? `Rebase on ${target}` : 'Rebase'}
+        Rebase
+        {/* The branch: its tag (as in the history). */}
+        {targetBranch && <span className={`ref-badge ${targetBranch.remote ? 'remote' : 'branch'}`}>{targetBranch.name}</span>}
       </button>
       {choices.length > 1 && (
         <button

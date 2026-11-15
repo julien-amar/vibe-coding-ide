@@ -315,8 +315,9 @@ test('History: Rebase on a branch (the last one used, or chosen in ▾); a stopp
   await menu.getByRole('option', { name: 'upstream-work' }).click()
   // main now has upstream-work's commit below its own.
   await expect.poll(() => git('log', '--format=%s', 'main').split('\n')).toContain('Upstream work')
-  // Remembered: the button now rebases on it.
-  await expect(main).toHaveText('Rebase on upstream-work')
+  // Remembered: the button now rebases on it (the branch shown as its tag).
+  await expect(main).toHaveAccessibleName('Rebase on upstream-work')
+  await expect(main.locator('.ref-badge')).toHaveText('upstream-work')
   await expect(toggle).toBeVisible()
 
   // A conflict: the rebase stops; Abort brings the branch back.
@@ -330,7 +331,7 @@ test('History: Rebase on a branch (the last one used, or chosen in ▾); a stopp
   // The panel up to date (main checked out again, the new commits shown) before clicking.
   await toolbar.locator('button[title="Refresh"]').click()
   await expect(gitPanel(page).locator('.git-subject', { hasText: 'Upstream-work changes upstream.txt' })).toBeVisible()
-  await expect(main).toHaveText('Rebase on upstream-work')
+  await expect(main).toHaveAccessibleName('Rebase on upstream-work')
   await main.click()
   const rebasing = toolbar.locator('.git-rebasing')
   try {
@@ -347,7 +348,7 @@ test('History: Rebase on a branch (the last one used, or chosen in ▾); a stopp
   // Only one other branch: no ▾.
   for (const name of branches.filter((b) => b !== 'main')) git('branch', '-q', '-D', name)
   await gitPanel(page).locator('.git-toolbar button[title="Refresh"]').click()
-  await expect(main).toHaveText('Rebase on upstream-work')
+  await expect(main).toHaveAccessibleName('Rebase on upstream-work')
   await expect(toggle).toHaveCount(0)
 })
 
@@ -402,7 +403,7 @@ test('History: a rebase stopped on a conflict continues once it is resolved and 
   expect(git('log', '--format=%s', '-2').trim().split('\n')).toEqual(['Main adds shared.txt', 'Base adds shared.txt'])
   expect(git('show', 'HEAD:shared.txt')).toBe('both versions\n')
   // The Rebase button is back.
-  await expect(toolbar.locator('.split-button .split-main')).toHaveText('Rebase on base-work')
+  await expect(toolbar.locator('.split-button .split-main')).toHaveAccessibleName('Rebase on base-work')
 })
 
 test('Shift+click selects a range of changed lines, staged at once', async () => {
