@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { cleanup, closeApp, createRepo, launch, openProject, readLog, tempDir, terminalText, type TestApp } from './app'
 
 let hub: TestApp
@@ -45,6 +45,43 @@ test('Ctrl+V in the AI agent panel pastes once', async () => {
   // Not a second time (the browser's own paste, handled by the terminal too).
   await page.waitForTimeout(1000)
   expect(readLog(hub.agentLog).match(/PASTED-ONCE/g)).toHaveLength(1)
+})
+
+test('right-click pastes once in AI agent terminals that ask for the mouse (Claude Code): panel, full screen, tab', async () => {
+  const { page } = hub
+  const count = (word: string): number => readLog(hub.agentLog).split(word).length - 1
+  /** In an agent terminal asking for the mouse: right-click leaves the click to it, Shift+right-click pastes once. */
+  const check = async (host: Locator, word: string): Promise<void> => {
+    await expect.poll(() => terminalText(page, host)).toContain('Fake agent ready')
+    await hub.app.evaluate(({ clipboard }, w) => clipboard.writeText(w), word)
+    await host.click()
+    await page.keyboard.type('mouse-on')
+    await expect
+      .poll(() => host.evaluate((el) => (el as unknown as { __xterm: { modes: { mouseTrackingMode: string } } }).__xterm.modes.mouseTrackingMode))
+      .toBe('any')
+    await host.click({ button: 'right' })
+    // The click reported to the agent (button 2: right), which pastes itself; not pasted here too.
+    await expect.poll(() => readLog(hub.agentLog)).toMatch(/\x1b\[<2;/) // eslint-disable-line no-control-regex -- an SGR mouse report
+    // (A paste here would come a moment later: the clipboard is read first.)
+    await page.waitForTimeout(1500)
+    expect(count(word)).toBe(0)
+    // Shift+right-click: pasted here, once.
+    await host.click({ button: 'right', modifiers: ['Shift'] })
+    await expect.poll(() => count(word)).toBe(1)
+    await page.waitForTimeout(1000)
+    expect(count(word)).toBe(1)
+  }
+
+  const agentPane = panel(page).locator('.pane', { has: page.locator('.pane-header .agent-settings') })
+  await check(agentPane.locator('.terminal-host'), 'IN-THE-PANEL')
+  // Full screen.
+  await agentPane.getByRole('button', { name: 'Full screen' }).click()
+  await check(agentPane.locator('.terminal-host'), 'IN-FULL-SCREEN')
+  await page.keyboard.press('Escape')
+  // A Claude Code tab.
+  await page.keyboard.press('ControlOrMeta+t')
+  await page.locator('.launcher-item', { hasText: 'Claude Code' }).first().click()
+  await check(panel(page).locator('.terminal-host').first(), 'IN-A-TAB')
 })
 
 test('a project shows the git history with the branch graph and a terminal in the folder', async () => {

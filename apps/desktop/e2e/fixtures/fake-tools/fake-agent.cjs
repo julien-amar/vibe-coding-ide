@@ -14,9 +14,14 @@ if (log) fs.appendFileSync(`${log}.argv`, JSON.stringify({ cwd: process.cwd(), a
 // FAKE_AGENT_BANNER (README screenshots): an illustrative session instead of the test banner.
 process.stdout.write(process.env.FAKE_AGENT_BANNER ? process.env.FAKE_AGENT_BANNER.replace(/\n/g, '\r\n') : 'Fake agent ready\r\n> ')
 if (process.stdin.isTTY) process.stdin.setRawMode(true)
+/** The last keys typed. */
+let typed = ''
 process.stdin.on('data', (data) => {
   if (log) fs.appendFileSync(log, data)
   // Ctrl+C / Ctrl+D end it like a real CLI.
   if (data.includes(3) || data.includes(4)) process.exit(0)
+  // "mouse-on" typed (a key at a time): asks for the mouse (any event, SGR reports), as Claude Code does.
+  typed = (typed + data.toString()).slice(-32)
+  if (typed.endsWith('mouse-on')) process.stdout.write('\x1b[?1003h\x1b[?1006h')
   process.stdout.write('.')
 })

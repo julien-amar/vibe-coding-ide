@@ -131,12 +131,17 @@ export function TerminalView({ sessionId, restoredScrollback, visible, autoFocus
       return true
     })
 
-    host.addEventListener('contextmenu', (e) => {
+    // Right-click: copies the selection, else pastes. Not when the program asked for the mouse (Claude
+    // Code…): the click is its own then — it pastes itself (pasted twice otherwise); Shift+right-click
+    // still copies / pastes here (as in other terminals).
+    const onContextMenu = (e: MouseEvent): void => {
       e.preventDefault()
+      if (term.modes.mouseTrackingMode !== 'none' && !e.shiftKey) return
       void copySelection(term).then((copied) => {
         if (!copied) void paste(term)
       })
-    })
+    }
+    host.addEventListener('contextmenu', onContextMenu)
 
     // Replay buffered output, dropping live events received before the snapshot
     // (they are already contained in it).
@@ -188,6 +193,7 @@ export function TerminalView({ sessionId, restoredScrollback, visible, autoFocus
 
     return () => {
       media.removeEventListener('change', onScheme)
+      host.removeEventListener('contextmenu', onContextMenu)
       ro.disconnect()
       offData()
       offExit()
