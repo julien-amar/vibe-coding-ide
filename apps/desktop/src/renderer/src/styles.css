@@ -1022,15 +1022,3 @@ body.resizing-row * {
   height: 14px;
   border-width: 2px;
 }
-
-/* What a spinner's loading is doing, under it. */
-.spinner-area:has(.spinner-caption) {
-  flex-direction: column;
-  gap: 10px;
-}
-
-.spinner-caption {
-  max-width: 90%;
-  font-size: 12px;
-  text-align: center;
-}

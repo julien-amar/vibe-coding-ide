@@ -200,10 +200,10 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
         >
           ⟳
         </button>
-        {/* Some projects are shown, others are still being listed. */}
-        {st.discovering && st.projects && (
+        {/* Finding tests (before any project is listed too): the spinner and the step in progress. */}
+        {st.discovering && (
           <>
-            <Spinner inline label="Finding more tests" />
+            <Spinner inline label={st.projects ? 'Finding more tests' : 'Finding tests'} />
             {st.step && (
               <span className="muted tests-step" title={st.step}>
                 {st.step}…
@@ -213,7 +213,6 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
         )}
         <span className="spacer" />
         <span className="tests-summary">
-          {/* (Finding tests: the list's spinner.) */}
           {st.running && <span className="busy">Running{st.runningProjects.length > 1 ? ` ${st.runningProjects.length} projects` : ''}…</span>}
         </span>
       </div>
@@ -247,7 +246,6 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
             <p className="muted">Supported: Vitest and Playwright (a vitest / playwright config file, also in sub-folders).</p>
           </div>
         )}
-        {!st.projects && st.discovering && <Spinner label="Finding tests" caption={st.step ? `${st.step}…` : undefined} />}
         {rows.length === 0 && counts.total > 0 && (
           <div className="tests-empty muted">
             No {statusFilter === 'all' ? '' : `${statusFilter} `}tests{filter.trim() ? ` matching “${filter.trim()}”` : ''}.
