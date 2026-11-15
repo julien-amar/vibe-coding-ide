@@ -4,6 +4,7 @@ import { ignoresWhitespace } from '@shared/settings-defaults'
 import { useGitPrefs } from '../prefs'
 import { useGitRepos, useGitReposStore } from '../git-repos'
 import { notify } from './Dialogs'
+import { GitIcon } from './GitIcons'
 import { GitLogPane } from './GitLogPane'
 import { BranchesView } from './GitBranches'
 import { ChangesView } from './GitChanges'
@@ -198,20 +199,22 @@ export function GitPanel({
               Rebasing
             </span>
             <button
-              className="tool-button"
+              className="tool-button git-action"
               disabled={!!busy}
               title="Continue the rebase (the conflicts resolved and staged)"
+              aria-label="Continue"
               onClick={() => void run('Continuing the rebase', { op: 'rebaseContinue' }, 'Rebased')}
             >
-              Continue
+              <GitIcon name="continue" />
             </button>
             <button
-              className="tool-button"
+              className="tool-button git-action"
               disabled={!!busy}
               title="Abort the rebase: the branch as it was before"
+              aria-label="Abort"
               onClick={() => void run('Aborting the rebase', { op: 'rebaseAbort' }, 'Rebase aborted')}
             >
-              Abort
+              <GitIcon name="abort" />
             </button>
           </span>
         )}
@@ -221,39 +224,48 @@ export function GitPanel({
         )}
         {status && (
           <>
-            <button className="tool-button" disabled={!!busy} title="Fetch all remotes" onClick={() => void run('Fetching', { op: 'fetch' }, 'Fetched')}>
-              Fetch
+            <button
+              className="tool-button git-action"
+              disabled={!!busy}
+              title="Fetch all remotes"
+              aria-label="Fetch"
+              onClick={() => void run('Fetching', { op: 'fetch' }, 'Fetched')}
+            >
+              <GitIcon name="fetch" />
             </button>
             {prefs.updateWith === 'pull' && <PullButton root={root} branches={branches} upstream={status.upstream} busy={!!busy} run={run} />}
             {prefs.pushCommand ? (
               // The push command of the settings (e.g. git review): whatever the upstream.
               <button
-                className="tool-button"
+                className="tool-button git-action"
                 disabled={!!busy || !status.branch}
                 title={`Push: ${prefs.pushCommand} (Git settings)`}
+                aria-label="Push"
                 onClick={() => void run('Pushing', { op: 'push' }, 'Pushed')}
               >
-                Push
+                <GitIcon name="push" />
               </button>
             ) : (
               <button
-                className="tool-button"
+                className="tool-button git-action"
                 disabled={!!busy || !status.branch}
                 title={status.upstream ? 'Push to upstream' : 'Publish this branch to origin'}
+                aria-label={status.upstream ? 'Push' : 'Publish'}
                 onClick={() => void run('Pushing', { op: 'push' }, status.upstream ? 'Pushed' : `Published ${status.branch}`)}
               >
-                {status.upstream ? 'Push' : 'Publish'}
+                <GitIcon name={status.upstream ? 'push' : 'publish'} />
               </button>
             )}
             {/* Pull requests: on a supported host only. */}
             {host && (
               <button
-                className="tool-button"
+                className="tool-button git-action"
                 disabled={!!busy || !status.branch}
                 title="Open this branch's pull request, or create one"
+                aria-label="Pull request"
                 onClick={() => void pullRequest(root, setBusy, run)}
               >
-                Pull request
+                <GitIcon name="pullRequest" />
               </button>
             )}
           </>

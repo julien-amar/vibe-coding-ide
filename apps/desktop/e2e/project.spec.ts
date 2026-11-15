@@ -308,7 +308,7 @@ test('History: Rebase on a branch (the last one used, or chosen in ▾); a stopp
   const main = toolbar.locator('.rebase-button .split-main')
   const toggle = toolbar.getByRole('button', { name: 'Choose the branch to rebase on' })
   // Several branches, none used yet: the button asks which.
-  await expect(main).toHaveText('Rebase')
+  await expect(main).toHaveAccessibleName('Rebase')
   await main.click()
   const menu = page.getByRole('listbox', { name: 'Rebase on' })
   await expect(menu.getByRole('option')).toHaveCount(branches.length) // every branch but main, + upstream-work
@@ -538,7 +538,7 @@ test('a pull request is created with gh (branch pushed first), then opened', asy
   const browserLog = join(profile, 'browser.log')
 
   await expect(gitPanel(page).locator('.git-toolbar .ref-badge').first()).toHaveText('feature/pr')
-  await gitPanel(page).locator('.git-toolbar button', { hasText: 'Pull request' }).click()
+  await gitPanel(page).locator('.git-toolbar').getByRole('button', { name: 'Pull request' }).click()
   const dialog = page.locator('.dialog')
   await expect(dialog.locator('h2')).toHaveText('New pull request')
   await expect(dialog.locator('input').first()).toHaveValue('Add the PR file')
@@ -558,7 +558,7 @@ test('a pull request is created with gh (branch pushed first), then opened', asy
   expect(create).toEqual(expect.arrayContaining(['--title=Add the PR file', '--body=First line\n"quoted" second line', '--base=main', '--head=feature/pr']))
 
   // The branch now has an open pull request: the button opens it.
-  await gitPanel(page).locator('.git-toolbar button', { hasText: 'Pull request' }).click()
+  await gitPanel(page).locator('.git-toolbar').getByRole('button', { name: 'Pull request' }).click()
   await expect(page.locator('.toast', { hasText: '#1: Add the PR file' })).toBeVisible()
   expect(readLog(browserLog).trim().split('\n')).toHaveLength(2)
 })

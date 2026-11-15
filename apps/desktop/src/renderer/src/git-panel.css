@@ -769,3 +769,17 @@ button:disabled {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* An action shown as its icon. */
+.tool-button.git-action,
+.split-button .split-main {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  padding: 0 7px;
+}
+
+.git-icon {
+  flex-shrink: 0;
+}

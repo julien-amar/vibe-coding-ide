@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { GitBranch } from '@shared/types'
+import { GitIcon, type GitIconName } from './GitIcons'
 import type { GitRun } from './GitPanel'
 
 /** The branch an action (rebase on, pull from) last used in a repository, remembered per repository. */
@@ -26,6 +27,7 @@ function rememberBranch(key: string, branch: string): void {
 function BranchSplitButton({
   className,
   label,
+  icon,
   menuName,
   storageKey,
   choices,
@@ -37,6 +39,8 @@ function BranchSplitButton({
 }: {
   className: string
   label: string
+  /** Shown instead of the label (which names it). */
+  icon: GitIconName
   /** The list of branches' name ("Rebase on"). */
   menuName: string
   storageKey: string
@@ -89,7 +93,7 @@ function BranchSplitButton({
         aria-label={name}
         onClick={() => (target ? act(target) : setOpen(true))}
       >
-        {label}
+        <GitIcon name={icon} />
         {/* The branch: its tag (as in the history). */}
         {target && <span className={`ref-badge ${target.remote ? 'remote' : 'branch'}`}>{target.name}</span>}
       </button>
@@ -130,6 +134,7 @@ export function RebaseButton({ root, branches, busy, run }: { root: string; bran
     <BranchSplitButton
       className="rebase-button"
       label="Rebase"
+      icon="rebase"
       menuName="Rebase on"
       storageKey={`git-rebase-on:${root}`}
       choices={choices}
@@ -167,6 +172,7 @@ export function PullButton({
     <BranchSplitButton
       className="pull-button"
       label="Pull"
+      icon="pull"
       menuName="Pull from"
       storageKey={`git-pull-from:${root}`}
       choices={choices}
