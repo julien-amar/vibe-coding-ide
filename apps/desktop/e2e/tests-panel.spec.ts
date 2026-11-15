@@ -104,7 +104,8 @@ test('a failed test opens in the editor and is sent to the AI agent with "Fix wi
   await expect(vitest).toBeVisible({ timeout: 90_000 })
   // Every project listed (they are shown as they come: the rows move until then).
   await expect(panel.getByRole('status', { name: /Finding/ })).toHaveCount(0, { timeout: 90_000 })
-  await vitest.hover()
+  // Selected (its ▶ shows; not only while hovered, which a re-render can end).
+  await vitest.click()
   await vitest.locator('.test-run').click()
   const failing = panel.locator('.test-row.kind-test', { hasText: 'fails on purpose' }).first()
   await expect(failing.locator('.test-status')).toHaveClass(/st-failed/, { timeout: 90_000 })
@@ -126,9 +127,12 @@ test('a failed test opens in the editor and is sent to the AI agent with "Fix wi
   await expect(depFrame).not.toContainText('file:')
   await depFrame.click()
   await expect.poll(() => readLog(hub.editorLog)).toMatch(/node_modules[\\/]+vitest[^"]*\.js:\d+:\d+"/)
-  // Double-clicking a test opens it too.
+  // Double-clicking a test opens it too; a file's row: the file.
   await panel.locator('.test-row.kind-test', { hasText: 'adds numbers' }).dblclick()
   await expect.poll(() => readLog(hub.editorLog)).toMatch(/math\.check\.ts:4:1"/)
+  const opened = readLog(hub.editorLog).length
+  await panel.locator('.test-row.kind-file', { hasText: 'names.check.ts' }).dblclick()
+  await expect.poll(() => readLog(hub.editorLog).slice(opened)).toMatch(/names\.check\.ts/)
 
   // "Fix with agent": the failure, its location and how to re-run it, pasted into the agent
   // panel's CLI (a fake `claude` records what it receives) and submitted.
@@ -160,7 +164,8 @@ test('"Fix with agent" opens an AI agent panel when none is running, and waits f
   await expect(jest).toBeVisible({ timeout: 90_000 })
   // Every project listed (they are shown as they come: the rows move until then).
   await expect(panel.getByRole('status', { name: /Finding/ })).toHaveCount(0, { timeout: 90_000 })
-  await jest.hover()
+  // Selected (its ▶ shows; not only while hovered, which a re-render can end).
+  await jest.click()
   await jest.locator('.test-run').click()
   const failing = panel.locator('.test-row.kind-test', { hasText: 'fails on purpose' }).first()
   await expect(failing.locator('.test-status')).toHaveClass(/st-failed/, { timeout: 90_000 })
@@ -217,7 +222,7 @@ test('the Details / Output section opens above its bar and can be resized by its
   const top = (await panel.locator('.tests-bottom-resizer').boundingBox())!
   await page.mouse.move(top.x + top.width / 2, top.y + top.height / 2)
   await page.mouse.down()
-  await page.mouse.move(top.x + top.width / 2, panelBox.y - 200, { steps: 8 })
+  await page.mouse.move(top.x + top.width / 2, panelBox.y + 2, { steps: 8 })
   await page.mouse.up()
   await expect.poll(height).toBeGreaterThan(panelBox.height - 100)
   expect(await height()).toBeLessThanOrEqual(panelBox.height - 96 + 1)

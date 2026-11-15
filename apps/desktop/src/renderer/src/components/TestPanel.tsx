@@ -264,8 +264,11 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
                   show('details')
                 }}
                 onDoubleClick={() => {
-                  // A test opens in the editor at its line; a group folds / unfolds.
+                  // A test opens in the editor at its line, a file (or a class: its file) in the editor; another
+                  // group folds / unfolds (its chevron too).
+                  const file = node.test ? undefined : fileOf(node, project)
                   if (node.test) void openFile(root, project, node.test.source ?? node.test.file, node.test.line)
+                  else if (file) void openFile(root, project, file)
                   else setExpanded((e) => ({ ...e, [node.key]: !isOpen }))
                 }}
               >
@@ -419,6 +422,17 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
       </div>
     </div>
   )
+}
+
+/**
+ * The source file a row of the tree stands for (relative to its test project), if any: a test file
+ * (Vitest, Jest, Playwright, pytest, Rust), a Java class (its file), a .NET class (the file declaring
+ * it). Not a Go package (a folder), a namespace, a describe() block or a project.
+ */
+export function fileOf(node: TestTreeNode, project?: TestProject): string | undefined {
+  if (!project || (node.kind !== 'file' && node.kind !== 'class') || project.framework === 'go') return undefined
+  const first = project.tests.find((t) => t.id === node.testIds[0])
+  return first?.source ?? (node.kind === 'file' ? node.req.file : undefined)
 }
 
 function findNode(trees: TestTreeNode[], key?: string): TestTreeNode | undefined {

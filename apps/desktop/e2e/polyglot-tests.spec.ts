@@ -52,6 +52,20 @@ test('Go, Rust, .NET, Gradle and Maven projects: discovered, run, opened in the 
   })
   await expect(panel.locator('.test-row.kind-project', { hasText: 'Maven' }).locator('.test-count')).toHaveText('5')
   await expect(panel.locator('.test-row.kind-project', { hasText: 'Gradle' }).locator('.test-count')).toHaveText('5')
+  // Double-click: a Java class's row opens its file; a Go package (a folder) folds / unfolds instead.
+  // (Full screen: room for the rows above the Details section the first click opens.)
+  await expect(panel.getByRole('status', { name: /Finding/ })).toHaveCount(0, { timeout: 300_000 })
+  const testsPane = page.locator('.tab-panel.visible .pane', { has: page.locator('.tests-panel') })
+  await testsPane.getByRole('button', { name: 'Full screen' }).click()
+  await panel.locator('.test-row.kind-file', { hasText: 'sample.MathTest' }).first().dblclick()
+  await expect.poll(() => readLog(hub.editorLog)).toMatch(/MathTest\.java/)
+  const opened = readLog(hub.editorLog).length
+  const goPackage = panel.locator('.test-row.kind-file', { hasText: 'mathx' })
+  const expanded = await goPackage.getAttribute('aria-expanded')
+  await goPackage.dblclick()
+  await expect(goPackage).not.toHaveAttribute('aria-expanded', expanded ?? '')
+  expect(readLog(hub.editorLog).slice(opened)).toBe('')
+  await page.keyboard.press('Escape')
   await expect(panel.locator('.test-row.kind-group')).toHaveText(/polyglot-tests/)
   // .NET: namespaces, then classes (a nested class by its full name).
   await expect(panel.locator('.test-row.kind-namespace .test-label')).toHaveText(['SampleTests'])
