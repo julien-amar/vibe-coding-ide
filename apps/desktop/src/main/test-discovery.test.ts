@@ -128,10 +128,10 @@ describe('test discovery', () => {
 
 describe('test discovery steps', () => {
   it('names what listing a project does', () => {
-    expect(stepLabel({ framework: 'vitest', relDir: 'apps/web' })).toBe('Discovering Vitest tests in apps/web')
-    expect(stepLabel({ framework: 'cargo', relDir: '' })).toBe('Building and listing Rust tests')
-    expect(stepLabel({ framework: 'dotnet', relDir: 'tests/A.Tests' })).toBe('Building and listing .NET tests in tests/A.Tests')
-    expect(stepLabel({ framework: 'dotnet', relDir: 'tests/A.Tests' }, true)).toBe('Discovering .NET tests in tests/A.Tests')
+    expect(stepLabel('vitest')).toBe('Discovering Vitest tests')
+    expect(stepLabel('cargo')).toBe('Building and listing Rust tests')
+    expect(stepLabel('dotnet')).toBe('Building and listing .NET tests')
+    expect(stepLabel('dotnet', true)).toBe('Discovering .NET tests')
   })
 
   it('tells each step while it runs (several at once: the oldest, and how many more), then that it is over', async () => {
@@ -144,8 +144,10 @@ describe('test discovery steps', () => {
       const steps: (string | undefined)[] = []
       await discoverTests(root, undefined, (s) => steps.push(s))
       expect(steps[0]).toBe('Finding test projects')
-      expect(steps).toContain('Building and listing .NET tests in A.Tests')
-      expect(steps.some((s) => s?.startsWith('Finding test projects (+') || s === 'Building and listing Rust tests in crate')).toBe(true)
+      expect(steps).toContain('Building and listing .NET tests')
+      expect(steps.some((s) => s?.startsWith('Finding test projects (+') || s === 'Building and listing Rust tests')).toBe(true)
+      // Which project: not told.
+      expect(steps.filter((s) => s && /crate|A\.Tests/.test(s))).toEqual([])
       expect(steps.at(-1)).toBeUndefined()
     } finally {
       rmSync(root, { recursive: true, force: true })

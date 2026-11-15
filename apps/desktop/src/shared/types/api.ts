@@ -89,7 +89,7 @@ export interface IdeApi {
     discover(root: string): Promise<TestProject[]>
     /** A test project of a discovery in progress, as soon as its tests are listed (`order`: its place in the panel, compared as strings). */
     onProject(cb: (root: string, project: TestProject, order: string) => void): () => void
-    /** What a discovery in progress is doing ("Building Platform.sln"); none: it is over. */
+    /** What a discovery in progress is doing ("Building .NET solution", "Discovering Vitest tests"); none: it is over. */
     onStep(cb: (root: string, step: string | null) => void): () => void
     /** Run tests (one run per project root at a time); output streams through onOutput. */
     run(root: string, req: TestRunRequest): Promise<TestRunResult>

@@ -1,6 +1,6 @@
 import type { Dirent } from 'node:fs'
 import { readdir } from 'node:fs/promises'
-import { basename, join, relative } from 'node:path'
+import { join, relative } from 'node:path'
 import type { ChildProcess } from 'node:child_process'
 import type { WebContents } from 'electron'
 import type { TestFramework, TestProject, TestResult, TestRunRequest, TestRunResult } from '@shared/types'
@@ -93,11 +93,11 @@ const FRAMEWORK_NAME: Record<TestFramework, string> = {
   gradle: 'Gradle'
 }
 
-/** What listing a project does, told while it runs ("Building and listing Rust tests in crates/core"). */
-export function stepLabel(p: { framework: TestFramework; relDir: string }, prebuilt = false): string {
+/** What listing a project does, told while it runs ("Building and listing Rust tests"; not which project). */
+export function stepLabel(framework: TestFramework, prebuilt = false): string {
   // Go and Rust compile their tests to list them; .NET builds its project (unless its solution was).
-  const builds = p.framework === 'cargo' || p.framework === 'go' || (p.framework === 'dotnet' && !prebuilt)
-  return `${builds ? 'Building and listing' : 'Discovering'} ${FRAMEWORK_NAME[p.framework]} tests${p.relDir ? ` in ${p.relDir}` : ''}`
+  const builds = framework === 'cargo' || framework === 'go' || (framework === 'dotnet' && !prebuilt)
+  return `${builds ? 'Building and listing' : 'Discovering'} ${FRAMEWORK_NAME[framework]} tests`
 }
 
 /** Shown in the panel: a project with tests, or with a listing error to show. */
@@ -137,7 +137,7 @@ export async function discoverTests(
 
   const listOne = async ({ framework, dir, relDir }: FoundProject, opts?: ListOptions): Promise<TestProject> => {
     const id = `${framework}:${relDir}`
-    const done = step(stepLabel({ framework, relDir }, !!opts?.prebuilt))
+    const done = step(stepLabel(framework, !!opts?.prebuilt))
     const work = workDir()
     try {
       const { tests: listed, error, projectFile } = await adapterFor(framework).list(dir, work, opts)
@@ -176,7 +176,7 @@ export async function discoverTests(
       dotnet.map((p) => p.dir),
       (sln) => {
         building?.()
-        building = sln ? step(`Building ${basename(sln)}`) : undefined
+        building = sln ? step('Building .NET solution') : undefined
       }
     )
     for (const p of dotnet) {
