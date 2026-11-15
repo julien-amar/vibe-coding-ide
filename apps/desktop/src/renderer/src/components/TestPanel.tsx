@@ -200,17 +200,6 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
         >
           ⟳
         </button>
-        {/* Finding tests (before any project is listed too): the spinner and the step in progress. */}
-        {st.discovering && (
-          <>
-            <Spinner inline label={st.projects ? 'Finding more tests' : 'Finding tests'} />
-            {st.step && (
-              <span className="muted tests-step" title={st.step}>
-                {st.step}…
-              </span>
-            )}
-          </>
-        )}
         <span className="spacer" />
         <span className="tests-summary">
           {st.running && <span className="busy">Running{st.runningProjects.length > 1 ? ` ${st.runningProjects.length} projects` : ''}…</span>}
@@ -414,6 +403,17 @@ export function TestPanel({ root, tabId, visible }: { root: string; tabId: strin
                 <path d="M10 10l3.5 3.5M13.5 10L10 13.5" />
               </svg>
             </button>
+          )}
+          {/* Finding tests: the step in progress and a spinner, in the panel's bottom right corner. */}
+          {st.discovering && (
+            <span className="tests-finding">
+              {st.step && (
+                <span className="muted tests-step" title={st.step}>
+                  {st.step}…
+                </span>
+              )}
+              <Spinner inline label={st.projects ? 'Finding more tests' : 'Finding tests'} />
+            </span>
           )}
         </div>
       </div>

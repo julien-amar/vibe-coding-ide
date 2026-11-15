@@ -467,3 +467,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Finding tests: in the bottom bar's right corner (the step cut when long). */
+.tests-finding {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}

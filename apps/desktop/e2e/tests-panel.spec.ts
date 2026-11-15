@@ -39,11 +39,17 @@ test('the Tests panel discovers and runs Vitest, Jest, Playwright and pytest tes
   // Skipped tests are listed too.
   await expect(count('all')).toHaveText(String(expected.all))
 
-  // Refresh: the list empties, the small spinner next to ⟳ shows while the tests are found again (none in
-  // the list), then they are back.
+  // Refresh: the list empties, a small spinner shows in the bottom right corner (level with Details /
+  // Output; none in the list) while the tests are found again, then they are back.
   await panel.getByRole('button', { name: '⟳' }).click()
   await expect(panel.locator('.test-row')).toHaveCount(0)
-  await expect(panel.locator('.tests-toolbar').getByRole('status', { name: 'Finding tests' })).toBeVisible()
+  const finding = panel.locator('.tests-bottom-bar').getByRole('status', { name: 'Finding tests' })
+  await expect(finding).toBeVisible()
+  const spin = (await finding.boundingBox())!
+  const details = (await panel.locator('.tests-bottom-bar').getByRole('tab', { name: 'Details' }).boundingBox())!
+  const box = (await panel.boundingBox())!
+  expect(Math.abs(spin.y + spin.height / 2 - (details.y + details.height / 2))).toBeLessThan(4)
+  expect(box.x + box.width - (spin.x + spin.width)).toBeLessThan(24)
   await expect(panel.locator('.tests-tree .spinner-area')).toHaveCount(0)
   await expect(panel.locator('.test-row.kind-project')).toHaveCount(PYTEST ? 4 : 3, { timeout: 90_000 })
   await expect(count('all')).toHaveText(String(expected.all))
