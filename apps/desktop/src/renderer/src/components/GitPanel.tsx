@@ -204,13 +204,16 @@ export function GitPanel({
             </button>
           </span>
         )}
-        {view === 'history' && status && !status.rebasing && status.branch && <RebaseButton root={root} branches={branches} busy={!!busy} run={run} />}
+        {/* Bringing other work in: Rebase (the default) or Pull, as the settings say. */}
+        {prefs.updateWith === 'rebase' && status && !status.rebasing && status.branch && (
+          <RebaseButton root={root} branches={branches} busy={!!busy} run={run} />
+        )}
         {status && (
           <>
             <button className="tool-button" disabled={!!busy} title="Fetch all remotes" onClick={() => void run('Fetching', { op: 'fetch' }, 'Fetched')}>
               Fetch
             </button>
-            <PullButton root={root} branches={branches} upstream={status.upstream} busy={!!busy} run={run} />
+            {prefs.updateWith === 'pull' && <PullButton root={root} branches={branches} upstream={status.upstream} busy={!!busy} run={run} />}
             {prefs.pushCommand ? (
               // The push command of the settings (e.g. git review): whatever the upstream.
               <button

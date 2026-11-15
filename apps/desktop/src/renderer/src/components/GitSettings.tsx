@@ -84,6 +84,19 @@ export function GitSettings({ prefs, onClose }: { prefs: GitPrefs; onClose: () =
         </section>
 
         <section className="settings-section">
+          <h3>Branch update</h3>
+          <div className="settings-defaults">
+            <label className="settings-default">
+              <span>The toolbar's button</span>
+              <select aria-label="Branch update" value={prefs.updateWith} onChange={(e) => save({ updateWith: e.target.value as GitPrefs['updateWith'] })}>
+                <option value="rebase">Rebase (on a branch)</option>
+                <option value="pull">Pull (from a branch)</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section className="settings-section">
           <h3>Push</h3>
           <label className="settings-default git-push-command">
             <span>

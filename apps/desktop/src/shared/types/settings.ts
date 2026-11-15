@@ -39,6 +39,8 @@ export interface GitPrefs {
   ignoreBlankLines: boolean
   /** The Push button's command, run in the repository (empty: `git push`), e.g. `git review` (Gerrit). */
   pushCommand: string
+  /** The toolbar's button bringing other work into the current branch: Rebase (on a branch) or Pull (from one). */
+  updateWith: 'rebase' | 'pull'
 }
 
 /** Containers tab options (its ⚙ dialog). */

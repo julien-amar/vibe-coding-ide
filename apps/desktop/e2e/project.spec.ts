@@ -367,7 +367,7 @@ test('Tests: a project whose tests cannot be listed offers to fix its build with
   expect(readLog(hub.agentLog)).toContain(`cd 'web' && npx vitest list`)
 })
 
-test('Pull: from a branch chosen in ▾ (then remembered, shown as its tag)', async () => {
+test('Git settings: the toolbar rebases (default) or pulls; Pull: from a branch chosen in ▾ (then remembered, shown as its tag)', async () => {
   const { page } = hub
   const git = (...args: string[]): string => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' })
   git('switch', '-q', '-c', 'side')
@@ -378,6 +378,20 @@ test('Pull: from a branch chosen in ▾ (then remembered, shown as its tag)', as
   const toolbar = gitPanel(page).locator('.git-toolbar')
   await toolbar.locator('button[title="Refresh"]').click()
   await expect(gitPanel(page).locator('.git-subject', { hasText: 'Side work' })).toBeVisible()
+
+  // By default the toolbar rebases; Git settings → Branch update: Pull instead.
+  await expect(toolbar.locator('.rebase-button')).toBeVisible()
+  await expect(toolbar.locator('.pull-button')).toHaveCount(0)
+  await panel(page)
+    .locator('.pane', { has: page.locator('.git-panel') })
+    .getByRole('button', { name: 'Git settings' })
+    .click()
+  const dialog = page.getByRole('dialog', { name: 'Git settings' })
+  await expect(dialog.getByLabel('Branch update')).toHaveValue('rebase')
+  await dialog.getByLabel('Branch update').selectOption('pull')
+  await page.keyboard.press('Escape')
+  await expect(toolbar.locator('.pull-button')).toBeVisible()
+  await expect(toolbar.locator('.rebase-button')).toHaveCount(0)
 
   const pull = toolbar.locator('.pull-button .split-main')
   await toolbar.getByRole('button', { name: 'Choose the branch to pull from' }).click()

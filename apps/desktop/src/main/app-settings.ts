@@ -55,7 +55,8 @@ function sanitizeGit(v: unknown): GitPrefs {
             .replace(/[\r\n]+/g, ' ')
             .trim()
             .slice(0, 500)
-        : DEFAULT_GIT_PREFS.pushCommand
+        : DEFAULT_GIT_PREFS.pushCommand,
+    updateWith: g.updateWith === 'rebase' || g.updateWith === 'pull' ? g.updateWith : DEFAULT_GIT_PREFS.updateWith
   }
 }
 
