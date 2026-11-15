@@ -218,21 +218,23 @@ export function GitPanel({
             </button>
           </span>
         )}
-        {/* Bringing other work in: Rebase (the default) or Pull, as the settings say. */}
+        {/* Fetch first, then bringing other work in: Rebase (the default) or Pull, as the settings say. */}
+        {status && (
+          <button
+            className="tool-button git-action"
+            disabled={!!busy}
+            title="Fetch all remotes"
+            aria-label="Fetch"
+            onClick={() => void run('Fetching', { op: 'fetch' }, 'Fetched')}
+          >
+            <GitIcon name="fetch" />
+          </button>
+        )}
         {prefs.updateWith === 'rebase' && status && !status.rebasing && status.branch && (
           <RebaseButton root={root} branches={branches} busy={!!busy} run={run} />
         )}
         {status && (
           <>
-            <button
-              className="tool-button git-action"
-              disabled={!!busy}
-              title="Fetch all remotes"
-              aria-label="Fetch"
-              onClick={() => void run('Fetching', { op: 'fetch' }, 'Fetched')}
-            >
-              <GitIcon name="fetch" />
-            </button>
             {prefs.updateWith === 'pull' && <PullButton root={root} branches={branches} upstream={status.upstream} busy={!!busy} run={run} />}
             {prefs.pushCommand ? (
               // The push command of the settings (e.g. git review): whatever the upstream.

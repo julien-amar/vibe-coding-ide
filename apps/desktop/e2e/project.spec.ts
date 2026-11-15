@@ -307,6 +307,8 @@ test('History: Rebase on a branch (the last one used, or chosen in ▾); a stopp
   const toolbar = gitPanel(page).locator('.git-toolbar')
   const main = toolbar.locator('.rebase-button .split-main')
   const toggle = toolbar.getByRole('button', { name: 'Choose the branch to rebase on' })
+  // Fetch comes first, on its left.
+  expect((await toolbar.getByRole('button', { name: 'Fetch' }).boundingBox())!.x).toBeLessThan((await main.boundingBox())!.x)
   // Several branches, none used yet: the button asks which.
   await expect(main).toHaveAccessibleName('Rebase')
   await main.click()
