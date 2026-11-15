@@ -1,6 +1,26 @@
 import { useState } from 'react'
 import type { TestsPrefs } from '@shared/types'
+import { useTestsPrefs } from '../prefs'
 import { Modal } from './Modal'
+
+/** The ⚙ of the Tests panel's header: its settings. */
+export function TestsSettingsButton(): React.JSX.Element {
+  const prefs = useTestsPrefs()
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <button
+        className="icon-button pane-action"
+        title="Tests settings: how Run all runs the test projects (every project)"
+        aria-label="Tests settings"
+        onClick={() => setOpen(true)}
+      >
+        ⚙
+      </button>
+      {open && <TestsSettings prefs={prefs} onClose={() => setOpen(false)} />}
+    </>
+  )
+}
 
 /** The Tests panel's settings (⚙), for every project: how Run all runs the test projects. */
 export function TestsSettings({ prefs, onClose }: { prefs: TestsPrefs; onClose: () => void }): React.JSX.Element {

@@ -207,7 +207,13 @@ test('Tests settings (⚙): Run all runs the test projects in parallel (how many
   // By default: in parallel, 4 at once.
   await expect(runAll).toHaveAttribute('title', /in parallel, 4 at once/)
 
-  await panel.getByRole('button', { name: 'Tests settings' }).click()
+  // In the panel's header, next to Full screen.
+  const header = page.locator('.tab-panel.visible .pane', { has: page.locator('.tests-panel') }).locator('.pane-header')
+  await expect(header.getByRole('button', { name: 'Tests settings' }).locator('xpath=following-sibling::button[1]')).toHaveAttribute(
+    'aria-label',
+    'Full screen'
+  )
+  await header.getByRole('button', { name: 'Tests settings' }).click()
   const dialog = page.getByRole('dialog', { name: 'Tests settings' })
   await expect(dialog.getByLabel('Run all')).toHaveValue('parallel')
   await dialog.getByLabel('Projects at once').fill('2')

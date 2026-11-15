@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { AppSettings, GitPrefs } from '@shared/types'
-import { DEFAULT_GIT_PREFS } from '@shared/settings-defaults'
+import type { AppSettings, GitPrefs, TestsPrefs } from '@shared/types'
+import { DEFAULT_GIT_PREFS, DEFAULT_TESTS_PREFS } from '@shared/settings-defaults'
 
 /** A part of the app settings, kept up to date (its defaults until loaded). */
 function usePrefs<T>(pick: (s: AppSettings) => T | undefined, defaults: T): T {
@@ -15,3 +15,6 @@ function usePrefs<T>(pick: (s: AppSettings) => T | undefined, defaults: T): T {
 
 /** The Git panel's options (every project). */
 export const useGitPrefs = (): GitPrefs => usePrefs((s) => s.git, DEFAULT_GIT_PREFS)
+
+/** The Tests panel's options (every project). */
+export const useTestsPrefs = (): TestsPrefs => usePrefs((s) => s.tests, DEFAULT_TESTS_PREFS)

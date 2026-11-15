@@ -8,6 +8,7 @@ import { useTabs, type Tab } from '../store'
 import { useGitRepos } from '../git-repos'
 import { GitPanel } from './GitPanel'
 import { GitSettingsButton } from './GitSettings'
+import { TestsSettingsButton } from './TestsSettings'
 import { ProfileIcon } from './ProfileIcon'
 import { ProfileSelect } from './ProfileSelect'
 import { SplitView } from './SplitView'
@@ -304,6 +305,7 @@ function TestsPane({ tab, pane, visible }: { tab: Tab; pane: PaneNode; visible: 
           <span className="pane-title">Tests</span>
         </>
       }
+      actions={<TestsSettingsButton />}
     >
       <TestPanel root={tab.project!.root} tabId={tab.id} visible={visible} />
     </PaneFrame>
