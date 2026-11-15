@@ -219,8 +219,12 @@ test('Tests settings (⚙): Run all runs the test projects in parallel (how many
   await dialog.getByLabel('Projects at once').fill('2')
   await dialog.getByLabel('Projects at once').press('Enter')
   await expect(runAll).toHaveAttribute('title', /in parallel, 2 at once/)
+  // One after the other: no number of projects at once (back in parallel: it is there again, kept).
   await dialog.getByLabel('Run all').selectOption('sequential')
-  await expect(dialog.getByLabel('Projects at once')).toBeDisabled()
+  await expect(dialog.getByLabel('Projects at once')).toHaveCount(0)
+  await dialog.getByLabel('Run all').selectOption('parallel')
+  await expect(dialog.getByLabel('Projects at once')).toHaveValue('2')
+  await dialog.getByLabel('Run all').selectOption('sequential')
   await page.keyboard.press('Escape')
   await expect(runAll).toHaveAttribute('title', /one after the other/)
 

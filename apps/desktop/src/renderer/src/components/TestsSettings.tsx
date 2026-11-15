@@ -52,20 +52,22 @@ export function TestsSettings({ prefs, onClose }: { prefs: TestsPrefs; onClose: 
                 <option value="sequential">One after the other</option>
               </select>
             </label>
-            <label className="settings-default">
-              <span>Projects at once</span>
-              <input
-                type="number"
-                min={1}
-                max={16}
-                aria-label="Projects at once"
-                disabled={prefs.runAll !== 'parallel'}
-                value={parallelism}
-                onChange={(e) => setParallelism(e.target.value)}
-                onBlur={saveParallelism}
-                onKeyDown={(e) => e.key === 'Enter' && saveParallelism()}
-              />
-            </label>
+            {/* Only in parallel (one after the other: one at a time). */}
+            {prefs.runAll === 'parallel' && (
+              <label className="settings-default">
+                <span>Projects at once</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={16}
+                  aria-label="Projects at once"
+                  value={parallelism}
+                  onChange={(e) => setParallelism(e.target.value)}
+                  onBlur={saveParallelism}
+                  onKeyDown={(e) => e.key === 'Enter' && saveParallelism()}
+                />
+              </label>
+            )}
           </div>
           <p className="muted settings-note">
             In parallel, .NET test projects still run one after the other (running them builds them, and they often share projects), alongside the other
