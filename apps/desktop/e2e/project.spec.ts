@@ -521,6 +521,9 @@ test('dragging over changed lines selects them (from a selected line: unselects 
 test('a pull request is created with gh (branch pushed first), then opened', async () => {
   const { page } = hub
   const git = (...args: string[]): string => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' })
+  // No remote on a supported host (none at all): no Pull request button.
+  await expect(gitPanel(page).locator('.git-row').first()).toBeVisible()
+  await expect(gitPanel(page).getByRole('button', { name: 'Pull request' })).toHaveCount(0)
   // A GitHub remote whose pushes go to a local bare repository.
   const origin = join(work, 'origin.git')
   execFileSync('git', ['init', '-q', '--bare', origin])

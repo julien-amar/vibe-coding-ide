@@ -136,6 +136,17 @@ export function GitPanel({
 
   const changes = status?.files.length ?? 0
 
+  // Where the repository is hosted: Pull request only for a supported host (GitHub, GitLab…).
+  const [host, setHost] = useState<GitOpResult['host']>()
+  useEffect(() => {
+    let alive = true
+    // (Re-read when the repository changes: a remote added or changed.)
+    void window.ide.git.op(root, { op: 'remoteHost' }).then((r) => alive && setHost(r.ok ? r.host : undefined))
+    return () => {
+      alive = false
+    }
+  }, [root, tick])
+
   // The branches (the Rebase and Pull buttons), reloaded with the views.
   const [branches, setBranches] = useState<GitBranch[]>([])
   useEffect(() => {
@@ -234,14 +245,17 @@ export function GitPanel({
                 {status.upstream ? 'Push' : 'Publish'}
               </button>
             )}
-            <button
-              className="tool-button"
-              disabled={!!busy || !status.branch}
-              title="Open this branch's pull request, or create one"
-              onClick={() => void pullRequest(root, setBusy, run)}
-            >
-              Pull request
-            </button>
+            {/* Pull requests: on a supported host only. */}
+            {host && (
+              <button
+                className="tool-button"
+                disabled={!!busy || !status.branch}
+                title="Open this branch's pull request, or create one"
+                onClick={() => void pullRequest(root, setBusy, run)}
+              >
+                Pull request
+              </button>
+            )}
           </>
         )}
         <button className="icon-button" title="Refresh" onClick={reload}>

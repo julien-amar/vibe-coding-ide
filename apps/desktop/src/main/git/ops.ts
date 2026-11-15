@@ -2,7 +2,7 @@ import type { GitOpRequest, GitOpResult, GitPrefs } from '@shared/types'
 import { DEFAULT_GIT_PREFS, ignoresWhitespace } from '@shared/settings-defaults'
 import { partialPatch, partialUnsupported } from '@shared/git-patch'
 import { parseWslPath } from '@shared/wsl-paths'
-import { createPr, prInfo } from './pull-requests'
+import { createPr, prInfo, remoteHost } from './pull-requests'
 import {
   commandWords,
   DIFF_FLAGS,
@@ -76,6 +76,8 @@ export async function gitOp(root: string, req: GitOpRequest, prefs: GitPrefs = D
         await git(root, args, { input: patch })
         return { ok: true }
       }
+      case 'remoteHost':
+        return { ok: true, host: await remoteHost(root) }
       case 'prInfo': {
         // (The remote and web URL are the main process's business.)
         const { remote: _remote, web: _web, ...pr } = await prInfo(root)

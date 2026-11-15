@@ -104,6 +104,7 @@ export type GitOp =
   | 'rebase'
   | 'rebaseContinue'
   | 'rebaseAbort'
+  | 'remoteHost'
 
 /** Where the repository is hosted and how pull requests are made (prInfo). */
 export interface GitPullRequestInfo {
@@ -180,6 +181,8 @@ export interface GitOpResult {
   files?: GitCommitFile[]
   /** prInfo: pull requests of the repository. */
   pr?: GitPullRequestInfo
+  /** remoteHost: where the repository is hosted (none: not a supported host, or no remote). */
+  host?: GitPullRequestInfo['host']
   /** createPr: the new request's address (created by gh / glab), or the host's page to open. */
   url?: string
   /** createPr: the url is the host's "new pull request" page (no gh / glab), not a created request. */

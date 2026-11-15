@@ -29,6 +29,13 @@ async function remoteOf(root: string, status: GitStatus): Promise<string> {
   return remotes.includes('origin') ? 'origin' : (remotes[0] ?? 'origin')
 }
 
+/** Where the repository is hosted (its remote's address only: no tool run, nothing asked of the host). */
+export async function remoteHost(root: string): Promise<GitPullRequestInfo['host']> {
+  const remote = await remoteOf(root, await gitStatus(root))
+  const url = (await git(root, ['remote', 'get-url', remote]).catch(() => '')).trim()
+  return url ? parseRemote(url)?.kind : undefined
+}
+
 export async function prInfo(root: string): Promise<GitPullRequestInfo & { remote: string; web?: RemoteHost }> {
   const status = await gitStatus(root)
   const branch = status.branch

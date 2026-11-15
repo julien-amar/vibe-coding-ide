@@ -352,3 +352,18 @@ describe('pull from a chosen branch', () => {
     run('remote', 'remove', 'self')
   })
 })
+
+describe('where a repository is hosted', () => {
+  it('tells a supported host from its remote (none without a remote, or for another host)', async () => {
+    const dir = join(base, 'hosted')
+    mkdirSync(dir)
+    execFileSync('git', ['-C', dir, 'init', '-q'])
+    expect(await gitOp(dir, { op: 'remoteHost' })).toEqual({ ok: true, host: undefined })
+    execFileSync('git', ['-C', dir, 'remote', 'add', 'origin', 'git@github.com:acme/app.git'])
+    expect((await gitOp(dir, { op: 'remoteHost' })).host).toBe('github')
+    execFileSync('git', ['-C', dir, 'remote', 'set-url', 'origin', 'https://gitlab.com/acme/app.git'])
+    expect((await gitOp(dir, { op: 'remoteHost' })).host).toBe('gitlab')
+    execFileSync('git', ['-C', dir, 'remote', 'set-url', 'origin', 'https://git.example.org/acme/app.git'])
+    expect((await gitOp(dir, { op: 'remoteHost' })).host).toBeUndefined()
+  })
+})
